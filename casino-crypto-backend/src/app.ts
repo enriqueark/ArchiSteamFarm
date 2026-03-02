@@ -14,6 +14,7 @@ import { env } from "./config/env";
 import { isAppError, toZodDetails } from "./core/errors";
 import { redis } from "./infrastructure/cache/redis";
 import { authRoutes } from "./modules/auth/routes";
+import { betsRoutes } from "./modules/bets/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { ledgerRoutes } from "./modules/ledger/routes";
 import { minesRoutes } from "./modules/mines/routes";
@@ -69,6 +70,7 @@ export const buildApp = (): FastifyInstance => {
       tags: [
         { name: "health", description: "Health checks" },
         { name: "auth", description: "Authentication and sessions" },
+        { name: "bets", description: "Transactional generic bet placement and settlement" },
         { name: "wallets", description: "Wallet management and bet reservations" },
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "mines", description: "Mines game with provably fair backend generation" },
@@ -84,6 +86,7 @@ export const buildApp = (): FastifyInstance => {
 
   app.register(healthRoutes, { prefix: "/api/v1/health" });
   app.register(authRoutes, { prefix: "/api/v1/auth" });
+  app.register(betsRoutes, { prefix: "/api/v1/bets" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
   app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });

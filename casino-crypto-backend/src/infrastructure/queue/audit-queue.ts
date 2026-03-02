@@ -12,7 +12,9 @@ type AuditPayload = {
 
 export const auditQueue = new Queue<AuditPayload, void, "audit">("audit-events", {
   connection: {
-    url: env.REDIS_URL
+    url: env.REDIS_URL,
+    lazyConnect: true,
+    maxRetriesPerRequest: null
   },
   defaultJobOptions: {
     removeOnComplete: 500,
@@ -23,6 +25,10 @@ export const auditQueue = new Queue<AuditPayload, void, "audit">("audit-events",
       delay: 500
     }
   }
+});
+
+auditQueue.on("error", () => {
+  // Audit queue is best-effort; avoid crashing request flow on Redis outages.
 });
 
 export const enqueueAuditEvent = async (payload: Omit<AuditPayload, "createdAt">): Promise<void> => {

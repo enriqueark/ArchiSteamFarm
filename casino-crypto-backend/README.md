@@ -30,6 +30,7 @@ src/
   modules/
     health/
     auth/
+    bets/
     users/
     wallets/
     ledger/
@@ -41,6 +42,7 @@ src/
 
 - `health`: liveness/readiness probes.
 - `auth`: register, login, refresh, logout.
+- `bets`: generic transactional place/settle flow (backend-only financial logic).
 - `users`: authenticated profile (`/me`).
 - `wallets`: balances, transaction history, and atomic bet fund reservations.
 - `ledger`: idempotent administrative balance adjustments.
@@ -70,6 +72,7 @@ src/
 - `BetReservation`
 - `ProvablyFairProfile`, `ProvablyFairSeed`, `MinesGame`
 - `RouletteRound`, `RouletteBet`
+- `CasinoBet`
 
 ## PostgreSQL schema (requested entities)
 
@@ -101,6 +104,24 @@ To prevent double spending with simultaneous bets, the wallet module uses a rese
 
 All three operations run inside PostgreSQL transactions and create immutable records in
 `wallet_transactions`, plus state tracking in `bet_reservations`.
+
+## Generic casino bet transaction flow (SERIALIZABLE)
+
+The `bets` module provides a strict backend-only financial flow:
+
+1. **placeBet**
+   - Creates `casino_bets` record in `PENDING`.
+   - Debits `balanceAtomic` and increases `lockedAtomic`.
+   - Persists game round reference.
+   - Returns `betId`, `balanceBefore`, `balanceAfter`, `lockedAfter`.
+
+2. **settleBet**
+   - Locks bet + wallet rows with `SELECT ... FOR UPDATE`.
+   - Requires bet `PENDING` and matching `userId`.
+   - Releases locked funds and conditionally pays out winner.
+   - Finalizes to `WON` or `LOST` exactly once.
+
+Both phases run with PostgreSQL **SERIALIZABLE isolation level** and retry on serialization conflicts.
 
 ## Mines provably fair (backend-only result generation)
 
@@ -147,6 +168,10 @@ Roulette worker settings:
 - `ROULETTE_SPIN_SECONDS`
 - `ROULETTE_WORKER_TICK_MS`
 
+Optional integration test toggle:
+
+- `RUN_DB_TESTS=true`
+
 ## Run locally
 
 ```bash
@@ -173,6 +198,8 @@ docker compose up --build
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/bets/place` (`Idempotency-Key`)
+- `POST /api/v1/bets/:betId/settle` (ADMIN + `Idempotency-Key`)
 - `GET /api/v1/users/me`
 - `GET /api/v1/wallets`
 - `GET /api/v1/wallets/:currency/entries`

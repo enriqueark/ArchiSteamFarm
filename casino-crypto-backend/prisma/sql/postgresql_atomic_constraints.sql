@@ -121,6 +121,24 @@ END $$;
 
 DO $$
 BEGIN
+  ALTER TABLE "casino_bets"
+    ADD CONSTRAINT "casino_bets_amount_positive"
+    CHECK ("amountAtomic" > 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "casino_bets"
+    ADD CONSTRAINT "casino_bets_payout_non_negative"
+    CHECK ("payoutAtomic" IS NULL OR "payoutAtomic" >= 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
   ALTER TABLE "wallet_transactions"
     ADD CONSTRAINT "wallet_transactions_balances_non_negative"
     CHECK ("balanceBeforeAtomic" >= 0 AND "balanceAfterAtomic" >= 0);

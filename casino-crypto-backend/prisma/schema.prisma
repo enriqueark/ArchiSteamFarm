@@ -106,6 +106,12 @@ enum RouletteBetStatus {
   VOID
 }
 
+enum CasinoBetStatus {
+  PENDING
+  WON
+  LOST
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -124,6 +130,7 @@ model User {
   minesGames          MinesGame[]
   rouletteBets        RouletteBet[]
   rouletteRounds      RouletteRound[]
+  casinoBets          CasinoBet[]
 
   @@map("users")
 }
@@ -158,6 +165,7 @@ model Wallet {
   withdrawals   Withdrawal[]
   betReserves   BetReservation[]
   rouletteBets  RouletteBet[]
+  casinoBets    CasinoBet[]
 
   @@unique([userId, currency])
   @@unique([id, currency])
@@ -184,10 +192,41 @@ model LedgerEntry {
   betHoldReserve      BetReservation? @relation("BetHoldEntry")
   betReleaseReserve   BetReservation? @relation("BetReleaseEntry")
   betCaptureReserve   BetReservation? @relation("BetCaptureEntry")
+  casinoBetCapture    CasinoBet?      @relation("CasinoBetCaptureEntry")
+  casinoBetPayout     CasinoBet?      @relation("CasinoBetPayoutEntry")
 
   @@index([walletId, createdAt(sort: Desc)])
   @@unique([walletId, idempotencyKey])
   @@map("wallet_transactions")
+}
+
+model CasinoBet {
+  id                   String          @id @default(cuid())
+  userId               String
+  walletId             String
+  currency             Currency
+  gameType             String
+  roundReference       String
+  amountAtomic         BigInt
+  payoutAtomic         BigInt?
+  status               CasinoBetStatus @default(PENDING)
+  placeIdempotencyKey  String
+  settleIdempotencyKey String?         @unique
+  captureTransactionId String?         @unique
+  payoutTransactionId  String?         @unique
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  settledAt            DateTime?
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet               Wallet          @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  captureTransaction   LedgerEntry?    @relation("CasinoBetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  payoutTransaction    LedgerEntry?    @relation("CasinoBetPayoutEntry", fields: [payoutTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, placeIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([gameType, roundReference, createdAt(sort: Desc)])
+  @@map("casino_bets")
 }
 
 model BetReservation {
