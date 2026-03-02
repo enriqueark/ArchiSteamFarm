@@ -38,6 +38,10 @@ export const buildApp = (): FastifyInstance => {
   app.register(jwt, {
     secret: env.JWT_ACCESS_SECRET
   });
+  app.register(jwt, {
+    secret: env.JWT_REFRESH_SECRET,
+    namespace: "refresh"
+  });
 
   app.register(rateLimit, {
     global: true,
