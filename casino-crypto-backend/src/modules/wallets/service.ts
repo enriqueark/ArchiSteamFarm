@@ -45,7 +45,7 @@ type WalletLockedRow = {
   lockedAtomic: bigint;
 };
 
-export const debitBalance = async (
+const debitBalanceWithRowLock = async (
   tx: Prisma.TransactionClient,
   input: DebitBalanceInput
 ): Promise<DebitBalanceResult> => {
@@ -95,3 +95,11 @@ export const debitBalance = async (
     lockedAtomic: nextLocked
   };
 };
+
+export const debitBalanceInTx = async (
+  tx: Prisma.TransactionClient,
+  input: DebitBalanceInput
+): Promise<DebitBalanceResult> => debitBalanceWithRowLock(tx, input);
+
+export const debitBalance = async (input: DebitBalanceInput): Promise<DebitBalanceResult> =>
+  prisma.$transaction(async (tx) => debitBalanceWithRowLock(tx, input));

@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { debitBalance } from "../wallets/service";
+import { debitBalanceInTx } from "../wallets/service";
 import {
   BOARD_SIZE,
   MAX_MINES,
@@ -635,7 +635,7 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
         throw new AppError("Active server seed not found", 500, "ACTIVE_SERVER_SEED_NOT_FOUND");
       }
 
-      const wallet = await debitBalance(tx, {
+      const wallet = await debitBalanceInTx(tx, {
         userId: input.userId,
         currency: input.currency,
         amountAtomic: input.betAtomic,

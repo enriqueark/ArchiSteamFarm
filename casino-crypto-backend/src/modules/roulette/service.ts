@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { SUPPORTED_CURRENCIES, debitBalance } from "../wallets/service";
+import { SUPPORTED_CURRENCIES, debitBalanceInTx } from "../wallets/service";
 import { computePayoutAtomic, evaluateRouletteBet, getRouletteColor, validateRouletteBetInput } from "./rules";
 import { RouletteRealtimeEvent } from "./ws-hub";
 
@@ -832,7 +832,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
         throw new AppError("Roulette round is closed for betting", 409, "ROULETTE_ROUND_CLOSED");
       }
 
-      const wallet = await debitBalance(tx, {
+      const wallet = await debitBalanceInTx(tx, {
         userId: input.userId,
         currency: input.currency,
         amountAtomic: input.stakeAtomic,

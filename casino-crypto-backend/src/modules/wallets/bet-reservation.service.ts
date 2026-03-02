@@ -10,7 +10,7 @@ import {
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { debitBalance } from "./service";
+import { debitBalanceInTx } from "./service";
 
 type WalletState = {
   walletId: string;
@@ -108,7 +108,7 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const updatedWallet = await debitBalance(tx, {
+      const updatedWallet = await debitBalanceInTx(tx, {
         userId: input.userId,
         currency: input.currency,
         amountAtomic: input.amountAtomic,
