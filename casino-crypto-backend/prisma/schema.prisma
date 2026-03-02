@@ -37,6 +37,7 @@ enum LedgerReason {
   BONUS
   BET_HOLD
   BET_RELEASE
+  BET_CAPTURE
 }
 
 enum DepositStatus {
@@ -59,6 +60,12 @@ enum WithdrawalStatus {
   CANCELLED
 }
 
+enum BetReservationStatus {
+  HELD
+  RELEASED
+  CAPTURED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -71,6 +78,7 @@ model User {
   wallets      Wallet[]
   deposits     Deposit[]
   withdrawals  Withdrawal[]
+  betReserves  BetReservation[]
 
   @@map("users")
 }
@@ -103,6 +111,7 @@ model Wallet {
   entries       LedgerEntry[]
   deposits      Deposit[]
   withdrawals   Withdrawal[]
+  betReserves   BetReservation[]
 
   @@unique([userId, currency])
   @@unique([id, currency])
@@ -126,10 +135,45 @@ model LedgerEntry {
   depositCredit       Deposit?        @relation("DepositCreditEntry")
   withdrawalDebit     Withdrawal?     @relation("WithdrawalDebitEntry")
   withdrawalFee       Withdrawal?     @relation("WithdrawalFeeEntry")
+  betHoldReserve      BetReservation? @relation("BetHoldEntry")
+  betReleaseReserve   BetReservation? @relation("BetReleaseEntry")
+  betCaptureReserve   BetReservation? @relation("BetCaptureEntry")
 
   @@index([walletId, createdAt(sort: Desc)])
   @@unique([walletId, idempotencyKey])
   @@map("wallet_transactions")
+}
+
+model BetReservation {
+  id                  String               @id @default(cuid())
+  userId              String
+  walletId            String
+  currency            Currency
+  betReference        String
+  amountAtomic        BigInt
+  status              BetReservationStatus @default(HELD)
+  holdIdempotencyKey  String?
+  releaseIdempotencyKey String?
+  captureIdempotencyKey String?
+  holdTransactionId   String               @unique
+  releaseTransactionId String?             @unique
+  captureTransactionId String?             @unique
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  releasedAt          DateTime?
+  capturedAt          DateTime?
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet              Wallet               @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  holdTransaction     LedgerEntry          @relation("BetHoldEntry", fields: [holdTransactionId], references: [id], onDelete: Restrict)
+  releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
+  captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, betReference])
+  @@unique([walletId, holdIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@map("bet_reservations")
 }
 
 model Deposit {

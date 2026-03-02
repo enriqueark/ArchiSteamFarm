@@ -40,8 +40,8 @@ src/
 - `health`: liveness/readiness probes.
 - `auth`: register, login, refresh, logout.
 - `users`: authenticated profile (`/me`).
-- `wallets`: balance and transaction history queries.
-- `ledger`: idempotent administrative adjustments (no betting/game logic).
+- `wallets`: balances, transaction history, and atomic bet fund reservations.
+- `ledger`: idempotent administrative balance adjustments.
 
 ## Scalability decisions (500 concurrent users)
 
@@ -51,6 +51,7 @@ src/
 4. **Mandatory Idempotency-Key** for critical operations (`/ledger/admin/adjust`).
 5. **Outbox + queue** to decouple audit event processing.
 6. **Rotating refresh JWTs** for secure, revocable sessions.
+7. **Atomic bet reservations** (`hold -> release/capture`) to prevent double spending in concurrent bets.
 
 ## Core data model (Prisma)
 
@@ -59,6 +60,7 @@ src/
 - `LedgerEntry` (before/after balance trail)
 - `OutboxEvent`
 - `Deposit`, `Withdrawal`
+- `BetReservation`
 
 ## PostgreSQL schema (requested entities)
 
@@ -75,8 +77,21 @@ Design highlights for multi-crypto + atomic consistency:
 - `wallets`: unique per `(userId, currency)`, balances stored in atomic units (`BIGINT`).
 - `wallet_transactions`: idempotency key per wallet, immutable before/after balance trail.
 - `deposits` / `withdrawals`: status lifecycle, network info, and optional linkage to ledger rows.
+- `bet_reservations`: one hold per `(walletId, betReference)` with explicit release/capture lifecycle.
 - Composite wallet relation in deposits/withdrawals enforces currency consistency with wallet.
 - Extra PostgreSQL `CHECK` constraints available in `prisma/sql/postgresql_atomic_constraints.sql`.
+
+## Atomic wallet flow for concurrent bets
+
+To prevent double spending with simultaneous bets, the wallet module uses a reservation flow:
+
+1. **HOLD**: atomically moves stake from `balanceAtomic` to `lockedAtomic` using one SQL statement:
+   - `UPDATE wallets SET balance = balance - x, locked = locked + x WHERE balance >= x`
+2. **RELEASE**: unlocks reserved funds (`locked -> balance`) when a bet is cancelled/refunded.
+3. **CAPTURE**: finalizes loss by decreasing `lockedAtomic` only.
+
+All three operations run inside PostgreSQL transactions and create immutable records in
+`wallet_transactions`, plus state tracking in `bet_reservations`.
 
 ## Requirements
 
@@ -129,6 +144,9 @@ docker compose up --build
 - `GET /api/v1/wallets`
 - `GET /api/v1/wallets/:currency/entries`
 - `POST /api/v1/ledger/admin/adjust` (ADMIN only + `Idempotency-Key`)
+- `POST /api/v1/wallets/admin/bets/hold` (ADMIN only + `Idempotency-Key`)
+- `POST /api/v1/wallets/admin/bets/release` (ADMIN only + `Idempotency-Key`)
+- `POST /api/v1/wallets/admin/bets/capture` (ADMIN only + `Idempotency-Key`)
 
 ## Recommended next steps
 

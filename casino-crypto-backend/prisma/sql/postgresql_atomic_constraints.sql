@@ -22,17 +22,17 @@ END $$;
 
 DO $$
 BEGIN
-  ALTER TABLE "wallets"
-    ADD CONSTRAINT "wallets_locked_lte_balance"
-    CHECK ("lockedAtomic" <= "balanceAtomic");
+  ALTER TABLE "wallet_transactions"
+    ADD CONSTRAINT "wallet_transactions_amount_positive"
+    CHECK ("amountAtomic" > 0);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
-  ALTER TABLE "wallet_transactions"
-    ADD CONSTRAINT "wallet_transactions_amount_positive"
+  ALTER TABLE "bet_reservations"
+    ADD CONSTRAINT "bet_reservations_amount_positive"
     CHECK ("amountAtomic" > 0);
 EXCEPTION
   WHEN duplicate_object THEN NULL;

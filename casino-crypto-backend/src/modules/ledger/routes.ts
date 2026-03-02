@@ -16,9 +16,15 @@ const adjustSchema = z.object({
   reason: z
     .nativeEnum(LedgerReason)
     .default(LedgerReason.ADMIN_ADJUSTMENT)
-    .refine((value) => value !== LedgerReason.BET_HOLD && value !== LedgerReason.BET_RELEASE, {
+    .refine(
+      (value) =>
+        value !== LedgerReason.BET_HOLD &&
+        value !== LedgerReason.BET_RELEASE &&
+        value !== LedgerReason.BET_CAPTURE,
+      {
       message: "Reason is not allowed in this administrative endpoint"
-    }),
+      }
+    ),
   referenceId: z.string().max(64).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 });

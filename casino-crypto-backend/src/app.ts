@@ -60,7 +60,7 @@ export const buildApp = (): FastifyInstance => {
       tags: [
         { name: "health", description: "Health checks" },
         { name: "auth", description: "Authentication and sessions" },
-        { name: "wallets", description: "Wallet management" },
+        { name: "wallets", description: "Wallet management and bet reservations" },
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "users", description: "User profile" }
       ]

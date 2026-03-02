@@ -2,14 +2,42 @@ import { Currency } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
-import { requireAuth } from "../../core/auth";
+import { requireAuth, requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
+import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
+import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "./bet-reservation.service";
 import { getWalletsByUser } from "./service";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
+
+const holdSchema = z.object({
+  userId: z.string().cuid(),
+  currency: z.nativeEnum(Currency),
+  betReference: z.string().min(8).max(128),
+  amountAtomic: z
+    .string()
+    .regex(/^\d+$/, "amountAtomic must be an integer string")
+    .transform((value) => BigInt(value))
+    .refine((value) => value > 0n, "amountAtomic must be greater than 0"),
+  metadata: z.record(z.string(), z.unknown()).optional()
+});
+
+const finalizeSchema = z.object({
+  userId: z.string().cuid(),
+  currency: z.nativeEnum(Currency),
+  betReference: z.string().min(8).max(128)
+});
+
+const getIdempotencyKey = (request: { idempotencyKey?: string }): string => {
+  if (!request.idempotencyKey) {
+    throw new AppError("Idempotency-Key header is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
+  }
+
+  return request.idempotencyKey;
+};
 
 export const walletRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", { preHandler: requireAuth }, async (request, reply) => {
@@ -71,4 +99,102 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
       }))
     );
   });
+
+  fastify.post(
+    "/admin/bets/hold",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = holdSchema.parse(request.body);
+      const idempotencyKey = getIdempotencyKey(request);
+      const result = await holdFundsForBet({
+        actorUserId: request.user.sub,
+        userId: body.userId,
+        currency: body.currency,
+        betReference: body.betReference,
+        amountAtomic: body.amountAtomic,
+        idempotencyKey,
+        metadata: body.metadata
+      });
+
+      return reply.send({
+        reservationId: result.reservation.id,
+        status: result.reservation.status,
+        betReference: result.reservation.betReference,
+        amountAtomic: result.reservation.amountAtomic.toString(),
+        currency: result.reservation.currency,
+        holdTransactionId: result.reservation.holdTransactionId,
+        releaseTransactionId: result.reservation.releaseTransactionId,
+        captureTransactionId: result.reservation.captureTransactionId,
+        balanceAtomic: result.wallet.balanceAtomic.toString(),
+        lockedAtomic: result.wallet.lockedAtomic.toString(),
+        availableAtomic: result.wallet.balanceAtomic.toString()
+      });
+    }
+  );
+
+  fastify.post(
+    "/admin/bets/release",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = finalizeSchema.parse(request.body);
+      const idempotencyKey = getIdempotencyKey(request);
+      const result = await releaseHeldFunds({
+        actorUserId: request.user.sub,
+        userId: body.userId,
+        currency: body.currency,
+        betReference: body.betReference,
+        idempotencyKey
+      });
+
+      return reply.send({
+        reservationId: result.reservation.id,
+        status: result.reservation.status,
+        betReference: result.reservation.betReference,
+        amountAtomic: result.reservation.amountAtomic.toString(),
+        currency: result.reservation.currency,
+        holdTransactionId: result.reservation.holdTransactionId,
+        releaseTransactionId: result.reservation.releaseTransactionId,
+        captureTransactionId: result.reservation.captureTransactionId,
+        balanceAtomic: result.wallet.balanceAtomic.toString(),
+        lockedAtomic: result.wallet.lockedAtomic.toString(),
+        availableAtomic: result.wallet.balanceAtomic.toString()
+      });
+    }
+  );
+
+  fastify.post(
+    "/admin/bets/capture",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = finalizeSchema.parse(request.body);
+      const idempotencyKey = getIdempotencyKey(request);
+      const result = await captureHeldFunds({
+        actorUserId: request.user.sub,
+        userId: body.userId,
+        currency: body.currency,
+        betReference: body.betReference,
+        idempotencyKey
+      });
+
+      return reply.send({
+        reservationId: result.reservation.id,
+        status: result.reservation.status,
+        betReference: result.reservation.betReference,
+        amountAtomic: result.reservation.amountAtomic.toString(),
+        currency: result.reservation.currency,
+        holdTransactionId: result.reservation.holdTransactionId,
+        releaseTransactionId: result.reservation.releaseTransactionId,
+        captureTransactionId: result.reservation.captureTransactionId,
+        balanceAtomic: result.wallet.balanceAtomic.toString(),
+        lockedAtomic: result.wallet.lockedAtomic.toString(),
+        availableAtomic: result.wallet.balanceAtomic.toString()
+      });
+    }
+  );
 };
