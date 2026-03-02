@@ -121,7 +121,7 @@ export const register = async (
   });
 
   if (existing) {
-    throw new AppError("El email ya está registrado", 409, "EMAIL_ALREADY_EXISTS");
+    throw new AppError("Email is already registered", 409, "EMAIL_ALREADY_EXISTS");
   }
 
   const passwordHash = await argon2.hash(input.password);
@@ -158,17 +158,17 @@ export const login = async (
   });
 
   if (!user) {
-    throw new AppError("Credenciales inválidas", 401, "INVALID_CREDENTIALS");
+    throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
   }
 
   const passwordValid = await argon2.verify(user.passwordHash, input.password);
 
   if (!passwordValid) {
-    throw new AppError("Credenciales inválidas", 401, "INVALID_CREDENTIALS");
+    throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
   }
 
   if (user.status !== "ACTIVE") {
-    throw new AppError("El usuario no está activo", 403, "USER_NOT_ACTIVE");
+    throw new AppError("User is not active", 403, "USER_NOT_ACTIVE");
   }
 
   const sanitizedUser = sanitizeUser(user);
@@ -195,7 +195,7 @@ export const refreshSession = async (
   }>(refreshToken);
 
   if (decoded.tokenType !== "refresh") {
-    throw new AppError("Token de refresh inválido", 401, "INVALID_REFRESH_TOKEN");
+    throw new AppError("Invalid refresh token", 401, "INVALID_REFRESH_TOKEN");
   }
 
   const session = await prisma.session.findFirst({
@@ -207,13 +207,13 @@ export const refreshSession = async (
   });
 
   if (!session) {
-    throw new AppError("Sesión inválida o revocada", 401, "SESSION_REVOKED");
+    throw new AppError("Invalid or revoked session", 401, "SESSION_REVOKED");
   }
 
   const validHash = await argon2.verify(session.refreshTokenHash, refreshToken);
 
   if (!validHash) {
-    throw new AppError("Refresh token no coincide", 401, "REFRESH_TOKEN_MISMATCH");
+    throw new AppError("Refresh token mismatch", 401, "REFRESH_TOKEN_MISMATCH");
   }
 
   const tokens = await issueTokenPair(

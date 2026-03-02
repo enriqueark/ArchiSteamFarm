@@ -46,7 +46,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/logout", { preHandler: requireAuth }, async (request, reply) => {
     if (!request.user.sessionId) {
-      throw new AppError("Sesión inválida", 401, "INVALID_SESSION");
+      throw new AppError("Invalid session", 401, "INVALID_SESSION");
     }
 
     await logout(request.user.sessionId, request.user.sub);

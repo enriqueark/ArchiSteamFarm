@@ -19,7 +19,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      return reply.code(404).send({ message: "Usuario no encontrado" });
+      return reply.code(404).send({ message: "User not found" });
     }
 
     return reply.send(user);

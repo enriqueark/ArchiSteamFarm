@@ -1,17 +1,17 @@
-# Casino Crypto Backend (sin juegos)
+# Casino Crypto Backend (without games)
 
-Backend modular en **Node.js + TypeScript** para una plataforma de casino crypto, diseñado como base escalable para ~500 usuarios concurrentes.
+Modular **Node.js + TypeScript** backend for a crypto casino platform, designed as a scalable foundation for ~500 concurrent users.
 
 ## Stack
 
 - **API**: Fastify 5
-- **Lenguaje**: TypeScript estricto
-- **DB principal**: PostgreSQL + Prisma ORM
-- **Cache/coordination**: Redis (rate limit distribuido + colas)
-- **Colas**: BullMQ (eventos de auditoría)
-- **Auth**: JWT access + refresh con rotación
+- **Language**: strict TypeScript
+- **Primary DB**: PostgreSQL + Prisma ORM
+- **Cache/coordination**: Redis (distributed rate limit + queues)
+- **Queues**: BullMQ (audit events)
+- **Auth**: JWT access + refresh with rotation
 
-## Arquitectura modular
+## Modular architecture
 
 ```txt
 src/
@@ -35,52 +35,52 @@ src/
     ledger/
 ```
 
-### Módulos incluidos (sin juegos)
+### Included modules (without games)
 
-- `health`: probes de liveness/readiness.
-- `auth`: registro, login, refresh, logout.
-- `users`: perfil autenticado (`/me`).
-- `wallets`: consulta de balances y movimientos.
-- `ledger`: ajustes administrativos con idempotencia (sin lógica de apuestas/juegos).
+- `health`: liveness/readiness probes.
+- `auth`: register, login, refresh, logout.
+- `users`: authenticated profile (`/me`).
+- `wallets`: balance and transaction history queries.
+- `ledger`: idempotent administrative adjustments (no betting/game logic).
 
-## Decisiones de escalabilidad (500 concurrentes)
+## Scalability decisions (500 concurrent users)
 
-1. **Fastify** para alto rendimiento por conexión.
-2. **Rate limiting con Redis** para sincronizar límites entre réplicas.
-3. **Ledger con transacción SQL + row lock (`FOR UPDATE`)** para evitar race conditions en balances.
-4. **Idempotency-Key** obligatorio en operaciones críticas (`/ledger/admin/adjust`).
-5. **Outbox + cola** para desacoplar eventos de auditoría.
-6. **JWT con refresh rotatorio** para sesiones seguras y revocables.
+1. **Fastify** for high per-connection throughput.
+2. **Redis-backed rate limiting** to sync limits across replicas.
+3. **Ledger transaction + row lock (`FOR UPDATE`)** to avoid balance race conditions.
+4. **Mandatory Idempotency-Key** for critical operations (`/ledger/admin/adjust`).
+5. **Outbox + queue** to decouple audit event processing.
+6. **Rotating refresh JWTs** for secure, revocable sessions.
 
-## Modelo de datos principal (Prisma)
+## Core data model (Prisma)
 
 - `User`, `Session`
-- `Wallet` (saldo en unidades atómicas `BigInt`)
-- `LedgerEntry` (doble rastro de before/after)
+- `Wallet` (atomic-unit balance with `BigInt`)
+- `LedgerEntry` (before/after balance trail)
 - `OutboxEvent`
 
-## Requisitos
+## Requirements
 
 - Node.js 22+
 - PostgreSQL 16+
 - Redis 7+
 
-## Variables de entorno
+## Environment variables
 
-Copiar el ejemplo:
+Copy the example file:
 
 ```bash
 cp .env.example .env
 ```
 
-Variables mínimas:
+Minimum required variables:
 
 - `DATABASE_URL`
 - `REDIS_URL`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
 
-## Ejecutar en local
+## Run locally
 
 ```bash
 npm install
@@ -89,16 +89,16 @@ npm run prisma:migrate
 npm run dev
 ```
 
-API docs en `http://localhost:3000/docs`.
+API docs available at `http://localhost:3000/docs`.
 
-## Ejecutar con Docker
+## Run with Docker
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-## Endpoints base
+## Base endpoints
 
 - `GET /api/v1/health/live`
 - `GET /api/v1/health/ready`
@@ -109,11 +109,11 @@ docker compose up --build
 - `GET /api/v1/users/me`
 - `GET /api/v1/wallets`
 - `GET /api/v1/wallets/:currency/entries`
-- `POST /api/v1/ledger/admin/adjust` (solo ADMIN + `Idempotency-Key`)
+- `POST /api/v1/ledger/admin/adjust` (ADMIN only + `Idempotency-Key`)
 
-## Siguientes pasos recomendados
+## Recommended next steps
 
-- Agregar módulo de pagos on-chain/off-chain.
-- Integrar KYC/AML y límites por jurisdicción.
-- Añadir worker dedicado para procesar `OutboxEvent`.
-- Integrar observabilidad completa (OpenTelemetry + métricas Prometheus).
+- Add on-chain/off-chain payments module.
+- Integrate KYC/AML and jurisdiction-based limits.
+- Add a dedicated worker to process `OutboxEvent`.
+- Integrate full observability (OpenTelemetry + Prometheus metrics).

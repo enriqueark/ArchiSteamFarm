@@ -1,7 +1,7 @@
 {
   "name": "casino-crypto-backend",
   "version": "1.0.0",
-  "description": "Backend modular para casino crypto con Node.js, TypeScript, PostgreSQL y Redis.",
+  "description": "Modular crypto casino backend with Node.js, TypeScript, PostgreSQL, and Redis.",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

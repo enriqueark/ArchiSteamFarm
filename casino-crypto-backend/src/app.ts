@@ -54,15 +54,15 @@ export const buildApp = (): FastifyInstance => {
     openapi: {
       info: {
         title: "Casino Crypto Backend API",
-        description: "API base modular (sin juegos) para plataforma casino crypto.",
+        description: "Modular base API (without games) for a crypto casino platform.",
         version: "1.0.0"
       },
       tags: [
         { name: "health", description: "Health checks" },
-        { name: "auth", description: "Autenticación y sesiones" },
-        { name: "wallets", description: "Gestión de wallets" },
-        { name: "ledger", description: "Movimientos contables" },
-        { name: "users", description: "Perfil de usuario" }
+        { name: "auth", description: "Authentication and sessions" },
+        { name: "wallets", description: "Wallet management" },
+        { name: "ledger", description: "Ledger accounting entries" },
+        { name: "users", description: "User profile" }
       ]
     }
   });
@@ -81,7 +81,7 @@ export const buildApp = (): FastifyInstance => {
     if (error instanceof ZodError) {
       return reply.code(400).send({
         code: "VALIDATION_ERROR",
-        message: "Error de validación",
+        message: "Validation error",
         details: toZodDetails(error)
       });
     }
@@ -97,7 +97,7 @@ export const buildApp = (): FastifyInstance => {
     request.log.error({ err: error }, "Unhandled error");
     return reply.code(500).send({
       code: "INTERNAL_SERVER_ERROR",
-      message: "Ha ocurrido un error interno"
+      message: "An internal error occurred"
     });
   });
 

@@ -43,7 +43,7 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!wallet) {
-      throw new AppError("Wallet no encontrada para la moneda solicitada", 404, "WALLET_NOT_FOUND");
+      throw new AppError("Wallet not found for requested currency", 404, "WALLET_NOT_FOUND");
     }
 
     const entries = await prisma.ledgerEntry.findMany({

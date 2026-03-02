@@ -8,11 +8,11 @@ export const requireIdempotencyKey = async (request: FastifyRequest, _reply: Fas
   const headerValue = request.headers["idempotency-key"];
 
   if (typeof headerValue !== "string") {
-    throw new AppError("El header Idempotency-Key es obligatorio", 400, "IDEMPOTENCY_KEY_REQUIRED");
+    throw new AppError("Idempotency-Key header is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
   }
 
   if (!IDEMPOTENCY_KEY_REGEX.test(headerValue)) {
-    throw new AppError("Idempotency-Key inválido", 400, "IDEMPOTENCY_KEY_INVALID");
+    throw new AppError("Invalid Idempotency-Key", 400, "IDEMPOTENCY_KEY_INVALID");
   }
 
   request.idempotencyKey = headerValue;

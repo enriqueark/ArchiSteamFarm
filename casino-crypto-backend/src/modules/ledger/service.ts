@@ -25,7 +25,7 @@ const isUniqueViolation = (error: unknown): error is Prisma.PrismaClientKnownReq
 
 export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<AdjustBalanceResult> => {
   if (input.amountAtomic === 0n) {
-    throw new AppError("amountAtomic no puede ser 0", 400, "INVALID_AMOUNT");
+    throw new AppError("amountAtomic cannot be 0", 400, "INVALID_AMOUNT");
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -40,7 +40,7 @@ export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<Ad
     const wallet = walletRows[0];
 
     if (!wallet) {
-      throw new AppError("Wallet no encontrada", 404, "WALLET_NOT_FOUND");
+      throw new AppError("Wallet not found", 404, "WALLET_NOT_FOUND");
     }
 
     if (input.idempotencyKey) {
@@ -67,7 +67,7 @@ export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<Ad
     const after = direction === LedgerDirection.CREDIT ? before + amountAbs : before - amountAbs;
 
     if (after < 0n) {
-      throw new AppError("Fondos insuficientes", 422, "INSUFFICIENT_FUNDS");
+      throw new AppError("Insufficient funds", 422, "INSUFFICIENT_FUNDS");
     }
 
     await tx.wallet.update({

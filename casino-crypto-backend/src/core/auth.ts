@@ -6,7 +6,7 @@ export const requireAuth = async (request: FastifyRequest, _reply: FastifyReply)
   await request.jwtVerify();
 
   if (request.user.tokenType !== "access") {
-    throw new AppError("Token inválido para este endpoint", 401, "INVALID_TOKEN_TYPE");
+    throw new AppError("Invalid token for this endpoint", 401, "INVALID_TOKEN_TYPE");
   }
 };
 
@@ -16,6 +16,6 @@ export const requireRoles =
     await requireAuth(request, _reply);
 
     if (!roles.includes(request.user.role)) {
-      throw new AppError("No tienes permisos para esta operación", 403, "FORBIDDEN");
+      throw new AppError("You do not have permission to perform this operation", 403, "FORBIDDEN");
     }
   };
