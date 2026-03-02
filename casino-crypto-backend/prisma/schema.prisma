@@ -39,6 +39,26 @@ enum LedgerReason {
   BET_RELEASE
 }
 
+enum DepositStatus {
+  PENDING
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  BROADCASTED
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -49,6 +69,10 @@ model User {
   updatedAt    DateTime   @updatedAt
   sessions     Session[]
   wallets      Wallet[]
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
+
+  @@map("users")
 }
 
 model Session {
@@ -64,6 +88,7 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+  @@map("sessions")
 }
 
 model Wallet {
@@ -76,9 +101,13 @@ model Wallet {
   updatedAt     DateTime    @updatedAt
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries       LedgerEntry[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
 
   @@unique([userId, currency])
+  @@unique([id, currency])
   @@index([userId])
+  @@map("wallets")
 }
 
 model LedgerEntry {
@@ -94,9 +123,78 @@ model LedgerEntry {
   metadata            Json?
   createdAt           DateTime        @default(now())
   wallet              Wallet          @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  depositCredit       Deposit?        @relation("DepositCreditEntry")
+  withdrawalDebit     Withdrawal?     @relation("WithdrawalDebitEntry")
+  withdrawalFee       Withdrawal?     @relation("WithdrawalFeeEntry")
 
   @@index([walletId, createdAt(sort: Desc)])
   @@unique([walletId, idempotencyKey])
+  @@map("wallet_transactions")
+}
+
+model Deposit {
+  id                    String        @id @default(cuid())
+  userId                String
+  walletId              String
+  currency              Currency
+  network               String        @default("mainnet")
+  amountAtomic          BigInt
+  txHash                String?
+  txVout                Int?
+  status                DepositStatus @default(PENDING)
+  confirmations         Int           @default(0)
+  requiredConfirmations Int           @default(1)
+  idempotencyKey        String?
+  creditedTransactionId String?       @unique
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  confirmedAt           DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet                Wallet        @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  creditedTransaction   LedgerEntry?  @relation("DepositCreditEntry", fields: [creditedTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@map("deposits")
+}
+
+model Withdrawal {
+  id                 String           @id @default(cuid())
+  userId             String
+  walletId           String
+  currency           Currency
+  network            String           @default("mainnet")
+  destinationAddress String
+  amountAtomic       BigInt
+  feeAtomic          BigInt           @default(0)
+  status             WithdrawalStatus @default(PENDING)
+  idempotencyKey     String?
+  txHash             String?
+  debitTransactionId String?          @unique
+  feeTransactionId   String?          @unique
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  reviewedAt         DateTime?
+  broadcastedAt      DateTime?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  cancelledAt        DateTime?
+  user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet             Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  debitTransaction   LedgerEntry?     @relation("WithdrawalDebitEntry", fields: [debitTransactionId], references: [id], onDelete: SetNull)
+  feeTransaction     LedgerEntry?     @relation("WithdrawalFeeEntry", fields: [feeTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@map("withdrawals")
 }
 
 model OutboxEvent {
@@ -107,4 +205,5 @@ model OutboxEvent {
   createdAt   DateTime  @default(now())
 
   @@index([publishedAt])
+  @@map("outbox_events")
 }

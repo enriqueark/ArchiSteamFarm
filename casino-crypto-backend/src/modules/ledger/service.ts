@@ -31,7 +31,7 @@ export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<Ad
   const result = await prisma.$transaction(async (tx) => {
     const walletRows = await tx.$queryRaw<Array<{ id: string; balanceAtomic: bigint }>>`
       SELECT id, "balanceAtomic"
-      FROM "Wallet"
+      FROM "wallets"
       WHERE "userId" = ${input.userId}
         AND "currency" = ${input.currency}
       FOR UPDATE

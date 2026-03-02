@@ -58,6 +58,25 @@ src/
 - `Wallet` (atomic-unit balance with `BigInt`)
 - `LedgerEntry` (before/after balance trail)
 - `OutboxEvent`
+- `Deposit`, `Withdrawal`
+
+## PostgreSQL schema (requested entities)
+
+The Prisma models are mapped to these PostgreSQL tables:
+
+- `users`
+- `wallets`
+- `wallet_transactions` (via `LedgerEntry`)
+- `deposits`
+- `withdrawals`
+
+Design highlights for multi-crypto + atomic consistency:
+
+- `wallets`: unique per `(userId, currency)`, balances stored in atomic units (`BIGINT`).
+- `wallet_transactions`: idempotency key per wallet, immutable before/after balance trail.
+- `deposits` / `withdrawals`: status lifecycle, network info, and optional linkage to ledger rows.
+- Composite wallet relation in deposits/withdrawals enforces currency consistency with wallet.
+- Extra PostgreSQL `CHECK` constraints available in `prisma/sql/postgresql_atomic_constraints.sql`.
 
 ## Requirements
 
