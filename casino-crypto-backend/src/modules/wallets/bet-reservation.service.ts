@@ -10,6 +10,7 @@ import {
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { debitBalance } from "./service";
 
 type WalletState = {
   walletId: string;
@@ -107,29 +108,20 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const updatedRows = await tx.$queryRaw<
-        Array<{ id: string; balanceAtomic: bigint; lockedAtomic: bigint }>
-      >`UPDATE "wallets"
-         SET "balanceAtomic" = "balanceAtomic" - ${input.amountAtomic},
-             "lockedAtomic" = "lockedAtomic" + ${input.amountAtomic},
-             "updatedAt" = NOW()
-         WHERE "id" = ${wallet.id}
-           AND "balanceAtomic" >= ${input.amountAtomic}
-         RETURNING id, "balanceAtomic", "lockedAtomic"`;
+      const updatedWallet = await debitBalance(tx, {
+        userId: input.userId,
+        currency: input.currency,
+        amountAtomic: input.amountAtomic,
+        lockAmountAtomic: input.amountAtomic
+      });
 
-      const updatedWallet = updatedRows[0];
-      if (!updatedWallet) {
-        throw new AppError("Insufficient funds", 422, "INSUFFICIENT_FUNDS");
-      }
-
-      const balanceBefore = updatedWallet.balanceAtomic + input.amountAtomic;
       const holdEntry = await tx.ledgerEntry.create({
         data: {
-          walletId: wallet.id,
+          walletId: updatedWallet.walletId,
           direction: LedgerDirection.DEBIT,
           reason: LedgerReason.BET_HOLD,
           amountAtomic: input.amountAtomic,
-          balanceBeforeAtomic: balanceBefore,
+          balanceBeforeAtomic: updatedWallet.balanceBeforeAtomic,
           balanceAfterAtomic: updatedWallet.balanceAtomic,
           idempotencyKey: input.idempotencyKey,
           referenceId: input.betReference,
@@ -144,7 +136,7 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
       const reservation = await tx.betReservation.create({
         data: {
           userId: input.userId,
-          walletId: wallet.id,
+          walletId: updatedWallet.walletId,
           currency: input.currency,
           betReference: input.betReference,
           amountAtomic: input.amountAtomic,
@@ -160,7 +152,7 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
           payload: {
             actorUserId: input.actorUserId,
             userId: input.userId,
-            walletId: wallet.id,
+            walletId: updatedWallet.walletId,
             currency: input.currency,
             betReference: input.betReference,
             amountAtomic: input.amountAtomic.toString(),
@@ -173,7 +165,7 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
       return {
         reservation,
         wallet: {
-          walletId: updatedWallet.id,
+          walletId: updatedWallet.walletId,
           balanceAtomic: updatedWallet.balanceAtomic,
           lockedAtomic: updatedWallet.lockedAtomic
         }

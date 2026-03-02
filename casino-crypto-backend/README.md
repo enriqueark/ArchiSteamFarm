@@ -95,7 +95,7 @@ Design highlights for multi-crypto + atomic consistency:
 To prevent double spending with simultaneous bets, the wallet module uses a reservation flow:
 
 1. **HOLD**: atomically moves stake from `balanceAtomic` to `lockedAtomic` using one SQL statement:
-   - `UPDATE wallets SET balance = balance - x, locked = locked + x WHERE balance >= x`
+   - via wallet module function `debitBalance()` with `SELECT ... FOR UPDATE` row lock.
 2. **RELEASE**: unlocks reserved funds (`locked -> balance`) when a bet is cancelled/refunded.
 3. **CAPTURE**: finalizes loss by decreasing `lockedAtomic` only.
 

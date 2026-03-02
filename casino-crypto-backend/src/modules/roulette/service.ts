@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { SUPPORTED_CURRENCIES } from "../wallets/service";
+import { SUPPORTED_CURRENCIES, debitBalance } from "../wallets/service";
 import { computePayoutAtomic, evaluateRouletteBet, getRouletteColor, validateRouletteBetInput } from "./rules";
 import { RouletteRealtimeEvent } from "./ws-hub";
 
@@ -832,32 +832,22 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
         throw new AppError("Roulette round is closed for betting", 409, "ROULETTE_ROUND_CLOSED");
       }
 
-      const walletRows = await tx.$queryRaw<WalletMutationRow[]>`
-        UPDATE "wallets"
-        SET "balanceAtomic" = "balanceAtomic" - ${input.stakeAtomic},
-            "lockedAtomic" = "lockedAtomic" + ${input.stakeAtomic},
-            "updatedAt" = NOW()
-        WHERE "userId" = ${input.userId}
-          AND "currency" = ${input.currency}
-          AND "balanceAtomic" >= ${input.stakeAtomic}
-        RETURNING id, "balanceAtomic", "lockedAtomic"
-      `;
-
-      const wallet = walletRows[0];
-      if (!wallet) {
-        throw new AppError("Insufficient funds", 422, "INSUFFICIENT_FUNDS");
-      }
+      const wallet = await debitBalance(tx, {
+        userId: input.userId,
+        currency: input.currency,
+        amountAtomic: input.stakeAtomic,
+        lockAmountAtomic: input.stakeAtomic
+      });
 
       const betReference = `roulette:${lockedRound.id}:${randomUUID()}`;
-      const balanceBefore = wallet.balanceAtomic + input.stakeAtomic;
 
       const holdEntry = await tx.ledgerEntry.create({
         data: {
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           direction: LedgerDirection.DEBIT,
           reason: LedgerReason.BET_HOLD,
           amountAtomic: input.stakeAtomic,
-          balanceBeforeAtomic: balanceBefore,
+          balanceBeforeAtomic: wallet.balanceBeforeAtomic,
           balanceAfterAtomic: wallet.balanceAtomic,
           idempotencyKey: input.idempotencyKey,
           referenceId: betReference,
@@ -875,7 +865,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
       const reservation = await tx.betReservation.create({
         data: {
           userId: input.userId,
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           currency: input.currency,
           betReference,
           amountAtomic: input.stakeAtomic,
@@ -894,7 +884,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
         data: {
           roundId: lockedRound.id,
           userId: input.userId,
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           currency: input.currency,
           betType: input.betType,
           betValue: input.betValue,
@@ -931,7 +921,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
         round: toRoundState(roundState),
         bet: toBetState(bet),
         wallet: {
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           balanceAtomic: wallet.balanceAtomic,
           lockedAtomic: wallet.lockedAtomic
         }

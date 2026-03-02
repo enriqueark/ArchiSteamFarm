@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { debitBalance } from "../wallets/service";
 import {
   BOARD_SIZE,
   MAX_MINES,
@@ -634,32 +635,22 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
         throw new AppError("Active server seed not found", 500, "ACTIVE_SERVER_SEED_NOT_FOUND");
       }
 
-      const walletRows = await tx.$queryRaw<WalletUpdateRow[]>`
-        UPDATE "wallets"
-        SET "balanceAtomic" = "balanceAtomic" - ${input.betAtomic},
-            "lockedAtomic" = "lockedAtomic" + ${input.betAtomic},
-            "updatedAt" = NOW()
-        WHERE "userId" = ${input.userId}
-          AND "currency" = ${input.currency}
-          AND "balanceAtomic" >= ${input.betAtomic}
-        RETURNING id, "balanceAtomic", "lockedAtomic"
-      `;
-
-      const wallet = walletRows[0];
-      if (!wallet) {
-        throw new AppError("Insufficient funds", 422, "INSUFFICIENT_FUNDS");
-      }
+      const wallet = await debitBalance(tx, {
+        userId: input.userId,
+        currency: input.currency,
+        amountAtomic: input.betAtomic,
+        lockAmountAtomic: input.betAtomic
+      });
 
       const betReference = `mines:${seed.serverSeedHash.slice(0, 12)}:${nonceState.nonce}:${randomUUID()}`;
-      const balanceBeforeHold = wallet.balanceAtomic + input.betAtomic;
 
       const holdEntry = await tx.ledgerEntry.create({
         data: {
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           direction: LedgerDirection.DEBIT,
           reason: LedgerReason.BET_HOLD,
           amountAtomic: input.betAtomic,
-          balanceBeforeAtomic: balanceBeforeHold,
+          balanceBeforeAtomic: wallet.balanceBeforeAtomic,
           balanceAfterAtomic: wallet.balanceAtomic,
           idempotencyKey: input.idempotencyKey,
           referenceId: betReference,
@@ -676,7 +667,7 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
       const reservation = await tx.betReservation.create({
         data: {
           userId: input.userId,
-          walletId: wallet.id,
+          walletId: wallet.walletId,
           currency: input.currency,
           betReference,
           amountAtomic: input.betAtomic,
@@ -727,7 +718,11 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
 
       return {
         game,
-        wallet: ensureWalletSnapshot(wallet)
+        wallet: {
+          walletId: wallet.walletId,
+          balanceAtomic: wallet.balanceAtomic,
+          lockedAtomic: wallet.lockedAtomic
+        }
       };
     });
 
