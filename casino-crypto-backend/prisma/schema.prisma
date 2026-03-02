@@ -38,6 +38,7 @@ enum LedgerReason {
   BET_HOLD
   BET_RELEASE
   BET_CAPTURE
+  BET_PAYOUT
 }
 
 enum DepositStatus {
@@ -66,6 +67,17 @@ enum BetReservationStatus {
   CAPTURED
 }
 
+enum ProvablyFairSeedStatus {
+  ACTIVE
+  REVEALED
+}
+
+enum MinesGameStatus {
+  ACTIVE
+  LOST
+  CASHED_OUT
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -79,6 +91,9 @@ model User {
   deposits     Deposit[]
   withdrawals  Withdrawal[]
   betReserves  BetReservation[]
+  provablyFairProfile ProvablyFairProfile?
+  provablyFairSeeds   ProvablyFairSeed[]
+  minesGames          MinesGame[]
 
   @@map("users")
 }
@@ -168,12 +183,74 @@ model BetReservation {
   holdTransaction     LedgerEntry          @relation("BetHoldEntry", fields: [holdTransactionId], references: [id], onDelete: Restrict)
   releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
   captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  minesGame           MinesGame?           @relation("BetReservationMinesGame")
 
   @@unique([walletId, betReference])
   @@unique([walletId, holdIdempotencyKey])
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([walletId, status, createdAt(sort: Desc)])
   @@map("bet_reservations")
+}
+
+model ProvablyFairSeed {
+  id            String                 @id @default(cuid())
+  userId        String
+  serverSeed    String
+  serverSeedHash String                @unique
+  status        ProvablyFairSeedStatus @default(ACTIVE)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  revealedAt    DateTime?
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  activeForProfiles ProvablyFairProfile[] @relation("ActiveProvablyFairSeed")
+  minesGames    MinesGame[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@map("provably_fair_seeds")
+}
+
+model ProvablyFairProfile {
+  userId       String            @id
+  clientSeed   String
+  nonce        Int               @default(0)
+  activeSeedId String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeSeed   ProvablyFairSeed  @relation("ActiveProvablyFairSeed", fields: [activeSeedId], references: [id], onDelete: Restrict)
+
+  @@index([activeSeedId])
+  @@map("provably_fair_profiles")
+}
+
+model MinesGame {
+  id                String          @id @default(cuid())
+  userId            String
+  currency          Currency
+  betAtomic         BigInt
+  mineCount         Int
+  boardSize         Int             @default(25)
+  status            MinesGameStatus @default(ACTIVE)
+  serverSeedId      String
+  serverSeedHash    String
+  clientSeed        String
+  nonce             Int
+  betReference      String          @unique
+  betReservationId  String          @unique
+  revealedCells     Json
+  safeReveals       Int             @default(0)
+  currentMultiplier Decimal         @default(1.0) @db.Decimal(18, 8)
+  payoutAtomic      BigInt?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  finishedAt        DateTime?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serverSeed        ProvablyFairSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  betReservation    BetReservation  @relation("BetReservationMinesGame", fields: [betReservationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mines_games")
 }
 
 model Deposit {

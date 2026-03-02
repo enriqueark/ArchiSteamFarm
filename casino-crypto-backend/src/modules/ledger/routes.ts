@@ -20,7 +20,8 @@ const adjustSchema = z.object({
       (value) =>
         value !== LedgerReason.BET_HOLD &&
         value !== LedgerReason.BET_RELEASE &&
-        value !== LedgerReason.BET_CAPTURE,
+        value !== LedgerReason.BET_CAPTURE &&
+        value !== LedgerReason.BET_PAYOUT,
       {
       message: "Reason is not allowed in this administrative endpoint"
       }

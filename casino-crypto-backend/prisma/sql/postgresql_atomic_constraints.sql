@@ -40,6 +40,42 @@ END $$;
 
 DO $$
 BEGIN
+  ALTER TABLE "provably_fair_profiles"
+    ADD CONSTRAINT "provably_fair_profiles_nonce_non_negative"
+    CHECK ("nonce" >= 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "mines_games"
+    ADD CONSTRAINT "mines_games_mine_count_valid"
+    CHECK ("mineCount" > 0 AND "mineCount" < "boardSize");
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "mines_games"
+    ADD CONSTRAINT "mines_games_safe_reveals_valid"
+    CHECK ("safeReveals" >= 0 AND "safeReveals" <= ("boardSize" - "mineCount"));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "mines_games"
+    ADD CONSTRAINT "mines_games_multiplier_valid"
+    CHECK ("currentMultiplier" >= 1);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
   ALTER TABLE "wallet_transactions"
     ADD CONSTRAINT "wallet_transactions_balances_non_negative"
     CHECK ("balanceBeforeAtomic" >= 0 AND "balanceAfterAtomic" >= 0);

@@ -33,6 +33,7 @@ src/
     users/
     wallets/
     ledger/
+    mines/
 ```
 
 ### Included modules (without games)
@@ -42,6 +43,7 @@ src/
 - `users`: authenticated profile (`/me`).
 - `wallets`: balances, transaction history, and atomic bet fund reservations.
 - `ledger`: idempotent administrative balance adjustments.
+- `mines`: provably fair Mines game logic fully generated on backend.
 
 ## Scalability decisions (500 concurrent users)
 
@@ -52,6 +54,7 @@ src/
 5. **Outbox + queue** to decouple audit event processing.
 6. **Rotating refresh JWTs** for secure, revocable sessions.
 7. **Atomic bet reservations** (`hold -> release/capture`) to prevent double spending in concurrent bets.
+8. **Provably fair seeds** (`server seed + client seed + nonce`) for reproducible Mines outcomes.
 
 ## Core data model (Prisma)
 
@@ -61,6 +64,7 @@ src/
 - `OutboxEvent`
 - `Deposit`, `Withdrawal`
 - `BetReservation`
+- `ProvablyFairProfile`, `ProvablyFairSeed`, `MinesGame`
 
 ## PostgreSQL schema (requested entities)
 
@@ -92,6 +96,15 @@ To prevent double spending with simultaneous bets, the wallet module uses a rese
 
 All three operations run inside PostgreSQL transactions and create immutable records in
 `wallet_transactions`, plus state tracking in `bet_reservations`.
+
+## Mines provably fair (backend-only result generation)
+
+The Mines result is **never generated in frontend**.
+
+- Board mine positions are generated in backend using: `serverSeed + clientSeed + nonce`.
+- `serverSeedHash` is committed to the player before the game.
+- Server seed is revealed only after rotation (and blocked while active Mines games exist).
+- With revealed seed, client seed, and nonce, users can verify historical game outcomes.
 
 ## Requirements
 
@@ -147,6 +160,13 @@ docker compose up --build
 - `POST /api/v1/wallets/admin/bets/hold` (ADMIN only + `Idempotency-Key`)
 - `POST /api/v1/wallets/admin/bets/release` (ADMIN only + `Idempotency-Key`)
 - `POST /api/v1/wallets/admin/bets/capture` (ADMIN only + `Idempotency-Key`)
+- `GET /api/v1/mines/provably-fair`
+- `PUT /api/v1/mines/provably-fair/client-seed`
+- `POST /api/v1/mines/provably-fair/rotate`
+- `POST /api/v1/mines/games` (`Idempotency-Key`)
+- `GET /api/v1/mines/games/:gameId`
+- `POST /api/v1/mines/games/:gameId/reveal`
+- `POST /api/v1/mines/games/:gameId/cashout` (`Idempotency-Key`)
 
 ## Recommended next steps
 
