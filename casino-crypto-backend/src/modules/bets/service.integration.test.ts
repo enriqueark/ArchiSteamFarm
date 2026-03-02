@@ -100,6 +100,7 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
       currency: Currency.USDT,
       gameType: "ROULETTE",
       roundReference: `round-${randomUUID()}`,
+      multiplier: "1.80000000",
       amountAtomic: 100n,
       placeIdempotencyKey: `place-${randomUUID()}`
     });
@@ -108,13 +109,10 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
     expect(placed.balanceAfter).toBe(900n);
     expect(placed.lockedAfter).toBe(100n);
 
-    const settles = Array.from({ length: 100 }, (_, idx) =>
+    const settles = Array.from({ length: 100 }, () =>
       settleBet({
-        userId,
         betId: placed.betId,
-        result: "WON",
-        payoutAtomic: 180n,
-        settleIdempotencyKey: `settle-${placed.betId}-${idx}`
+        gameResult: "WON"
       })
     );
 
@@ -179,16 +177,14 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
       currency: Currency.USDT,
       gameType: "MINES",
       roundReference: `round-${randomUUID()}`,
+      multiplier: "2.00000000",
       amountAtomic: 50n,
       placeIdempotencyKey: `place-${randomUUID()}`
     });
 
     const firstSettle = await settleBet({
-      userId,
       betId: placed.betId,
-      result: "LOST",
-      payoutAtomic: 0n,
-      settleIdempotencyKey: `settle-${randomUUID()}`
+      gameResult: "LOST"
     });
 
     expect(firstSettle.status).toBe("LOST");
@@ -197,11 +193,8 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
 
     await expect(
       settleBet({
-        userId,
         betId: placed.betId,
-        result: "LOST",
-        payoutAtomic: 0n,
-        settleIdempotencyKey: `settle-${randomUUID()}`
+        gameResult: "LOST"
       })
     ).rejects.toMatchObject({
       code: "BET_ALREADY_SETTLED"

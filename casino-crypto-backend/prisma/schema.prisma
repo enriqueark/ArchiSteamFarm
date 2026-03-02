@@ -208,12 +208,19 @@ model CasinoBet {
   gameType             String
   roundReference       String
   amountAtomic         BigInt
+  multiplier           Decimal         @db.Decimal(18, 8)
+  placeBalanceBeforeAtomic BigInt
+  placeBalanceAfterAtomic  BigInt
+  placeLockedAfterAtomic   BigInt
   payoutAtomic         BigInt?
   status               CasinoBetStatus @default(PENDING)
   placeIdempotencyKey  String
   settleIdempotencyKey String?         @unique
   captureTransactionId String?         @unique
   payoutTransactionId  String?         @unique
+  settleBalanceBeforeAtomic BigInt?
+  settleBalanceAfterAtomic  BigInt?
+  settleLockedAfterAtomic   BigInt?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   settledAt            DateTime?

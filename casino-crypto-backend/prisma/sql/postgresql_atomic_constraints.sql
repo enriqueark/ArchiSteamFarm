@@ -1,6 +1,6 @@
--- Optional hardening constraints for production.
--- Prisma currently does not model CHECK constraints directly, so keep this file
--- to enforce accounting invariants at the PostgreSQL level.
+-- Required financial integrity constraints.
+-- Prisma currently does not model CHECK constraints directly, so this SQL must be
+-- applied to enforce accounting invariants at the PostgreSQL level.
 
 DO $$
 BEGIN
@@ -133,6 +133,28 @@ BEGIN
   ALTER TABLE "casino_bets"
     ADD CONSTRAINT "casino_bets_payout_non_negative"
     CHECK ("payoutAtomic" IS NULL OR "payoutAtomic" >= 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "casino_bets"
+    ADD CONSTRAINT "casino_bets_multiplier_positive"
+    CHECK ("multiplier" > 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "casino_bets"
+    ADD CONSTRAINT "casino_bets_place_balances_non_negative"
+    CHECK (
+      "placeBalanceBeforeAtomic" >= 0
+      AND "placeBalanceAfterAtomic" >= 0
+      AND "placeLockedAfterAtomic" >= 0
+    );
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;

@@ -2,15 +2,17 @@ import { Currency } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
-import { requireAuth, requireRoles } from "../../core/auth";
+import { requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { placeBet, settleBet } from "./service";
 
 const placeBetSchema = z.object({
+  userId: z.string().cuid(),
   currency: z.nativeEnum(Currency),
   gameType: z.string().min(2).max(64),
   roundReference: z.string().min(4).max(128),
+  multiplier: z.string().regex(/^\d+(\.\d{1,8})?$/, "multiplier must be a decimal string"),
   amountAtomic: z
     .string()
     .regex(/^\d+$/, "amountAtomic must be an integer string")
@@ -19,12 +21,7 @@ const placeBetSchema = z.object({
 });
 
 const settleBetSchema = z.object({
-  userId: z.string().cuid(),
-  result: z.enum(["WON", "LOST"]),
-  payoutAtomic: z
-    .string()
-    .regex(/^\d+$/, "payoutAtomic must be a non-negative integer string")
-    .transform((value) => BigInt(value))
+  gameResult: z.enum(["WON", "LOST"])
 });
 
 const betParamsSchema = z.object({
@@ -43,15 +40,16 @@ export const betsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     "/place",
     {
-      preHandler: [requireAuth, requireIdempotencyKey]
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
     },
     async (request, reply) => {
       const body = placeBetSchema.parse(request.body);
       const result = await placeBet({
-        userId: request.user.sub,
+        userId: body.userId,
         currency: body.currency,
         gameType: body.gameType,
         roundReference: body.roundReference,
+        multiplier: body.multiplier,
         amountAtomic: body.amountAtomic,
         placeIdempotencyKey: ensureIdempotencyKey(request)
       });
@@ -69,18 +67,15 @@ export const betsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     "/:betId/settle",
     {
-      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+      preHandler: [requireRoles(["ADMIN"])]
     },
     async (request, reply) => {
       const params = betParamsSchema.parse(request.params);
       const body = settleBetSchema.parse(request.body);
 
       const result = await settleBet({
-        userId: body.userId,
         betId: params.betId,
-        result: body.result,
-        payoutAtomic: body.payoutAtomic,
-        settleIdempotencyKey: ensureIdempotencyKey(request)
+        gameResult: body.gameResult
       });
 
       return reply.send({

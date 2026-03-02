@@ -113,11 +113,14 @@ The `bets` module provides a strict backend-only financial flow:
    - Creates `casino_bets` record in `PENDING`.
    - Debits `balanceAtomic` and increases `lockedAtomic`.
    - Persists game round reference.
+   - Persists precomputed `multiplier` from trusted backend game logic.
    - Returns `betId`, `balanceBefore`, `balanceAfter`, `lockedAfter`.
 
 2. **settleBet**
    - Locks bet + wallet rows with `SELECT ... FOR UPDATE`.
-   - Requires bet `PENDING` and matching `userId`.
+   - Requires bet `PENDING`.
+   - Recomputes payout internally from `amountAtomic * multiplier`.
+   - Never accepts caller-provided payout value.
    - Releases locked funds and conditionally pays out winner.
    - Finalizes to `WON` or `LOST` exactly once.
 
@@ -198,8 +201,8 @@ docker compose up --build
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
-- `POST /api/v1/bets/place` (`Idempotency-Key`)
-- `POST /api/v1/bets/:betId/settle` (ADMIN + `Idempotency-Key`)
+- `POST /api/v1/bets/place` (ADMIN + `Idempotency-Key`)
+- `POST /api/v1/bets/:betId/settle` (ADMIN)
 - `GET /api/v1/users/me`
 - `GET /api/v1/wallets`
 - `GET /api/v1/wallets/:currency/entries`
