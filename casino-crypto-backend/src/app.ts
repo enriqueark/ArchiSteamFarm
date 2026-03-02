@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import websocket from "@fastify/websocket";
 import Fastify, { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
@@ -16,6 +17,7 @@ import { authRoutes } from "./modules/auth/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { ledgerRoutes } from "./modules/ledger/routes";
 import { minesRoutes } from "./modules/mines/routes";
+import { rouletteRoutes } from "./modules/roulette/routes";
 import { userRoutes } from "./modules/users/routes";
 import { walletRoutes } from "./modules/wallets/routes";
 
@@ -35,6 +37,12 @@ export const buildApp = (): FastifyInstance => {
     credentials: true
   });
   app.register(helmet);
+  app.register(websocket, {
+    options: {
+      perMessageDeflate: false,
+      maxPayload: 1024 * 8
+    }
+  });
 
   app.register(jwt, {
     secret: env.JWT_ACCESS_SECRET
@@ -64,6 +72,7 @@ export const buildApp = (): FastifyInstance => {
         { name: "wallets", description: "Wallet management and bet reservations" },
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "mines", description: "Mines game with provably fair backend generation" },
+        { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
         { name: "users", description: "User profile" }
       ]
     }
@@ -79,6 +88,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
   app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });
   app.register(minesRoutes, { prefix: "/api/v1/mines" });
+  app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {

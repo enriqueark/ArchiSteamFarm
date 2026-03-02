@@ -34,6 +34,7 @@ src/
     wallets/
     ledger/
     mines/
+    roulette/
 ```
 
 ### Included modules (without games)
@@ -44,6 +45,7 @@ src/
 - `wallets`: balances, transaction history, and atomic bet fund reservations.
 - `ledger`: idempotent administrative balance adjustments.
 - `mines`: provably fair Mines game logic fully generated on backend.
+- `roulette`: round-state engine with realtime websocket updates and atomic betting.
 
 ## Scalability decisions (500 concurrent users)
 
@@ -55,6 +57,8 @@ src/
 6. **Rotating refresh JWTs** for secure, revocable sessions.
 7. **Atomic bet reservations** (`hold -> release/capture`) to prevent double spending in concurrent bets.
 8. **Provably fair seeds** (`server seed + client seed + nonce`) for reproducible Mines outcomes.
+9. **Roulette round lifecycle** (`OPEN -> CLOSED -> SPINNING -> SETTLED`) handled by a background worker.
+10. **WebSocket fanout** for low-latency round updates to hundreds of concurrent clients.
 
 ## Core data model (Prisma)
 
@@ -65,6 +69,7 @@ src/
 - `Deposit`, `Withdrawal`
 - `BetReservation`
 - `ProvablyFairProfile`, `ProvablyFairSeed`, `MinesGame`
+- `RouletteRound`, `RouletteBet`
 
 ## PostgreSQL schema (requested entities)
 
@@ -106,6 +111,14 @@ The Mines result is **never generated in frontend**.
 - Server seed is revealed only after rotation (and blocked while active Mines games exist).
 - With revealed seed, client seed, and nonce, users can verify historical game outcomes.
 
+## Roulette rounds + websocket
+
+- Round states: `OPEN`, `CLOSED`, `SPINNING`, `SETTLED` (and `CANCELLED` for operational fallback).
+- New bets are accepted only when round is `OPEN` and `betsCloseAt > now`.
+- Bet placement uses SQL-atomic wallet hold (`balanceAtomic -= stake`, `lockedAtomic += stake`) in one transaction.
+- On settlement, bets are captured and winners receive payout, both recorded in `wallet_transactions`.
+- Websocket endpoint streams round state transitions and stake totals for realtime clients.
+
 ## Requirements
 
 - Node.js 22+
@@ -126,6 +139,13 @@ Minimum required variables:
 - `REDIS_URL`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
+
+Roulette worker settings:
+
+- `ROULETTE_ROUND_OPEN_SECONDS`
+- `ROULETTE_CLOSE_TO_SPIN_SECONDS`
+- `ROULETTE_SPIN_SECONDS`
+- `ROULETTE_WORKER_TICK_MS`
 
 ## Run locally
 
@@ -167,6 +187,11 @@ docker compose up --build
 - `GET /api/v1/mines/games/:gameId`
 - `POST /api/v1/mines/games/:gameId/reveal`
 - `POST /api/v1/mines/games/:gameId/cashout` (`Idempotency-Key`)
+- `GET /api/v1/roulette/rounds/current?currency=USDT`
+- `GET /api/v1/roulette/rounds/:roundId`
+- `POST /api/v1/roulette/bets` (`Idempotency-Key`)
+- `GET /api/v1/roulette/bets/me`
+- `WS /api/v1/roulette/ws?currency=USDT`
 
 ## Recommended next steps
 

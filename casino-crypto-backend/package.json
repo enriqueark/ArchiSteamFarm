@@ -23,6 +23,7 @@
     "@fastify/sensible": "^6.0.4",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
+    "@fastify/websocket": "^11.2.0",
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
     "argon2": "^0.44.0",
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@types/node": "^25.3.3",
     "@types/pg": "^8.18.0",
+    "@types/ws": "^8.18.1",
     "prisma": "^7.4.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

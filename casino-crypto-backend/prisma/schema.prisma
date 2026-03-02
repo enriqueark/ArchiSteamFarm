@@ -78,6 +78,34 @@ enum MinesGameStatus {
   CASHED_OUT
 }
 
+enum RouletteRoundStatus {
+  OPEN
+  CLOSED
+  SPINNING
+  SETTLED
+  CANCELLED
+}
+
+enum RouletteBetType {
+  STRAIGHT
+  RED
+  BLACK
+  EVEN
+  ODD
+  LOW
+  HIGH
+  DOZEN_1
+  DOZEN_2
+  DOZEN_3
+}
+
+enum RouletteBetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -94,6 +122,8 @@ model User {
   provablyFairProfile ProvablyFairProfile?
   provablyFairSeeds   ProvablyFairSeed[]
   minesGames          MinesGame[]
+  rouletteBets        RouletteBet[]
+  rouletteRounds      RouletteRound[]
 
   @@map("users")
 }
@@ -127,6 +157,7 @@ model Wallet {
   deposits      Deposit[]
   withdrawals   Withdrawal[]
   betReserves   BetReservation[]
+  rouletteBets  RouletteBet[]
 
   @@unique([userId, currency])
   @@unique([id, currency])
@@ -184,6 +215,7 @@ model BetReservation {
   releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
   captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
   minesGame           MinesGame?           @relation("BetReservationMinesGame")
+  rouletteBet         RouletteBet?         @relation("BetReservationRouletteBet")
 
   @@unique([walletId, betReference])
   @@unique([walletId, holdIdempotencyKey])
@@ -251,6 +283,63 @@ model MinesGame {
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("mines_games")
+}
+
+model RouletteRound {
+  id               String            @id @default(cuid())
+  roundNumber      Int
+  currency         Currency
+  status           RouletteRoundStatus @default(OPEN)
+  openAt           DateTime
+  betsCloseAt      DateTime
+  spinStartsAt     DateTime
+  settleAt         DateTime
+  closedAt         DateTime?
+  spinningAt       DateTime?
+  settledAt        DateTime?
+  cancelledAt      DateTime?
+  winningNumber    Int?
+  winningColor     String?
+  totalStakedAtomic BigInt          @default(0)
+  totalPayoutAtomic BigInt          @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdByUserId  String?
+  createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  bets             RouletteBet[]
+
+  @@unique([currency, roundNumber])
+  @@index([currency, status, betsCloseAt])
+  @@index([status, settleAt])
+  @@map("roulette_rounds")
+}
+
+model RouletteBet {
+  id               String           @id @default(cuid())
+  roundId          String
+  userId           String
+  walletId         String
+  currency         Currency
+  betType          RouletteBetType
+  betValue         Int?
+  stakeAtomic      BigInt
+  payoutAtomic     BigInt?
+  status           RouletteBetStatus @default(PENDING)
+  idempotencyKey   String
+  betReference     String           @unique
+  reservationId    String           @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  settledAt        DateTime?
+  round            RouletteRound    @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet           Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  reservation      BetReservation   @relation("BetReservationRouletteBet", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([roundId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("roulette_bets")
 }
 
 model Deposit {
