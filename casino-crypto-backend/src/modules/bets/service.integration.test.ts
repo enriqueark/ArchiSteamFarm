@@ -1,8 +1,13 @@
+process.env["GAME_ENGINE_SERVICE_TOKEN"] ??= "test_game_engine_token_abcdefghijklmnopqrstuvwxyz";
+process.env["GAME_ENGINE_HMAC_SECRET"] ??= "test_game_engine_hmac_secret_abcdefghijklmnopqrstuvwxyz";
+process.env["GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS"] ??= "120";
+
 import { Currency, LedgerReason } from "@prisma/client";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "../../infrastructure/db/prisma";
+import { GAME_ENGINE_SERVICE_ROLE } from "../../core/service-auth";
 import { settleBet, placeBet } from "./service";
 
 const runDbTests = process.env["RUN_DB_TESTS"] === "true";
@@ -14,6 +19,26 @@ type CreatedUser = {
 };
 
 const createdUsers: string[] = [];
+
+const signResultPayload = (input: {
+  betId: string;
+  gameType: string;
+  roundReference: string;
+  gameResult: "WON" | "LOST";
+  issuedAt: string;
+  nonce: string;
+}): string => {
+  const payload = [
+    input.betId,
+    input.gameType,
+    input.roundReference,
+    input.gameResult,
+    input.issuedAt,
+    input.nonce
+  ].join("|");
+
+  return createHmac("sha256", process.env["GAME_ENGINE_HMAC_SECRET"]!).update(payload).digest("hex");
+};
 
 const createUserWithWallet = async (balanceAtomic: bigint, currency: Currency): Promise<CreatedUser> => {
   const user = await prisma.user.create({
@@ -109,10 +134,39 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
     expect(placed.balanceAfter).toBe(900n);
     expect(placed.lockedAfter).toBe(100n);
 
+    const betRecord = await prisma.casinoBet.findUnique({
+      where: { id: placed.betId },
+      select: {
+        id: true,
+        gameType: true,
+        roundReference: true
+      }
+    });
+    expect(betRecord).not.toBeNull();
+
+    const issuedAt = new Date().toISOString();
+    const nonce = `nonce-${randomUUID()}`;
+    const signature = signResultPayload({
+      betId: betRecord!.id,
+      gameType: betRecord!.gameType,
+      roundReference: betRecord!.roundReference,
+      gameResult: "WON",
+      issuedAt,
+      nonce
+    });
+
     const settles = Array.from({ length: 100 }, () =>
       settleBet({
         betId: placed.betId,
-        gameResult: "WON"
+        actor: {
+          serviceRole: GAME_ENGINE_SERVICE_ROLE
+        },
+        signedGameResult: {
+          gameResult: "WON",
+          issuedAt,
+          nonce,
+          signature
+        }
       })
     );
 
@@ -120,14 +174,9 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
     const success = settledResults.filter((result) => result.status === "fulfilled");
     const failed = settledResults.filter((result) => result.status === "rejected");
 
-    expect(success).toHaveLength(1);
-    expect(failed).toHaveLength(99);
-
-    failed.forEach((entry) => {
-      if (entry.status === "rejected") {
-        expect((entry.reason as { code?: string }).code).toBe("BET_ALREADY_SETTLED");
-      }
-    });
+    // Replays of the same signed payload are idempotent; all calls may return the same settled outcome.
+    expect(success.length).toBeGreaterThanOrEqual(1);
+    expect(failed).toHaveLength(0);
 
     const wallet = await prisma.wallet.findUnique({
       where: { id: walletId },
@@ -182,19 +231,67 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
       placeIdempotencyKey: `place-${randomUUID()}`
     });
 
+    const betRecord = await prisma.casinoBet.findUnique({
+      where: { id: placed.betId },
+      select: {
+        id: true,
+        gameType: true,
+        roundReference: true
+      }
+    });
+    expect(betRecord).not.toBeNull();
+
+    const firstNonce = `nonce-${randomUUID()}`;
+    const firstIssuedAt = new Date().toISOString();
+    const firstSignature = signResultPayload({
+      betId: betRecord!.id,
+      gameType: betRecord!.gameType,
+      roundReference: betRecord!.roundReference,
+      gameResult: "LOST",
+      issuedAt: firstIssuedAt,
+      nonce: firstNonce
+    });
+
     const firstSettle = await settleBet({
       betId: placed.betId,
-      gameResult: "LOST"
+      actor: {
+        serviceRole: GAME_ENGINE_SERVICE_ROLE
+      },
+      signedGameResult: {
+        gameResult: "LOST",
+        issuedAt: firstIssuedAt,
+        nonce: firstNonce,
+        signature: firstSignature
+      }
     });
 
     expect(firstSettle.status).toBe("LOST");
     expect(firstSettle.balanceAfter).toBe(950n);
     expect(firstSettle.lockedAfter).toBe(0n);
 
+    const secondNonce = `nonce-${randomUUID()}`;
+    const secondIssuedAt = new Date().toISOString();
+    const secondSignature = signResultPayload({
+      betId: betRecord!.id,
+      gameType: betRecord!.gameType,
+      roundReference: betRecord!.roundReference,
+      gameResult: "LOST",
+      issuedAt: secondIssuedAt,
+      nonce: secondNonce
+    });
+
     await expect(
       settleBet({
         betId: placed.betId,
-        gameResult: "LOST"
+        actor: {
+          serviceRole: GAME_ENGINE_SERVICE_ROLE
+        },
+        signedGameResult: {
+          gameResult: "LOST",
+          issuedAt: secondIssuedAt,
+          nonce: secondNonce,
+          signature: secondSignature
+        }
       })
     ).rejects.toMatchObject({
       code: "BET_ALREADY_SETTLED"

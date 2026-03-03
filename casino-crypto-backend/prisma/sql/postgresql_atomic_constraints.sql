@@ -20,6 +20,10 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+CREATE UNIQUE INDEX IF NOT EXISTS "casino_bets_single_final_state_idx"
+  ON "casino_bets" ("id")
+  WHERE "status" IN ('WON', 'LOST');
+
 DO $$
 BEGIN
   ALTER TABLE "wallet_transactions"

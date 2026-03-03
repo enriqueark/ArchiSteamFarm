@@ -28,5 +28,6 @@ declare module "fastify" {
 
   interface FastifyRequest {
     idempotencyKey?: string;
+    serviceRole?: "GAME_ENGINE";
   }
 }

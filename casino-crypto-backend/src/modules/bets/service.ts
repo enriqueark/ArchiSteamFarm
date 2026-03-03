@@ -2,12 +2,16 @@ import {
   CasinoBet,
   CasinoBetStatus,
   Currency,
+  GameResultOutcome,
   LedgerDirection,
   LedgerReason,
   Prisma
 } from "@prisma/client";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
+import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
+import { GAME_ENGINE_SERVICE_ROLE } from "../../core/service-auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 
@@ -21,9 +25,22 @@ type PlaceBetInput = {
   placeIdempotencyKey: string;
 };
 
+type SettlementActor = {
+  actorUserId?: string;
+  serviceRole?: string;
+};
+
+type SignedGameResult = {
+  gameResult: "WON" | "LOST";
+  issuedAt: string;
+  nonce: string;
+  signature: string;
+};
+
 type SettleBetInput = {
   betId: string;
-  gameResult: "WON" | "LOST";
+  actor: SettlementActor;
+  signedGameResult: SignedGameResult;
 };
 
 export type PlaceBetResult = {
@@ -54,12 +71,25 @@ type LockedBetRow = {
 };
 
 const MAX_SERIALIZABLE_RETRIES = 4;
+const BIGINT_MAX = 9_223_372_036_854_775_807n;
+const MAX_CLOCK_SKEW_MS = 5_000;
 
 const isSerializationConflict = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
 
 const isUniqueViolation = (error: unknown): error is Prisma.PrismaClientKnownRequestError =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+
+const secureEqual = (left: string, right: string): boolean => {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return timingSafeEqual(a, b);
+};
 
 const parseMultiplier = (rawMultiplier: string): Prisma.Decimal => {
   const normalized = rawMultiplier.trim();
@@ -151,6 +181,70 @@ const getBetByPlaceKey = async (userId: string, placeIdempotencyKey: string) =>
     }
   });
 
+const assertActorCanSettle = (actor: SettlementActor, betUserId: string): void => {
+  if (actor.serviceRole === GAME_ENGINE_SERVICE_ROLE) {
+    return;
+  }
+
+  // Ownership check for user-level actor paths, even though settlement remains service-only.
+  if (actor.actorUserId && actor.actorUserId !== betUserId) {
+    throw new AppError("Bet does not belong to settlement actor", 403, "BET_USER_MISMATCH");
+  }
+
+  throw new AppError("Only GAME_ENGINE service role can settle bets", 403, "SERVICE_ROLE_FORBIDDEN");
+};
+
+const parseIssuedAt = (issuedAtIso: string): Date => {
+  const issuedAt = new Date(issuedAtIso);
+  if (Number.isNaN(issuedAt.getTime())) {
+    throw new AppError("Invalid signed result timestamp", 400, "INVALID_RESULT_TIMESTAMP");
+  }
+
+  const now = Date.now();
+  const drift = now - issuedAt.getTime();
+  if (drift < -MAX_CLOCK_SKEW_MS) {
+    throw new AppError("Signed result timestamp is in the future", 400, "INVALID_RESULT_TIMESTAMP");
+  }
+
+  if (drift > env.GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS * 1000) {
+    throw new AppError("Signed result payload has expired", 400, "RESULT_SIGNATURE_EXPIRED");
+  }
+
+  return issuedAt;
+};
+
+const buildSignedPayload = (
+  bet: Pick<CasinoBet, "id" | "gameType" | "roundReference">,
+  signedResult: SignedGameResult
+): string =>
+  [
+    bet.id,
+    bet.gameType,
+    bet.roundReference,
+    signedResult.gameResult,
+    signedResult.issuedAt,
+    signedResult.nonce
+  ].join("|");
+
+const verifySignedResultPayload = (
+  bet: Pick<CasinoBet, "id" | "gameType" | "roundReference">,
+  signedResult: SignedGameResult
+): { payload: string; payloadHash: string; issuedAt: Date } => {
+  const issuedAt = parseIssuedAt(signedResult.issuedAt);
+  const payload = buildSignedPayload(bet, signedResult);
+  const expectedSignature = createHmac("sha256", env.GAME_ENGINE_HMAC_SECRET).update(payload).digest("hex");
+
+  if (!secureEqual(expectedSignature, signedResult.signature)) {
+    throw new AppError("Signed game result verification failed", 403, "GAME_RESULT_SIGNATURE_INVALID");
+  }
+
+  const payloadHash = createHash("sha256").update(payload).digest("hex");
+  return { payload, payloadHash, issuedAt };
+};
+
+const mapGameResultOutcome = (result: SignedGameResult["gameResult"]): GameResultOutcome =>
+  result === "WON" ? GameResultOutcome.WON : GameResultOutcome.LOST;
+
 export const placeBet = async (input: PlaceBetInput): Promise<PlaceBetResult> => {
   if (input.amountAtomic <= 0n) {
     throw new AppError("amountAtomic must be greater than 0", 400, "INVALID_AMOUNT");
@@ -178,7 +272,6 @@ export const placeBet = async (input: PlaceBetInput): Promise<PlaceBetResult> =>
 
   try {
     const result = await runSerializable(async (tx) => {
-      // Row lock guarantees that concurrent debits for the same wallet are serialized.
       const walletRows = await tx.$queryRaw<LockedWalletRow[]>`
         SELECT id, "balanceAtomic", "lockedAtomic"
         FROM "wallets"
@@ -301,7 +394,6 @@ export const placeBet = async (input: PlaceBetInput): Promise<PlaceBetResult> =>
 export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult> => {
   try {
     const result = await runSerializable(async (tx) => {
-      // Lock the bet row first so only one resolver can transition PENDING -> FINAL.
       const betLockRows = await tx.$queryRaw<LockedBetRow[]>`
         SELECT id
         FROM "casino_bets"
@@ -323,7 +415,34 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
         throw new AppError("Bet not found", 404, "BET_NOT_FOUND");
       }
 
+      assertActorCanSettle(input.actor, bet.userId);
+
+      const { payloadHash, issuedAt } = verifySignedResultPayload(
+        {
+          id: bet.id,
+          gameType: bet.gameType,
+          roundReference: bet.roundReference
+        },
+        input.signedGameResult
+      );
+
+      const settleKey = `engine:${input.signedGameResult.nonce}`;
       if (bet.status !== CasinoBetStatus.PENDING) {
+        if (
+          bet.settleIdempotencyKey === settleKey &&
+          bet.settleBalanceBeforeAtomic !== null &&
+          bet.settleBalanceAfterAtomic !== null &&
+          bet.settleLockedAfterAtomic !== null
+        ) {
+          return toSettleResult(
+            bet,
+            bet.payoutAtomic ?? 0n,
+            bet.settleBalanceBeforeAtomic,
+            bet.settleBalanceAfterAtomic,
+            bet.settleLockedAfterAtomic
+          );
+        }
+
         throw new AppError("Bet is already settled", 409, "BET_ALREADY_SETTLED");
       }
 
@@ -331,7 +450,52 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
         throw new AppError("Invalid bet amount persisted in database", 409, "BET_AMOUNT_INVALID");
       }
 
-      // Lock wallet row to prevent concurrent settle / wallet writes from racing.
+      const existingValidatedResult = await tx.betGameResult.findUnique({
+        where: {
+          betId: bet.id
+        }
+      });
+
+      if (existingValidatedResult) {
+        if (
+          existingValidatedResult.decisionNonce !== input.signedGameResult.nonce ||
+          existingValidatedResult.gameResult !== mapGameResultOutcome(input.signedGameResult.gameResult) ||
+          existingValidatedResult.payloadHash !== payloadHash
+        ) {
+          throw new AppError("Conflicting validated game result for bet", 409, "GAME_RESULT_CONFLICT");
+        }
+      } else {
+        try {
+          await tx.betGameResult.create({
+            data: {
+              betId: bet.id,
+              gameResult: mapGameResultOutcome(input.signedGameResult.gameResult),
+              decisionNonce: input.signedGameResult.nonce,
+              issuedAt,
+              signature: input.signedGameResult.signature,
+              payloadHash,
+              createdByServiceRole: input.actor.serviceRole ?? "UNKNOWN"
+            }
+          });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new AppError("Replay detected for signed game result payload", 409, "RESULT_REPLAY_DETECTED");
+          }
+
+          throw error;
+        }
+      }
+
+      // Financial hardening:
+      // payout is computed from persisted stake and multiplier only.
+      // Caller cannot provide payout, removing over-credit vectors via API tampering.
+      const computedPayout =
+        input.signedGameResult.gameResult === "WON" ? calculatePayoutAtomic(bet.amountAtomic, bet.multiplier) : 0n;
+
+      if (computedPayout < 0n || computedPayout > BIGINT_MAX) {
+        throw new AppError("Computed payout out of supported range", 409, "PAYOUT_OUT_OF_RANGE");
+      }
+
       const walletRows = await tx.$queryRaw<LockedWalletRow[]>`
         SELECT id, "balanceAtomic", "lockedAtomic"
         FROM "wallets"
@@ -348,22 +512,20 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
         throw new AppError("Wallet lock invariant violated", 409, "WALLET_LOCK_INVARIANT_VIOLATED");
       }
 
-      // Financial risk elimination:
-      // payout is recomputed strictly from persisted bet data (amount + multiplier)
-      // and gameResult, not from any caller-provided payout value.
-      const computedPayout = input.gameResult === "WON" ? calculatePayoutAtomic(bet.amountAtomic, bet.multiplier) : 0n;
+      if (wallet.balanceAtomic > BIGINT_MAX - computedPayout) {
+        throw new AppError("Balance overflow prevented during settlement", 409, "BALANCE_OVERFLOW_PREVENTED");
+      }
 
-      // State transition is guarded by status = PENDING in the WHERE clause.
-      // Under concurrent calls, only one transaction can transition the row.
+      // CAS-like status transition under lock; concurrent settles cannot both succeed.
       const transitioned = await tx.casinoBet.updateMany({
         where: {
           id: bet.id,
           status: CasinoBetStatus.PENDING
         },
         data: {
-          status: input.gameResult === "WON" ? CasinoBetStatus.WON : CasinoBetStatus.LOST,
+          status: input.signedGameResult.gameResult === "WON" ? CasinoBetStatus.WON : CasinoBetStatus.LOST,
           payoutAtomic: computedPayout,
-          settleIdempotencyKey: `settle:${bet.id}`,
+          settleIdempotencyKey: settleKey,
           settledAt: new Date()
         }
       });
@@ -372,7 +534,6 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
         throw new AppError("Bet is already settled", 409, "BET_ALREADY_SETTLED");
       }
 
-      let balanceBeforePayout = wallet.balanceAtomic;
       let balanceAfter = wallet.balanceAtomic;
       const lockedAfter = wallet.lockedAtomic - bet.amountAtomic;
 
@@ -384,7 +545,7 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
           amountAtomic: bet.amountAtomic,
           balanceBeforeAtomic: wallet.balanceAtomic,
           balanceAfterAtomic: wallet.balanceAtomic,
-          idempotencyKey: `settle:${bet.id}:capture`,
+          idempotencyKey: `${settleKey}:capture`,
           referenceId: bet.id,
           metadata: {
             gameType: bet.gameType,
@@ -397,8 +558,7 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
 
       let payoutEntryId: string | null = null;
       if (computedPayout > 0n) {
-        balanceBeforePayout = balanceAfter;
-        balanceAfter = balanceAfter + computedPayout;
+        balanceAfter = wallet.balanceAtomic + computedPayout;
 
         const payoutEntry = await tx.ledgerEntry.create({
           data: {
@@ -406,9 +566,9 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
             direction: LedgerDirection.CREDIT,
             reason: LedgerReason.BET_PAYOUT,
             amountAtomic: computedPayout,
-            balanceBeforeAtomic: balanceBeforePayout,
+            balanceBeforeAtomic: wallet.balanceAtomic,
             balanceAfterAtomic: balanceAfter,
-            idempotencyKey: `settle:${bet.id}:payout`,
+            idempotencyKey: `${settleKey}:payout`,
             referenceId: bet.id,
             metadata: {
               gameType: bet.gameType,
@@ -469,11 +629,11 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
 
     void enqueueAuditEvent({
       type: "CASINO_BET_SETTLED",
-      actorId: result.betId,
+      actorId: input.actor.actorUserId ?? input.actor.serviceRole ?? "UNKNOWN",
       targetId: result.betId,
       metadata: {
         betId: result.betId,
-        result: input.gameResult,
+        result: input.signedGameResult.gameResult,
         payoutAtomic: result.payoutAtomic.toString(),
         balanceBefore: result.balanceBefore.toString(),
         balanceAfter: result.balanceAfter.toString(),
@@ -484,13 +644,7 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
     return result;
   } catch (error) {
     if (isUniqueViolation(error)) {
-      const replay = await prisma.casinoBet.findUnique({
-        where: { id: input.betId }
-      });
-
-      if (replay && replay.status !== CasinoBetStatus.PENDING) {
-        throw new AppError("Bet is already settled", 409, "BET_ALREADY_SETTLED");
-      }
+      throw new AppError("Replay or duplicate settlement detected", 409, "RESULT_REPLAY_DETECTED");
     }
 
     throw error;

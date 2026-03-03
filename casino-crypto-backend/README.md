@@ -121,6 +121,8 @@ The `bets` module provides a strict backend-only financial flow:
    - Requires bet `PENDING`.
    - Recomputes payout internally from `amountAtomic * multiplier`.
    - Never accepts caller-provided payout value.
+   - Requires a signed game-result payload verified by backend HMAC.
+   - Allows settlement only for service role `GAME_ENGINE`.
    - Releases locked funds and conditionally pays out winner.
    - Finalizes to `WON` or `LOST` exactly once.
 
@@ -163,6 +165,9 @@ Minimum required variables:
 - `REDIS_URL`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
+- `GAME_ENGINE_SERVICE_TOKEN`
+- `GAME_ENGINE_HMAC_SECRET`
+- `GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS`
 
 Roulette worker settings:
 
@@ -202,7 +207,7 @@ docker compose up --build
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/bets/place` (ADMIN + `Idempotency-Key`)
-- `POST /api/v1/bets/:betId/settle` (ADMIN)
+- `POST /api/v1/bets/:betId/settle` (service role `GAME_ENGINE` + signed payload)
 - `GET /api/v1/users/me`
 - `GET /api/v1/wallets`
 - `GET /api/v1/wallets/:currency/entries`

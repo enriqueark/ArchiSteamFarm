@@ -112,6 +112,11 @@ enum CasinoBetStatus {
   LOST
 }
 
+enum GameResultOutcome {
+  WON
+  LOST
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -228,12 +233,32 @@ model CasinoBet {
   wallet               Wallet          @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
   captureTransaction   LedgerEntry?    @relation("CasinoBetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
   payoutTransaction    LedgerEntry?    @relation("CasinoBetPayoutEntry", fields: [payoutTransactionId], references: [id], onDelete: SetNull)
+  validatedGameResult  BetGameResult?
 
   @@unique([userId, placeIdempotencyKey])
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([walletId, status, createdAt(sort: Desc)])
   @@index([gameType, roundReference, createdAt(sort: Desc)])
   @@map("casino_bets")
+}
+
+model BetGameResult {
+  id                  String            @id @default(cuid())
+  betId               String            @unique
+  gameResult          GameResultOutcome
+  decisionNonce       String            @unique
+  issuedAt            DateTime
+  signature           String
+  signatureVersion    String            @default("HMAC_SHA256_V1")
+  payloadHash         String
+  createdByServiceRole String
+  verifiedAt          DateTime          @default(now())
+  createdAt           DateTime          @default(now())
+  bet                 CasinoBet         @relation(fields: [betId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([decisionNonce])
+  @@map("bet_game_results")
 }
 
 model BetReservation {

@@ -12,6 +12,15 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters long"),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("7d"),
+  GAME_ENGINE_SERVICE_TOKEN: z
+    .string()
+    .min(32, "GAME_ENGINE_SERVICE_TOKEN must be at least 32 characters long")
+    .default("replace_me_game_engine_token_at_least_32_chars"),
+  GAME_ENGINE_HMAC_SECRET: z
+    .string()
+    .min(32, "GAME_ENGINE_HMAC_SECRET must be at least 32 characters long")
+    .default("replace_me_game_engine_hmac_secret_32_chars"),
+  GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(300).default(60),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   ROULETTE_ROUND_OPEN_SECONDS: z.coerce.number().int().min(5).max(120).default(20),

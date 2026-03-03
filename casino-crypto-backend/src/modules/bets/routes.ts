@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
+import { GAME_ENGINE_SERVICE_ROLE, requireGameEngineService } from "../../core/service-auth";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { placeBet, settleBet } from "./service";
 
@@ -21,7 +22,10 @@ const placeBetSchema = z.object({
 });
 
 const settleBetSchema = z.object({
-  gameResult: z.enum(["WON", "LOST"])
+  gameResult: z.enum(["WON", "LOST"]),
+  issuedAt: z.string().datetime(),
+  nonce: z.string().min(16).max(128),
+  signature: z.string().regex(/^[a-f0-9]{64}$/i, "signature must be a SHA-256 hex digest")
 });
 
 const betParamsSchema = z.object({
@@ -67,7 +71,7 @@ export const betsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     "/:betId/settle",
     {
-      preHandler: [requireRoles(["ADMIN"])]
+      preHandler: [requireGameEngineService]
     },
     async (request, reply) => {
       const params = betParamsSchema.parse(request.params);
@@ -75,7 +79,15 @@ export const betsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await settleBet({
         betId: params.betId,
-        gameResult: body.gameResult
+        actor: {
+          serviceRole: request.serviceRole ?? GAME_ENGINE_SERVICE_ROLE
+        },
+        signedGameResult: {
+          gameResult: body.gameResult,
+          issuedAt: body.issuedAt,
+          nonce: body.nonce,
+          signature: body.signature
+        }
       });
 
       return reply.send({
