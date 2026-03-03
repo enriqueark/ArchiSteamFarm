@@ -1,0 +1,24 @@
+import { ZodError } from "zod";
+
+export class AppError extends Error {
+  public readonly statusCode: number;
+  public readonly code: string;
+  public readonly details?: unknown;
+
+  public constructor(message: string, statusCode = 400, code = "APP_ERROR", details?: unknown) {
+    super(message);
+    this.name = "AppError";
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export const isAppError = (error: unknown): error is AppError => error instanceof AppError;
+
+export const toZodDetails = (error: ZodError) =>
+  error.issues.map((issue) => ({
+    path: issue.path.join("."),
+    message: issue.message,
+    code: issue.code
+  }));

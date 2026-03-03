@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PLAYER
+  ADMIN
+  SUPPORT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Currency {
+  BTC
+  ETH
+  USDT
+  USDC
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerReason {
+  ADMIN_ADJUSTMENT
+  DEPOSIT
+  WITHDRAWAL
+  WITHDRAWAL_FEE
+  BONUS
+  BET_HOLD
+  BET_RELEASE
+  BET_CAPTURE
+  BET_PAYOUT
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  BROADCASTED
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+enum BetReservationStatus {
+  HELD
+  RELEASED
+  CAPTURED
+}
+
+enum ProvablyFairSeedStatus {
+  ACTIVE
+  REVEALED
+}
+
+enum MinesGameStatus {
+  ACTIVE
+  LOST
+  CASHED_OUT
+}
+
+enum RouletteRoundStatus {
+  OPEN
+  CLOSED
+  SPINNING
+  SETTLED
+  CANCELLED
+}
+
+enum RouletteBetType {
+  STRAIGHT
+  RED
+  BLACK
+  EVEN
+  ODD
+  LOW
+  HIGH
+  DOZEN_1
+  DOZEN_2
+  DOZEN_3
+}
+
+enum RouletteBetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
+enum CasinoBetStatus {
+  PENDING
+  WON
+  LOST
+}
+
+enum GameResultOutcome {
+  WON
+  LOST
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  role         UserRole   @default(PLAYER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sessions     Session[]
+  wallets      Wallet[]
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
+  betReserves  BetReservation[]
+  provablyFairProfile ProvablyFairProfile?
+  provablyFairSeeds   ProvablyFairSeed[]
+  minesGames          MinesGame[]
+  rouletteBets        RouletteBet[]
+  rouletteRounds      RouletteRound[]
+  casinoBets          CasinoBet[]
+
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Wallet {
+  id            String      @id @default(cuid())
+  userId        String
+  currency      Currency
+  balanceAtomic BigInt      @default(0)
+  lockedAtomic  BigInt      @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries       LedgerEntry[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
+  betReserves   BetReservation[]
+  rouletteBets  RouletteBet[]
+  casinoBets    CasinoBet[]
+
+  @@unique([userId, currency])
+  @@unique([id, currency])
+  @@index([userId])
+  @@map("wallets")
+}
+
+model LedgerEntry {
+  id                  String          @id @default(cuid())
+  walletId            String
+  chainIndex          BigInt          @default(0)
+  previousHash        String          @default("0000000000000000000000000000000000000000000000000000000000000000")
+  currentHash         String          @default("0000000000000000000000000000000000000000000000000000000000000000")
+  direction           LedgerDirection
+  reason              LedgerReason
+  amountAtomic        BigInt
+  balanceBeforeAtomic BigInt
+  balanceAfterAtomic  BigInt
+  idempotencyKey      String
+  referenceId         String?
+  metadata            Json?
+  createdAt           DateTime        @default(now())
+  wallet              Wallet          @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  depositCredit       Deposit?        @relation("DepositCreditEntry")
+  withdrawalDebit     Withdrawal?     @relation("WithdrawalDebitEntry")
+  withdrawalFee       Withdrawal?     @relation("WithdrawalFeeEntry")
+  betHoldReserve      BetReservation? @relation("BetHoldEntry")
+  betReleaseReserve   BetReservation? @relation("BetReleaseEntry")
+  betCaptureReserve   BetReservation? @relation("BetCaptureEntry")
+  casinoBetCapture    CasinoBet?      @relation("CasinoBetCaptureEntry")
+  casinoBetPayout     CasinoBet?      @relation("CasinoBetPayoutEntry")
+
+  @@unique([walletId, chainIndex])
+  @@index([walletId, chainIndex(sort: Desc)])
+  @@index([walletId, createdAt(sort: Desc)])
+  @@index([currentHash])
+  @@unique([walletId, idempotencyKey])
+  @@map("wallet_transactions")
+}
+
+model CasinoBet {
+  id                   String          @id @default(cuid())
+  userId               String
+  walletId             String
+  currency             Currency
+  gameType             String
+  roundReference       String
+  amountAtomic         BigInt
+  multiplier           Decimal         @db.Decimal(18, 8)
+  placeBalanceBeforeAtomic BigInt
+  placeBalanceAfterAtomic  BigInt
+  placeLockedAfterAtomic   BigInt
+  payoutAtomic         BigInt?
+  status               CasinoBetStatus @default(PENDING)
+  placeIdempotencyKey  String
+  settleIdempotencyKey String?         @unique
+  captureTransactionId String?         @unique
+  payoutTransactionId  String?         @unique
+  settleBalanceBeforeAtomic BigInt?
+  settleBalanceAfterAtomic  BigInt?
+  settleLockedAfterAtomic   BigInt?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  settledAt            DateTime?
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet               Wallet          @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  captureTransaction   LedgerEntry?    @relation("CasinoBetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  payoutTransaction    LedgerEntry?    @relation("CasinoBetPayoutEntry", fields: [payoutTransactionId], references: [id], onDelete: SetNull)
+  validatedGameResult  BetGameResult?
+
+  @@unique([userId, placeIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([gameType, roundReference, createdAt(sort: Desc)])
+  @@map("casino_bets")
+}
+
+model BetGameResult {
+  id                  String            @id @default(cuid())
+  betId               String            @unique
+  gameResult          GameResultOutcome
+  decisionNonce       String            @unique
+  issuedAt            DateTime
+  signature           String
+  signatureVersion    String            @default("ED25519_V1")
+  payloadHash         String
+  createdByServiceRole String
+  verifiedAt          DateTime          @default(now())
+  createdAt           DateTime          @default(now())
+  bet                 CasinoBet         @relation(fields: [betId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([decisionNonce])
+  @@map("bet_game_results")
+}
+
+model BetReservation {
+  id                  String               @id @default(cuid())
+  userId              String
+  walletId            String
+  currency            Currency
+  betReference        String
+  amountAtomic        BigInt
+  status              BetReservationStatus @default(HELD)
+  holdIdempotencyKey  String?
+  releaseIdempotencyKey String?
+  captureIdempotencyKey String?
+  holdTransactionId   String               @unique
+  releaseTransactionId String?             @unique
+  captureTransactionId String?             @unique
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  releasedAt          DateTime?
+  capturedAt          DateTime?
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet              Wallet               @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  holdTransaction     LedgerEntry          @relation("BetHoldEntry", fields: [holdTransactionId], references: [id], onDelete: Restrict)
+  releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
+  captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  minesGame           MinesGame?           @relation("BetReservationMinesGame")
+  rouletteBet         RouletteBet?         @relation("BetReservationRouletteBet")
+
+  @@unique([walletId, betReference])
+  @@unique([walletId, holdIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@map("bet_reservations")
+}
+
+model ProvablyFairSeed {
+  id            String                 @id @default(cuid())
+  userId        String
+  serverSeed    String
+  serverSeedHash String                @unique
+  status        ProvablyFairSeedStatus @default(ACTIVE)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  revealedAt    DateTime?
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  activeForProfiles ProvablyFairProfile[] @relation("ActiveProvablyFairSeed")
+  minesGames    MinesGame[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@map("provably_fair_seeds")
+}
+
+model ProvablyFairProfile {
+  userId       String            @id
+  clientSeed   String
+  nonce        Int               @default(0)
+  activeSeedId String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeSeed   ProvablyFairSeed  @relation("ActiveProvablyFairSeed", fields: [activeSeedId], references: [id], onDelete: Restrict)
+
+  @@index([activeSeedId])
+  @@map("provably_fair_profiles")
+}
+
+model MinesGame {
+  id                String          @id @default(cuid())
+  userId            String
+  currency          Currency
+  betAtomic         BigInt
+  mineCount         Int
+  boardSize         Int             @default(25)
+  status            MinesGameStatus @default(ACTIVE)
+  serverSeedId      String
+  serverSeedHash    String
+  clientSeed        String
+  nonce             Int
+  betReference      String          @unique
+  betReservationId  String          @unique
+  revealedCells     Json
+  safeReveals       Int             @default(0)
+  currentMultiplier Decimal         @default(1.0) @db.Decimal(18, 8)
+  payoutAtomic      BigInt?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  finishedAt        DateTime?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serverSeed        ProvablyFairSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  betReservation    BetReservation  @relation("BetReservationMinesGame", fields: [betReservationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mines_games")
+}
+
+model RouletteRound {
+  id               String            @id @default(cuid())
+  roundNumber      Int
+  currency         Currency
+  status           RouletteRoundStatus @default(OPEN)
+  openAt           DateTime
+  betsCloseAt      DateTime
+  spinStartsAt     DateTime
+  settleAt         DateTime
+  closedAt         DateTime?
+  spinningAt       DateTime?
+  settledAt        DateTime?
+  cancelledAt      DateTime?
+  winningNumber    Int?
+  winningColor     String?
+  totalStakedAtomic BigInt          @default(0)
+  totalPayoutAtomic BigInt          @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdByUserId  String?
+  createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  bets             RouletteBet[]
+
+  @@unique([currency, roundNumber])
+  @@index([currency, status, betsCloseAt])
+  @@index([status, settleAt])
+  @@map("roulette_rounds")
+}
+
+model RouletteBet {
+  id               String           @id @default(cuid())
+  roundId          String
+  userId           String
+  walletId         String
+  currency         Currency
+  betType          RouletteBetType
+  betValue         Int?
+  stakeAtomic      BigInt
+  payoutAtomic     BigInt?
+  status           RouletteBetStatus @default(PENDING)
+  idempotencyKey   String
+  betReference     String           @unique
+  reservationId    String           @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  settledAt        DateTime?
+  round            RouletteRound    @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet           Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  reservation      BetReservation   @relation("BetReservationRouletteBet", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([roundId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("roulette_bets")
+}
+
+model Deposit {
+  id                    String        @id @default(cuid())
+  userId                String
+  walletId              String
+  currency              Currency
+  network               String        @default("mainnet")
+  amountAtomic          BigInt
+  txHash                String?
+  txVout                Int?
+  status                DepositStatus @default(PENDING)
+  confirmations         Int           @default(0)
+  requiredConfirmations Int           @default(1)
+  idempotencyKey        String?
+  creditedTransactionId String?       @unique
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  confirmedAt           DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet                Wallet        @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  creditedTransaction   LedgerEntry?  @relation("DepositCreditEntry", fields: [creditedTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@map("deposits")
+}
+
+model Withdrawal {
+  id                 String           @id @default(cuid())
+  userId             String
+  walletId           String
+  currency           Currency
+  network            String           @default("mainnet")
+  destinationAddress String
+  amountAtomic       BigInt
+  feeAtomic          BigInt           @default(0)
+  status             WithdrawalStatus @default(PENDING)
+  idempotencyKey     String?
+  txHash             String?
+  debitTransactionId String?          @unique
+  feeTransactionId   String?          @unique
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  reviewedAt         DateTime?
+  broadcastedAt      DateTime?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  cancelledAt        DateTime?
+  user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet             Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  debitTransaction   LedgerEntry?     @relation("WithdrawalDebitEntry", fields: [debitTransactionId], references: [id], onDelete: SetNull)
+  feeTransaction     LedgerEntry?     @relation("WithdrawalFeeEntry", fields: [feeTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@map("withdrawals")
+}
+
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}
