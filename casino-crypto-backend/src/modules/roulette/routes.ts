@@ -6,6 +6,7 @@ import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { SUPPORTED_CURRENCIES } from "../wallets/service";
+import { getRouletteProbabilityModel } from "./rules";
 import {
   RouletteRoundState,
   getCurrentRouletteRound,
@@ -124,6 +125,8 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
     const round = await getCurrentRouletteRound(query.currency);
     return reply.send(toRoundResponse(round));
   });
+
+  fastify.get("/probability-model", async (_request, reply) => reply.send(getRouletteProbabilityModel()));
 
   fastify.get("/rounds/:roundId", async (request, reply) => {
     const params = roundParamsSchema.parse(request.params);

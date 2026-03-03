@@ -146,6 +146,25 @@ The Mines result is **never generated in frontend**.
 - On settlement, bets are captured and winners receive payout, both recorded in `wallet_transactions`.
 - Websocket endpoint streams round state transitions and stake totals for realtime clients.
 
+### Roulette probability model (European single-zero wheel)
+
+All roulette bets in this service run on a single-zero wheel (`0-36`), so there are `37` equally likely outcomes.
+
+- Payout multipliers are **gross return multipliers** (stake included).
+- Expected return (per 1 unit staked): `EV_return = P(win) * payoutMultiplier`.
+- Expected net: `EV_net = EV_return - 1`.
+- House edge: `houseEdge = -EV_net`.
+
+| Bet type(s) | Winning outcomes | Win probability | Payout multiplier | Expected return | Expected net | House edge |
+| --- | --- | --- | --- | --- | --- | --- |
+| `STRAIGHT` | 1 | `1/37` (2.7027%) | `36x` | `36/37` (97.2973%) | `-1/37` (-2.7027%) | `1/37` (2.7027%) |
+| `RED`, `BLACK`, `EVEN`, `ODD`, `LOW`, `HIGH` | 18 | `18/37` (48.6486%) | `2x` | `36/37` (97.2973%) | `-1/37` (-2.7027%) | `1/37` (2.7027%) |
+| `DOZEN_1`, `DOZEN_2`, `DOZEN_3` | 12 | `12/37` (32.4324%) | `3x` | `36/37` (97.2973%) | `-1/37` (-2.7027%) | `1/37` (2.7027%) |
+
+The API exposes the computed model at:
+
+- `GET /api/v1/roulette/probability-model`
+
 ## Requirements
 
 - Node.js 22+
@@ -266,6 +285,7 @@ docker compose up --build
 - `POST /api/v1/mines/games/:gameId/reveal`
 - `POST /api/v1/mines/games/:gameId/cashout` (`Idempotency-Key`)
 - `GET /api/v1/roulette/rounds/current?currency=USDT`
+- `GET /api/v1/roulette/probability-model`
 - `GET /api/v1/roulette/rounds/:roundId`
 - `POST /api/v1/roulette/bets` (`Idempotency-Key`)
 - `GET /api/v1/roulette/bets/me`
