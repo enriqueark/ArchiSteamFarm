@@ -207,6 +207,31 @@ What it verifies:
 
 The script returns non-zero exit code when issues are detected, so it can be used in cron/CI.
 
+## Anti-fraud hardening for internal DB threats
+
+To detect tampering by an internal actor with direct DB write access, use signed external anchors:
+
+```bash
+# 1) Verify existing anchor chain signatures
+npm run audit:anchor:verify
+
+# 2) Run full fraud checks + append a new signed anchor
+npm run audit:fraud
+```
+
+How this helps:
+
+- `audit:integrity` validates financial consistency (balances, locks, duplicate settlements, hash-chain integrity).
+- `audit:anchor` fingerprints current DB financial state and appends a signed checkpoint to an external JSONL file.
+- Historical anchors are verified before each append, so silent DB rewrites become detectable.
+- Alerts can be pushed to an external webhook (`INTEGRITY_ALERT_WEBHOOK_URL`) on verification failure.
+
+Recommended deployment:
+
+- Run `audit:fraud` from a separate audit runner using a read-only DB role.
+- Keep `INTEGRITY_AUDIT_PRIVATE_KEY` only on the audit runner (not on app servers).
+- Replicate anchor files to immutable/offsite storage (WORM bucket, SIEM, or external log pipeline).
+
 API docs available at `http://localhost:3000/docs`.
 
 ## Run with Docker
