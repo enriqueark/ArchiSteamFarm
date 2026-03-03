@@ -1,9 +1,17 @@
+const TEST_GAME_ENGINE_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEICT69Ubou04ZJSo+s1a9BZBUmLgHzNlRng2F5MbdvmvX
+-----END PRIVATE KEY-----`;
+
+const TEST_GAME_ENGINE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEALHUqaQ1GH14Ty+7bT46fcWPnVcNA65/fVrFP5luTliY=
+-----END PUBLIC KEY-----`;
+
 process.env["GAME_ENGINE_SERVICE_TOKEN"] ??= "test_game_engine_token_abcdefghijklmnopqrstuvwxyz";
-process.env["GAME_ENGINE_HMAC_SECRET"] ??= "test_game_engine_hmac_secret_abcdefghijklmnopqrstuvwxyz";
+process.env["GAME_ENGINE_PUBLIC_KEY"] ??= TEST_GAME_ENGINE_PUBLIC_KEY_PEM;
 process.env["GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS"] ??= "120";
 
 import { Currency, LedgerReason } from "@prisma/client";
-import { createHmac, randomUUID } from "node:crypto";
+import { createPrivateKey, randomUUID, sign } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "../../infrastructure/db/prisma";
@@ -19,6 +27,7 @@ type CreatedUser = {
 };
 
 const createdUsers: string[] = [];
+const gameEnginePrivateKey = createPrivateKey(TEST_GAME_ENGINE_PRIVATE_KEY_PEM);
 
 const signResultPayload = (input: {
   betId: string;
@@ -37,7 +46,7 @@ const signResultPayload = (input: {
     input.nonce
   ].join("|");
 
-  return createHmac("sha256", process.env["GAME_ENGINE_HMAC_SECRET"]!).update(payload).digest("hex");
+  return sign(null, Buffer.from(payload), gameEnginePrivateKey).toString("base64");
 };
 
 const createUserWithWallet = async (balanceAtomic: bigint, currency: Currency): Promise<CreatedUser> => {

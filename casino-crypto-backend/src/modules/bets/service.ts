@@ -7,7 +7,7 @@ import {
   LedgerReason,
   Prisma
 } from "@prisma/client";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { KeyObject, createHash, createPublicKey, verify } from "node:crypto";
 
 import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
@@ -73,6 +73,12 @@ type LockedBetRow = {
 const MAX_SERIALIZABLE_RETRIES = 4;
 const BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MAX_CLOCK_SKEW_MS = 5_000;
+const ED25519_SIGNATURE_SIZE_BYTES = 64;
+const SIGNATURE_VERSION = "ED25519_V1";
+const BASE64_SIGNATURE_REGEX = /^[A-Za-z0-9+/]+={0,2}$/;
+const BASE64URL_SIGNATURE_REGEX = /^[A-Za-z0-9_-]+$/;
+
+let gameEnginePublicKeyCache: KeyObject | null = null;
 
 const isSerializationConflict = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
@@ -80,15 +86,69 @@ const isSerializationConflict = (error: unknown): boolean =>
 const isUniqueViolation = (error: unknown): error is Prisma.PrismaClientKnownRequestError =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
-const secureEqual = (left: string, right: string): boolean => {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-
-  if (a.length !== b.length) {
-    return false;
+const getGameEnginePublicKey = (): KeyObject => {
+  if (gameEnginePublicKeyCache) {
+    return gameEnginePublicKeyCache;
   }
 
-  return timingSafeEqual(a, b);
+  const rawKey = env.GAME_ENGINE_PUBLIC_KEY.trim();
+  const normalizedKey = rawKey.replace(/\\n/g, "\n");
+
+  try {
+    if (normalizedKey.includes("BEGIN PUBLIC KEY")) {
+      gameEnginePublicKeyCache = createPublicKey(normalizedKey);
+      return gameEnginePublicKeyCache;
+    }
+
+    if (!BASE64_SIGNATURE_REGEX.test(normalizedKey)) {
+      throw new Error("Invalid base64 key encoding");
+    }
+
+    const der = Buffer.from(normalizedKey, "base64");
+    if (der.length < 32) {
+      throw new Error("DER key payload is too short");
+    }
+
+    gameEnginePublicKeyCache = createPublicKey({
+      key: der,
+      format: "der",
+      type: "spki"
+    });
+
+    return gameEnginePublicKeyCache;
+  } catch {
+    throw new AppError(
+      "Invalid GAME_ENGINE_PUBLIC_KEY configuration",
+      500,
+      "ENGINE_PUBLIC_KEY_INVALID"
+    );
+  }
+};
+
+const parseSignature = (signature: string): Buffer => {
+  const normalized = signature.trim();
+  if (!normalized) {
+    throw new AppError("Signed game result signature is missing", 400, "GAME_RESULT_SIGNATURE_INVALID");
+  }
+
+  let decoded: Buffer;
+  if (BASE64URL_SIGNATURE_REGEX.test(normalized)) {
+    decoded = Buffer.from(normalized, "base64url");
+  } else if (BASE64_SIGNATURE_REGEX.test(normalized)) {
+    decoded = Buffer.from(normalized, "base64");
+  } else {
+    throw new AppError(
+      "Signed game result signature must be base64 or base64url",
+      400,
+      "GAME_RESULT_SIGNATURE_INVALID"
+    );
+  }
+
+  if (decoded.length !== ED25519_SIGNATURE_SIZE_BYTES) {
+    throw new AppError("Invalid Ed25519 signature length", 400, "GAME_RESULT_SIGNATURE_INVALID");
+  }
+
+  return decoded;
 };
 
 const parseMultiplier = (rawMultiplier: string): Prisma.Decimal => {
@@ -232,9 +292,10 @@ const verifySignedResultPayload = (
 ): { payload: string; payloadHash: string; issuedAt: Date } => {
   const issuedAt = parseIssuedAt(signedResult.issuedAt);
   const payload = buildSignedPayload(bet, signedResult);
-  const expectedSignature = createHmac("sha256", env.GAME_ENGINE_HMAC_SECRET).update(payload).digest("hex");
+  const signature = parseSignature(signedResult.signature);
+  const isVerified = verify(null, Buffer.from(payload), getGameEnginePublicKey(), signature);
 
-  if (!secureEqual(expectedSignature, signedResult.signature)) {
+  if (!isVerified) {
     throw new AppError("Signed game result verification failed", 403, "GAME_RESULT_SIGNATURE_INVALID");
   }
 
@@ -473,6 +534,7 @@ export const settleBet = async (input: SettleBetInput): Promise<SettleBetResult>
               decisionNonce: input.signedGameResult.nonce,
               issuedAt,
               signature: input.signedGameResult.signature,
+              signatureVersion: SIGNATURE_VERSION,
               payloadHash,
               createdByServiceRole: input.actor.serviceRole ?? "UNKNOWN"
             }

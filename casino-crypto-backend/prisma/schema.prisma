@@ -249,7 +249,7 @@ model BetGameResult {
   decisionNonce       String            @unique
   issuedAt            DateTime
   signature           String
-  signatureVersion    String            @default("HMAC_SHA256_V1")
+  signatureVersion    String            @default("ED25519_V1")
   payloadHash         String
   createdByServiceRole String
   verifiedAt          DateTime          @default(now())

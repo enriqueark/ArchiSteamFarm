@@ -8,6 +8,9 @@ import { GAME_ENGINE_SERVICE_ROLE, requireGameEngineService } from "../../core/s
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { placeBet, settleBet } from "./service";
 
+const base64SignatureRegex = /^[A-Za-z0-9+/]+={0,2}$/;
+const base64UrlSignatureRegex = /^[A-Za-z0-9_-]+$/;
+
 const placeBetSchema = z.object({
   userId: z.string().cuid(),
   currency: z.nativeEnum(Currency),
@@ -25,7 +28,15 @@ const settleBetSchema = z.object({
   gameResult: z.enum(["WON", "LOST"]),
   issuedAt: z.string().datetime(),
   nonce: z.string().min(16).max(128),
-  signature: z.string().regex(/^[a-f0-9]{64}$/i, "signature must be a SHA-256 hex digest")
+  signature: z
+    .string()
+    .trim()
+    .min(86)
+    .max(128)
+    .refine(
+      (value) => base64SignatureRegex.test(value) || base64UrlSignatureRegex.test(value),
+      "signature must be an Ed25519 signature encoded as base64 or base64url"
+    )
 });
 
 const betParamsSchema = z.object({

@@ -16,10 +16,10 @@ const envSchema = z.object({
     .string()
     .min(32, "GAME_ENGINE_SERVICE_TOKEN must be at least 32 characters long")
     .default("replace_me_game_engine_token_at_least_32_chars"),
-  GAME_ENGINE_HMAC_SECRET: z
+  GAME_ENGINE_PUBLIC_KEY: z
     .string()
-    .min(32, "GAME_ENGINE_HMAC_SECRET must be at least 32 characters long")
-    .default("replace_me_game_engine_hmac_secret_32_chars"),
+    .min(32, "GAME_ENGINE_PUBLIC_KEY must contain a PEM or base64 SPKI public key")
+    .default("replace_with_game_engine_ed25519_public_key_pem_or_base64_spki"),
   GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(300).default(60),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),

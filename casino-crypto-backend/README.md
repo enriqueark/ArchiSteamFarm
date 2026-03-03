@@ -121,7 +121,7 @@ The `bets` module provides a strict backend-only financial flow:
    - Requires bet `PENDING`.
    - Recomputes payout internally from `amountAtomic * multiplier`.
    - Never accepts caller-provided payout value.
-   - Requires a signed game-result payload verified by backend HMAC.
+   - Requires a signed game-result payload verified with Ed25519 public-key cryptography.
    - Allows settlement only for service role `GAME_ENGINE`.
    - Releases locked funds and conditionally pays out winner.
    - Finalizes to `WON` or `LOST` exactly once.
@@ -166,7 +166,7 @@ Minimum required variables:
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
 - `GAME_ENGINE_SERVICE_TOKEN`
-- `GAME_ENGINE_HMAC_SECRET`
+- `GAME_ENGINE_PUBLIC_KEY` (Ed25519 public key in PEM or base64 SPKI format)
 - `GAME_RESULT_SIGNATURE_MAX_AGE_SECONDS`
 
 Roulette worker settings:
