@@ -121,7 +121,7 @@ betsDescribe("casino bet transactional flow (no mocks)", () => {
 
   afterAll(async () => {
     for (const userId of createdUsers) {
-      await cleanupUser(userId);
+      await cleanupUser(userId).catch(() => undefined);
     }
 
     await prisma.$disconnect();

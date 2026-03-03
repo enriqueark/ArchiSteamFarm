@@ -181,12 +181,15 @@ model Wallet {
 model LedgerEntry {
   id                  String          @id @default(cuid())
   walletId            String
+  chainIndex          BigInt          @default(0)
+  previousHash        String          @default("0000000000000000000000000000000000000000000000000000000000000000")
+  currentHash         String          @default("0000000000000000000000000000000000000000000000000000000000000000")
   direction           LedgerDirection
   reason              LedgerReason
   amountAtomic        BigInt
   balanceBeforeAtomic BigInt
   balanceAfterAtomic  BigInt
-  idempotencyKey      String?
+  idempotencyKey      String
   referenceId         String?
   metadata            Json?
   createdAt           DateTime        @default(now())
@@ -200,7 +203,10 @@ model LedgerEntry {
   casinoBetCapture    CasinoBet?      @relation("CasinoBetCaptureEntry")
   casinoBetPayout     CasinoBet?      @relation("CasinoBetPayoutEntry")
 
+  @@unique([walletId, chainIndex])
+  @@index([walletId, chainIndex(sort: Desc)])
   @@index([walletId, createdAt(sort: Desc)])
+  @@index([currentHash])
   @@unique([walletId, idempotencyKey])
   @@map("wallet_transactions")
 }

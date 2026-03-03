@@ -174,6 +174,33 @@ END $$;
 
 DO $$
 BEGIN
+  ALTER TABLE "wallet_transactions"
+    ADD CONSTRAINT "wallet_transactions_chain_index_positive"
+    CHECK ("chainIndex" > 0);
+EXCEPTION
+  WHEN duplicate_object OR undefined_column THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "wallet_transactions"
+    ADD CONSTRAINT "wallet_transactions_previous_hash_hex"
+    CHECK ("previousHash" ~ '^[a-f0-9]{64}$');
+EXCEPTION
+  WHEN duplicate_object OR undefined_column THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "wallet_transactions"
+    ADD CONSTRAINT "wallet_transactions_current_hash_hex"
+    CHECK ("currentHash" ~ '^[a-f0-9]{64}$');
+EXCEPTION
+  WHEN duplicate_object OR undefined_column THEN NULL;
+END $$;
+
+DO $$
+BEGIN
   ALTER TABLE "deposits"
     ADD CONSTRAINT "deposits_amount_positive"
     CHECK ("amountAtomic" > 0);

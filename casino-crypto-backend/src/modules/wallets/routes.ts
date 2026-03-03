@@ -87,6 +87,9 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(
       entries.map((entry) => ({
         id: entry.id,
+        chainIndex: entry.chainIndex.toString(),
+        previousHash: entry.previousHash,
+        currentHash: entry.currentHash,
         direction: entry.direction,
         reason: entry.reason,
         amountAtomic: entry.amountAtomic.toString(),

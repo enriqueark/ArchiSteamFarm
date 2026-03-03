@@ -1,4 +1,5 @@
 import { Currency, LedgerDirection, LedgerEntry, LedgerReason, Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
@@ -27,6 +28,8 @@ export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<Ad
   if (input.amountAtomic === 0n) {
     throw new AppError("amountAtomic cannot be 0", 400, "INVALID_AMOUNT");
   }
+
+  const effectiveIdempotencyKey = input.idempotencyKey ?? `admin-adjust:${randomUUID()}`;
 
   const result = await prisma.$transaction(async (tx) => {
     const walletRows = await tx.$queryRaw<Array<{ id: string; balanceAtomic: bigint }>>`
@@ -89,7 +92,7 @@ export const adjustWalletBalance = async (input: AdjustBalanceInput): Promise<Ad
           amountAtomic: amountAbs,
           balanceBeforeAtomic: before,
           balanceAfterAtomic: after,
-          idempotencyKey: input.idempotencyKey,
+          idempotencyKey: effectiveIdempotencyKey,
           metadata: input.metadata as Prisma.InputJsonValue | undefined,
           referenceId: input.referenceId
         }

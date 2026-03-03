@@ -66,7 +66,7 @@ src/
 
 - `User`, `Session`
 - `Wallet` (atomic-unit balance with `BigInt`)
-- `LedgerEntry` (before/after balance trail)
+- `LedgerEntry` (before/after trail + append-only hash chain for tamper evidence)
 - `OutboxEvent`
 - `Deposit`, `Withdrawal`
 - `BetReservation`
@@ -88,6 +88,7 @@ Design highlights for multi-crypto + atomic consistency:
 
 - `wallets`: unique per `(userId, currency)`, balances stored in atomic units (`BIGINT`).
 - `wallet_transactions`: idempotency key per wallet, immutable before/after balance trail.
+- `wallet_transactions`: append-only + tamper-evident (`chainIndex`, `previousHash`, `currentHash`) with DB-enforced immutability.
 - `deposits` / `withdrawals`: status lifecycle, network info, and optional linkage to ledger rows.
 - `bet_reservations`: one hold per `(walletId, betReference)` with explicit release/capture lifecycle.
 - Composite wallet relation in deposits/withdrawals enforces currency consistency with wallet.
