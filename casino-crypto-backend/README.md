@@ -190,6 +190,23 @@ npm run prisma:migrate
 npm run dev
 ```
 
+## Periodic financial integrity audit
+
+Run the automated integrity script:
+
+```bash
+npm run audit:integrity
+```
+
+What it verifies:
+
+- Recomputes each wallet balance from ledger entries and compares to `wallet.balanceAtomic`.
+- Detects negative balances in wallet and ledger trails.
+- Detects locked invariant breaks and locked desync with active bet states.
+- Detects duplicated settlements (duplicate capture/payout rows, duplicate settle keys/nonces).
+
+The script returns non-zero exit code when issues are detected, so it can be used in cron/CI.
+
 API docs available at `http://localhost:3000/docs`.
 
 ## Run with Docker
