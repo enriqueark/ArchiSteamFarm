@@ -1,16 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Library</OutputType>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Library</OutputType>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ConfigureAwaitChecker.Analyzer" PrivateAssets="all" Version="4.0.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.8.3" />
-    <PackageReference Include="MSTest.TestAdapter" Version="2.1.2" />
-    <PackageReference Include="MSTest.TestFramework" Version="2.1.2" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="JetBrains.Annotations.Sources" PrivateAssets="all" />
+		<PackageReference Include="MSTest" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\ArchiSteamFarm\ArchiSteamFarm.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ArchiSteamFarm\ArchiSteamFarm.csproj" />
+	</ItemGroup>
 </Project>

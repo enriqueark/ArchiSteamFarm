@@ -1,25 +1,35 @@
 #!/usr/bin/env sh
 set -eu
 
-BINARY_DIR="$(dirname "$(readlink -f "$0")")/out/result"
 CONFIG_PATH="config/ASF.json"
+OS_TYPE="$(uname -s)"
+
+case "$OS_TYPE" in
+	"Darwin") SCRIPT_PATH="$(readlink "$0")" ;;
+	"FreeBSD") SCRIPT_PATH="$(readlink -f "$0")" ;;
+	"Linux") SCRIPT_PATH="$(readlink -f "$0")" ;;
+	*) echo "ERROR: Unknown OS type: ${OS_TYPE}. If you believe that our script should work on your machine, please let us know."; exit 1
+esac
+
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+BINARY_DIR="${SCRIPT_DIR}/out/result"
+BINARY="${BINARY_DIR}/ArchiSteamFarm.dll"
 
 if [ ! -d "$BINARY_DIR" ]; then
 	echo "ERROR: $BINARY_DIR could not be found!"
 	exit 1
 fi
 
-cd "$BINARY_DIR"
-
-BINARY_PATH="$(pwd)/ArchiSteamFarm.dll"
-
-if [ ! -f "$BINARY_PATH" ]; then
-	echo "ERROR: $BINARY_PATH could not be found!"
+if [ ! -f "$BINARY" ]; then
+	echo "ERROR: $BINARY could not be found!"
 	exit 1
 fi
 
+cd "$BINARY_DIR"
+
 BINARY_ARGS=""
 PATH_NEXT=0
+SERVICE=0
 
 PARSE_ARG() {
 	BINARY_ARGS="$BINARY_ARGS $1"
@@ -34,6 +44,7 @@ PARSE_ARG() {
 				cd "$(echo "$1" | cut -d '=' -f 2-)"
 			fi
 			;;
+		--service) SERVICE=1 ;;
 		*)
 			if [ "$PATH_NEXT" -eq 1 ]; then
 				PATH_NEXT=0
@@ -72,11 +83,11 @@ fi
 
 dotnet --info
 
-if [ -f "$CONFIG_PATH" ] && grep -Eq '"Headless":\s+?true' "$CONFIG_PATH"; then
+if [ "$SERVICE" -eq 1 ] || ([ -f "$CONFIG_PATH" ] && grep -Eq '"Headless":\s+?true' "$CONFIG_PATH"); then
 	# We're running ASF in headless mode so we don't need STDIN
-	dotnet "$BINARY_PATH" $BINARY_ARGS & # Start ASF in the background, trap will work properly due to non-blocking call
+	dotnet "$BINARY" $BINARY_ARGS & # Start ASF in the background, trap will work properly due to non-blocking call
 	wait $! # This will forward dotnet error code, set -e will abort the script if it's non-zero
 else
 	# We're running ASF in non-headless mode, so we need STDIN to be operative
-	dotnet "$BINARY_PATH" $BINARY_ARGS # Start ASF in the foreground, trap won't work until process exit
+	dotnet "$BINARY" $BINARY_ARGS # Start ASF in the foreground, trap won't work until process exit
 fi

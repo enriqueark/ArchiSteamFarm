@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,92 +25,134 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using ArchiSteamFarm.Core;
+using ArchiSteamFarm.Helpers.Json;
+using JetBrains.Annotations;
 
-namespace ArchiSteamFarm.Helpers {
-	public abstract class SerializableFile : IDisposable {
-		private readonly SemaphoreSlim FileSemaphore = new(1, 1);
+namespace ArchiSteamFarm.Helpers;
 
-		protected string? FilePath { get; set; }
+public abstract class SerializableFile : IDisposable {
+	private static readonly SemaphoreSlim GlobalFileSemaphore = new(1, 1);
 
-		private bool ReadOnly;
-		private bool SavingScheduled;
+	private readonly SemaphoreSlim FileSemaphore = new(1, 1);
 
-		public virtual void Dispose() {
+	protected string? FilePath { get; set; }
+
+	private bool ReadOnly;
+	private bool SavingScheduled;
+
+	public void Dispose() {
+		Dispose(true);
+		GC.SuppressFinalize(this);
+	}
+
+	protected virtual void Dispose(bool disposing) {
+		if (disposing) {
 			FileSemaphore.Dispose();
+		}
+	}
 
-			GC.SuppressFinalize(this);
+	/// <summary>
+	///     Implementing this method in your target class is crucial for providing supported functionality.
+	///     In order to do so, it's enough to call static <see cref="Save" /> function from the parent class, providing <code>this</code> as input parameter.
+	///     Afterwards, simply call your <see cref="Save" /> function whenever you need to save changes.
+	///     This approach will allow JSON serializer used in the <see cref="SerializableFile" /> to properly discover all of the properties used in your class.
+	///     Unfortunately, due to STJ's limitations, called by some "security", it's not possible for base class to resolve your properties automatically otherwise.
+	/// </summary>
+	/// <example>protected override Task Save() => Save(this);</example>
+	[UsedImplicitly]
+	protected abstract Task Save();
+
+	protected static async Task Save<T>(T serializableFile) where T : SerializableFile {
+		ArgumentNullException.ThrowIfNull(serializableFile);
+
+		if (string.IsNullOrEmpty(serializableFile.FilePath)) {
+			return;
 		}
 
-		protected async Task Save() {
-			if (string.IsNullOrEmpty(FilePath)) {
-				throw new InvalidOperationException(nameof(FilePath));
+		if (serializableFile.ReadOnly) {
+			return;
+		}
+
+		// ReSharper disable once SuspiciousLockOverSynchronizationPrimitive - this is not a mistake, we need extra synchronization, and we can re-use the semaphore object for that
+		lock (serializableFile.FileSemaphore) {
+			if (serializableFile.SavingScheduled) {
+				return;
 			}
 
+			serializableFile.SavingScheduled = true;
+		}
+
+		await serializableFile.FileSemaphore.WaitAsync().ConfigureAwait(false);
+
+		try {
+			// ReSharper disable once SuspiciousLockOverSynchronizationPrimitive - this is not a mistake, we need extra synchronization, and we can re-use the semaphore object for that
+			lock (serializableFile.FileSemaphore) {
+				serializableFile.SavingScheduled = false;
+			}
+
+			if (serializableFile.ReadOnly) {
+				return;
+			}
+
+			string json = serializableFile.ToJsonText(Debugging.IsUserDebugging);
+
+			if (string.IsNullOrEmpty(json)) {
+				throw new InvalidOperationException(nameof(json));
+			}
+
+			// We always want to write entire content to temporary file first, in order to never load corrupted data, also when target file doesn't exist
+			string newFilePath = $"{serializableFile.FilePath}.new";
+
+			await File.WriteAllTextAsync(newFilePath, json).ConfigureAwait(false);
+
+			File.Move(newFilePath, serializableFile.FilePath, true);
+		} catch (Exception e) {
+			ASF.ArchiLogger.LogGenericException(e);
+		} finally {
+			serializableFile.FileSemaphore.Release();
+		}
+	}
+
+	internal async Task MakeReadOnly() {
+		if (ReadOnly) {
+			return;
+		}
+
+		await FileSemaphore.WaitAsync().ConfigureAwait(false);
+
+		try {
 			if (ReadOnly) {
 				return;
 			}
 
-			lock (FileSemaphore) {
-				if (SavingScheduled) {
-					return;
-				}
-
-				SavingScheduled = true;
-			}
-
-			await FileSemaphore.WaitAsync().ConfigureAwait(false);
-
-			try {
-				lock (FileSemaphore) {
-					SavingScheduled = false;
-				}
-
-				if (ReadOnly) {
-					return;
-				}
-
-				string json = JsonConvert.SerializeObject(this, Debugging.IsUserDebugging ? Formatting.Indented : Formatting.None);
-
-				if (string.IsNullOrEmpty(json)) {
-					ASF.ArchiLogger.LogNullError(nameof(json));
-
-					return;
-				}
-
-				string newFilePath = FilePath + ".new";
-
-				// We always want to write entire content to temporary file first, in order to never load corrupted data, also when target file doesn't exist
-				await RuntimeCompatibility.File.WriteAllTextAsync(newFilePath, json).ConfigureAwait(false);
-
-				if (File.Exists(FilePath)) {
-					File.Replace(newFilePath, FilePath!, null);
-				} else {
-					File.Move(newFilePath, FilePath!);
-				}
-			} catch (Exception e) {
-				ASF.ArchiLogger.LogGenericException(e);
-			} finally {
-				FileSemaphore.Release();
-			}
+			ReadOnly = true;
+		} finally {
+			FileSemaphore.Release();
 		}
+	}
 
-		internal async Task MakeReadOnly() {
-			if (ReadOnly) {
-				return;
-			}
+	internal static async Task<bool> Write(string filePath, string json) {
+		ArgumentException.ThrowIfNullOrEmpty(filePath);
+		ArgumentException.ThrowIfNullOrEmpty(json);
 
-			await FileSemaphore.WaitAsync().ConfigureAwait(false);
+		string newFilePath = $"{filePath}.new";
 
-			try {
-				if (ReadOnly) {
-					return;
-				}
+		await GlobalFileSemaphore.WaitAsync().ConfigureAwait(false);
 
-				ReadOnly = true;
-			} finally {
-				FileSemaphore.Release();
-			}
+		try {
+			// We always want to write entire content to temporary file first, in order to never load corrupted data, also when target file doesn't exist
+			await File.WriteAllTextAsync(newFilePath, json).ConfigureAwait(false);
+
+			File.Move(newFilePath, filePath, true);
+
+			return true;
+		} catch (Exception e) {
+			ASF.ArchiLogger.LogGenericException(e);
+
+			return false;
+		} finally {
+			GlobalFileSemaphore.Release();
 		}
 	}
 }

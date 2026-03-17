@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,166 +24,220 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Threading;
 using System.Threading.Tasks;
+using ArchiSteamFarm.Core;
+using ArchiSteamFarm.Localization;
 
-namespace ArchiSteamFarm.Helpers {
-	internal sealed class CrossProcessFileBasedSemaphore : ICrossProcessSemaphore, IDisposable {
-		private const ushort SpinLockDelay = 1000; // In milliseconds
+namespace ArchiSteamFarm.Helpers;
 
-		private readonly string FilePath;
-		private readonly SemaphoreSlim LocalSemaphore = new(1, 1);
+internal sealed class CrossProcessFileBasedSemaphore : IAsyncDisposable, ICrossProcessSemaphore, IDisposable {
+	private const byte SpinLockDelay = 200; // In milliseconds
 
-		private FileStream? FileLock;
+	private readonly string FilePath;
+	private readonly SemaphoreSlim LocalSemaphore = new(1, 1);
 
-		internal CrossProcessFileBasedSemaphore(string name) {
-			if (string.IsNullOrEmpty(name)) {
-				throw new ArgumentNullException(nameof(name));
+	private FileStream? FileLock;
+
+	internal CrossProcessFileBasedSemaphore(string name) {
+		ArgumentException.ThrowIfNullOrEmpty(name);
+
+		FilePath = Path.Combine(Path.GetTempPath(), SharedInfo.ASF, name);
+	}
+
+	public void Dispose() {
+		// Those are objects that are always being created if constructor doesn't throw exception
+		LocalSemaphore.Dispose();
+
+		// Those are objects that might be null and the check should be in-place
+		FileLock?.Dispose();
+	}
+
+	public async ValueTask DisposeAsync() {
+		// Those are objects that are always being created if constructor doesn't throw exception
+		LocalSemaphore.Dispose();
+
+		// Those are objects that might be null and the check should be in-place
+		if (FileLock != null) {
+			await FileLock.DisposeAsync().ConfigureAwait(false);
+		}
+	}
+
+	void ICrossProcessSemaphore.Release() {
+		// ReSharper disable once SuspiciousLockOverSynchronizationPrimitive - this is not a mistake, we need extra synchronization, and we can re-use the semaphore object for that
+		lock (LocalSemaphore) {
+			if (FileLock == null) {
+				throw new InvalidOperationException(nameof(FileLock));
 			}
 
-			FilePath = Path.Combine(Path.GetTempPath(), SharedInfo.ASF, name);
-
-			EnsureFileExists();
+			FileLock.Dispose();
+			FileLock = null;
 		}
 
-		public void Dispose() {
-			LocalSemaphore.Dispose();
+		LocalSemaphore.Release();
+	}
 
-			FileLock?.Dispose();
-		}
+	async Task ICrossProcessSemaphore.WaitAsync(CancellationToken cancellationToken) {
+		await LocalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-		void ICrossProcessSemaphore.Release() {
-			lock (LocalSemaphore) {
-				if (FileLock == null) {
-					throw new InvalidOperationException(nameof(FileLock));
+		bool success = false;
+
+		try {
+			while (true) {
+				if (!await EnsureFileExists().ConfigureAwait(false)) {
+					ASF.ArchiLogger.LogGenericError(Strings.FormatWarningFailedWithError(nameof(EnsureFileExists)));
+
+					await Task.Delay(SpinLockDelay * 25, cancellationToken).ConfigureAwait(false);
+
+					continue;
 				}
 
-				FileLock.Dispose();
-				FileLock = null;
-			}
-
-			LocalSemaphore.Release();
-		}
-
-		async Task ICrossProcessSemaphore.WaitAsync() {
-			await LocalSemaphore.WaitAsync().ConfigureAwait(false);
-
-			bool success = false;
-
-			try {
-				while (true) {
-					try {
-						lock (LocalSemaphore) {
-							if (FileLock != null) {
-								throw new InvalidOperationException(nameof(FileLock));
-							}
-
-							EnsureFileExists();
-
-							FileLock = new FileStream(FilePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None);
-							success = true;
-
-							return;
+				try {
+					// ReSharper disable once SuspiciousLockOverSynchronizationPrimitive - this is not a mistake, we need extra synchronization, and we can re-use the semaphore object for that
+					lock (LocalSemaphore) {
+						if (FileLock != null) {
+							throw new InvalidOperationException(nameof(FileLock));
 						}
-					} catch (IOException) {
-						await Task.Delay(SpinLockDelay).ConfigureAwait(false);
+
+						FileLock = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+						success = true;
+
+						return;
 					}
-				}
-			} finally {
-				if (!success) {
-					LocalSemaphore.Release();
+				} catch (FileNotFoundException) {
+					throw;
+				} catch (IOException e) {
+					ASF.ArchiLogger.LogGenericDebuggingException(e);
+
+					await Task.Delay(SpinLockDelay, cancellationToken).ConfigureAwait(false);
 				}
 			}
+		} finally {
+			if (!success) {
+				LocalSemaphore.Release();
+			}
+		}
+	}
+
+	async Task<bool> ICrossProcessSemaphore.WaitAsync(int millisecondsTimeout, CancellationToken cancellationToken) {
+		Stopwatch stopwatch = Stopwatch.StartNew();
+
+		if (!await LocalSemaphore.WaitAsync(millisecondsTimeout, cancellationToken).ConfigureAwait(false)) {
+			stopwatch.Stop();
+
+			return false;
 		}
 
-		async Task<bool> ICrossProcessSemaphore.WaitAsync(int millisecondsTimeout) {
-			Stopwatch stopwatch = Stopwatch.StartNew();
+		bool success = false;
 
-			if (!await LocalSemaphore.WaitAsync(millisecondsTimeout).ConfigureAwait(false)) {
-				stopwatch.Stop();
+		try {
+			stopwatch.Stop();
 
+			if (stopwatch.ElapsedMilliseconds > millisecondsTimeout) {
 				return false;
 			}
 
-			bool success = false;
+			millisecondsTimeout -= (int) stopwatch.ElapsedMilliseconds;
 
-			try {
-				stopwatch.Stop();
+			while (true) {
+				if (!await EnsureFileExists().ConfigureAwait(false)) {
+					ASF.ArchiLogger.LogGenericError(Strings.FormatWarningFailedWithError(nameof(EnsureFileExists)));
 
-				millisecondsTimeout -= (int) stopwatch.ElapsedMilliseconds;
-
-				if (millisecondsTimeout <= 0) {
-					return false;
-				}
-
-				while (true) {
-					try {
-						lock (LocalSemaphore) {
-							if (FileLock != null) {
-								throw new InvalidOperationException(nameof(FileLock));
-							}
-
-							EnsureFileExists();
-
-							FileLock = new FileStream(FilePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None);
-							success = true;
-
-							return true;
-						}
-					} catch (IOException) {
-						if (millisecondsTimeout <= SpinLockDelay) {
-							return false;
-						}
-
-						await Task.Delay(SpinLockDelay).ConfigureAwait(false);
-						millisecondsTimeout -= SpinLockDelay;
+					if (millisecondsTimeout <= 0) {
+						return false;
 					}
+
+					int sleep = Math.Min(millisecondsTimeout, SpinLockDelay * 25);
+
+					await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+					millisecondsTimeout -= sleep;
+
+					continue;
 				}
-			} finally {
-				if (!success) {
-					LocalSemaphore.Release();
+
+				try {
+					// ReSharper disable once SuspiciousLockOverSynchronizationPrimitive - this is not a mistake, we need extra synchronization, and we can re-use the semaphore object for that
+					lock (LocalSemaphore) {
+						if (FileLock != null) {
+							throw new InvalidOperationException(nameof(FileLock));
+						}
+
+						FileLock = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+						success = true;
+
+						return true;
+					}
+				} catch (FileNotFoundException) {
+					throw;
+				} catch (IOException e) {
+					ASF.ArchiLogger.LogGenericDebuggingException(e);
+
+					if (millisecondsTimeout <= 0) {
+						return false;
+					}
+
+					int sleep = Math.Min(millisecondsTimeout, SpinLockDelay);
+
+					await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+					millisecondsTimeout -= sleep;
 				}
 			}
+		} finally {
+			if (!success) {
+				LocalSemaphore.Release();
+			}
 		}
+	}
 
-		private void EnsureFileExists() {
+	private async Task<bool> EnsureFileExists() {
+		for (byte i = 0; i < 2; i++) {
 			if (File.Exists(FilePath)) {
-				return;
+				return true;
 			}
 
 			string? directoryPath = Path.GetDirectoryName(FilePath);
 
 			if (string.IsNullOrEmpty(directoryPath)) {
-				ASF.ArchiLogger.LogNullError(nameof(directoryPath));
+				ASF.ArchiLogger.LogNullError(directoryPath);
 
-				return;
+				return false;
 			}
 
 			if (!Directory.Exists(directoryPath)) {
-				Directory.CreateDirectory(directoryPath!);
+				try {
+					if (OperatingSystem.IsWindows()) {
+						DirectoryInfo directoryInfo = Directory.CreateDirectory(directoryPath);
 
-				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-					DirectoryInfo directoryInfo = new(directoryPath!);
+						try {
+							DirectorySecurity directorySecurity = new(directoryPath, AccessControlSections.All);
 
-					try {
-						DirectorySecurity directorySecurity = new(directoryPath!, AccessControlSections.All);
-
-						directoryInfo.SetAccessControl(directorySecurity);
-					} catch (PrivilegeNotHeldException e) {
-						// Non-critical, user might have no rights to manage the resource
-						ASF.ArchiLogger.LogGenericDebuggingException(e);
+							directoryInfo.SetAccessControl(directorySecurity);
+						} catch (PrivilegeNotHeldException e) {
+							// Non-critical, user might have no rights to manage the resource
+							ASF.ArchiLogger.LogGenericDebuggingException(e);
+						}
+					} else if (OperatingSystem.IsFreeBSD() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) {
+						// We require global access from all users, as other ASFs might need to put additional files in there
+						Directory.CreateDirectory(directoryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
 					}
-				} else {
-					OS.UnixSetFileAccess(directoryPath!, OS.EUnixPermission.Combined777);
+				} catch (IOException e) {
+					ASF.ArchiLogger.LogGenericException(e);
+
+					return false;
 				}
 			}
 
-			try {
-				using (new FileStream(FilePath, FileMode.CreateNew)) { }
+			FileStreamOptions fileStreamOptions = new() {
+				Mode = FileMode.CreateNew,
+				Access = FileAccess.Write,
+				Share = FileShare.None
+			};
 
-				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+			try {
+				if (OperatingSystem.IsWindows()) {
+					await new FileStream(FilePath, fileStreamOptions).DisposeAsync().ConfigureAwait(false);
+
 					FileInfo fileInfo = new(FilePath);
 
 					try {
@@ -192,12 +248,28 @@ namespace ArchiSteamFarm.Helpers {
 						// Non-critical, user might have no rights to manage the resource
 						ASF.ArchiLogger.LogGenericDebuggingException(e);
 					}
-				} else {
-					OS.UnixSetFileAccess(FilePath, OS.EUnixPermission.Combined777);
+				} else if (OperatingSystem.IsFreeBSD() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) {
+					// Since we only create and read the files, we don't need write/execute permissions on them from other instances
+					fileStreamOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+
+					await new FileStream(FilePath, fileStreamOptions).DisposeAsync().ConfigureAwait(false);
 				}
-			} catch (IOException) {
-				// Ignored, if the file was already created in the meantime by another instance, this is fine
+			} catch (IOException e) {
+				if (i == 0) {
+					// Ignored, if the file was already created in the meantime by another instance, this is fine
+					ASF.ArchiLogger.LogGenericDebuggingException(e);
+
+					continue;
+				}
+
+				// It's not fine if the same issue happened again
+				ASF.ArchiLogger.LogGenericException(e);
+
+				return false;
 			}
 		}
+
+		// It's also not fine if we failed to create the file twice in a row
+		return File.Exists(FilePath);
 	}
 }

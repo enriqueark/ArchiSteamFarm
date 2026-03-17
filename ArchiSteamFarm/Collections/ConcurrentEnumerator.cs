@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,30 +25,29 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace ArchiSteamFarm.Collections {
-	internal sealed class ConcurrentEnumerator<T> : IEnumerator<T> {
-		public T Current => Enumerator.Current;
+namespace ArchiSteamFarm.Collections;
 
-		private readonly IEnumerator<T> Enumerator;
-		private readonly IDisposable LockObject;
+internal sealed class ConcurrentEnumerator<T> : IEnumerator<T> {
+	public T Current => Enumerator.Current;
 
-		object? IEnumerator.Current => Current;
+	private readonly IEnumerator<T> Enumerator;
+	private readonly IDisposable LockObject;
 
-		internal ConcurrentEnumerator(IReadOnlyCollection<T> collection, IDisposable lockObject) {
-			if (collection == null) {
-				throw new ArgumentNullException(nameof(collection));
-			}
+	object? IEnumerator.Current => Current;
 
-			LockObject = lockObject ?? throw new ArgumentNullException(nameof(lockObject));
-			Enumerator = collection.GetEnumerator();
-		}
+	internal ConcurrentEnumerator(IReadOnlyCollection<T> collection, IDisposable lockObject) {
+		ArgumentNullException.ThrowIfNull(collection);
+		ArgumentNullException.ThrowIfNull(lockObject);
 
-		public void Dispose() {
-			Enumerator.Dispose();
-			LockObject.Dispose();
-		}
-
-		public bool MoveNext() => Enumerator.MoveNext();
-		public void Reset() => Enumerator.Reset();
+		Enumerator = collection.GetEnumerator();
+		LockObject = lockObject;
 	}
+
+	public void Dispose() {
+		Enumerator.Dispose();
+		LockObject.Dispose();
+	}
+
+	public bool MoveNext() => Enumerator.MoveNext();
+	public void Reset() => Enumerator.Reset();
 }

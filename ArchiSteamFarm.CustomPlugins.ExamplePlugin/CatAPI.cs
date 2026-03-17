@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,44 +22,28 @@
 // limitations under the License.
 
 using System;
-using System.Diagnostics.CodeAnalysis;
+using System.Collections.Immutable;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using ArchiSteamFarm.Web;
+using ArchiSteamFarm.Web.Responses;
 
-namespace ArchiSteamFarm.CustomPlugins.ExamplePlugin {
-	// This is example class that shows how you can call third-party services within your plugin
-	// You've always wanted from your ASF to post cats, right? Now is your chance!
-	// P.S. The code is almost 1:1 copy from the one I use in ArchiBot, you can thank me later
-	internal static class CatAPI {
-		private const string URL = "https://aws.random.cat";
+namespace ArchiSteamFarm.CustomPlugins.ExamplePlugin;
 
-		internal static async Task<string?> GetRandomCatURL(WebBrowser webBrowser) {
-			if (webBrowser == null) {
-				throw new ArgumentNullException(nameof(webBrowser));
-			}
+// This is example class that shows how you can call third-party services within your plugin
+// You've always wanted from your ASF to post cats, right? Now is your chance!
+// P.S. The code is almost 1:1 copy from the one I use in ArchiBot, you can thank me later
+internal static class CatAPI {
+	private const string URL = "https://api.thecatapi.com";
 
-			const string request = URL + "/meow";
+	internal static async Task<Uri?> GetRandomCatURL(WebBrowser webBrowser, CancellationToken cancellationToken = default) {
+		ArgumentNullException.ThrowIfNull(webBrowser);
 
-			WebBrowser.ObjectResponse<MeowResponse>? response = await webBrowser.UrlGetToJsonObject<MeowResponse>(request).ConfigureAwait(false);
+		Uri request = new($"{URL}/v1/images/search");
 
-			if (response?.Content == null) {
-				return null;
-			}
+		ObjectResponse<ImmutableList<MeowResponse>>? response = await webBrowser.UrlGetToJsonObject<ImmutableList<MeowResponse>>(request, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (string.IsNullOrEmpty(response.Content.Link)) {
-				throw new InvalidOperationException(nameof(response.Content.Link));
-			}
-
-			return Uri.EscapeUriString(response.Content!.Link!);
-		}
-
-		[SuppressMessage("ReSharper", "ClassCannotBeInstantiated")]
-		private sealed class MeowResponse {
-			[JsonProperty(PropertyName = "file", Required = Required.Always)]
-			internal readonly string Link = "";
-
-			[JsonConstructor]
-			private MeowResponse() { }
-		}
+		return response?.Content?.FirstOrDefault()?.URL;
 	}
 }

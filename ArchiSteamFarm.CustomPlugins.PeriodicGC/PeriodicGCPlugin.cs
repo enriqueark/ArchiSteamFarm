@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,42 +23,50 @@
 
 using System;
 using System.Composition;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime;
+using System.Text.Json.Serialization;
 using System.Threading;
-using ArchiSteamFarm.Plugins;
+using System.Threading.Tasks;
+using ArchiSteamFarm.Core;
+using ArchiSteamFarm.Plugins.Interfaces;
+using JetBrains.Annotations;
 
-namespace ArchiSteamFarm.CustomPlugins.PeriodicGC {
-	[Export(typeof(IPlugin))]
-	[SuppressMessage("ReSharper", "UnusedType.Global")]
-	internal sealed class PeriodicGCPlugin : IPlugin {
-		private const byte GCPeriod = 60; // In seconds
+namespace ArchiSteamFarm.CustomPlugins.PeriodicGC;
 
-		private static readonly Timer PeriodicGCTimer = new(PerformGC);
+[Export(typeof(IPlugin))]
+[UsedImplicitly]
+internal sealed class PeriodicGCPlugin : IPlugin {
+	private const byte GCPeriod = 60; // In seconds
 
-		public string Name => nameof(PeriodicGCPlugin);
+	private static readonly Lock Lock = new();
+	private static readonly Timer PeriodicGCTimer = new(PerformGC);
 
-		public Version Version => typeof(PeriodicGCPlugin).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
+	[JsonInclude]
+	public string Name => nameof(PeriodicGCPlugin);
 
-		public void OnLoaded() {
-			TimeSpan timeSpan = TimeSpan.FromSeconds(GCPeriod);
+	[JsonInclude]
+	public Version Version => typeof(PeriodicGCPlugin).Assembly.GetName().Version ?? throw new InvalidOperationException(nameof(Version));
 
-			ASF.ArchiLogger.LogGenericWarning("Periodic GC will occur every " + timeSpan.ToHumanReadable() + ". Please keep in mind that this plugin should be used for debugging tests only.");
+	public Task OnLoaded() {
+		TimeSpan timeSpan = TimeSpan.FromSeconds(GCPeriod);
 
-			lock (PeriodicGCTimer) {
-				PeriodicGCTimer.Change(timeSpan, timeSpan);
-			}
+		ASF.ArchiLogger.LogGenericWarning($"Periodic GC will occur every {timeSpan.ToHumanReadable()}. Please keep in mind that this plugin should be used for debugging tests only.");
+
+		lock (Lock) {
+			PeriodicGCTimer.Change(timeSpan, timeSpan);
 		}
 
-		private static void PerformGC(object? state) {
-			ASF.ArchiLogger.LogGenericWarning("Performing GC, current memory: " + (GC.GetTotalMemory(false) / 1024) + " KB.");
+		return Task.CompletedTask;
+	}
 
-			lock (PeriodicGCTimer) {
-				GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-				GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
-			}
+	private static void PerformGC(object? state = null) {
+		ASF.ArchiLogger.LogGenericWarning($"Performing GC, current memory: {GC.GetTotalMemory(false) / 1024} KB.");
 
-			ASF.ArchiLogger.LogGenericWarning("GC finished, current memory: " + (GC.GetTotalMemory(false) / 1024) + " KB.");
+		lock (Lock) {
+			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+			GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
 		}
+
+		ASF.ArchiLogger.LogGenericWarning($"GC finished, current memory: {GC.GetTotalMemory(false) / 1024} KB.");
 	}
 }

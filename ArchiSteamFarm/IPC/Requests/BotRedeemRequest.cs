@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,21 +22,21 @@
 // limitations under the License.
 
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
-namespace ArchiSteamFarm.IPC.Requests {
-	[SuppressMessage("ReSharper", "ClassCannotBeInstantiated")]
-	public sealed class BotRedeemRequest {
-		/// <summary>
-		///     A collection (set) of keys to redeem.
-		/// </summary>
-		[JsonProperty(Required = Required.Always)]
-		[Required]
-		public ImmutableHashSet<string> KeysToRedeem { get; private set; } = ImmutableHashSet<string>.Empty;
+namespace ArchiSteamFarm.IPC.Requests;
 
-		[JsonConstructor]
-		private BotRedeemRequest() { }
-	}
+[SuppressMessage("ReSharper", "ClassCannotBeInstantiated")]
+public sealed class BotRedeemRequest {
+	[Description("A collection (set) of keys to redeem")]
+	[JsonInclude]
+	[JsonRequired]
+	[Required]
+	public ImmutableList<string> KeysToRedeem { get; private init; } = [];
+
+	[JsonConstructor]
+	private BotRedeemRequest() { }
 }

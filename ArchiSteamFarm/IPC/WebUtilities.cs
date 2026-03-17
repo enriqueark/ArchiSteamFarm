@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,51 +22,37 @@
 // limitations under the License.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 
-namespace ArchiSteamFarm.IPC {
-	internal static class WebUtilities {
-		internal static async Task Generate(this HttpResponse httpResponse, HttpStatusCode statusCode) {
-			if (httpResponse == null) {
-				throw new ArgumentNullException(nameof(httpResponse));
-			}
+namespace ArchiSteamFarm.IPC;
 
-			ushort statusCodeNumber = (ushort) statusCode;
+internal static class WebUtilities {
+	internal const string BotNamesParameterDescription = "Plural argument accepting one or many bots, acts the same as [Bots] parameter in the commands - https://github.com/JustArchiNET/ArchiSteamFarm/wiki/Commands#bots-argument";
 
-			httpResponse.StatusCode = statusCodeNumber;
-			await httpResponse.WriteAsync(statusCodeNumber + " - " + statusCode).ConfigureAwait(false);
+	internal static string? GetUnifiedName(this Type type) {
+		ArgumentNullException.ThrowIfNull(type);
+
+		return type.GenericTypeArguments.Length == 0 ? type.FullName : $"{type.Namespace}.{type.Name}{string.Join(null, type.GenericTypeArguments.Select(static innerType => $"[{innerType.GetUnifiedName()}]"))}";
+	}
+
+	[UnconditionalSuppressMessage("AssemblyLoadTrimming", "IL2057:TypeGetType", Justification = "We don't care about trimmed assemblies, as we need it to work only with the known (used) ones")]
+	internal static Type? ParseType(string typeText) {
+		ArgumentException.ThrowIfNullOrEmpty(typeText);
+
+		Type? targetType = Type.GetType(typeText);
+
+		if (targetType != null) {
+			return targetType;
 		}
 
-		internal static string? GetUnifiedName(this Type type) {
-			if (type == null) {
-				throw new ArgumentNullException(nameof(type));
-			}
+		// We can try one more time by trying to smartly guess the assembly name from the namespace, this will work for custom libraries like SteamKit2
+		int index = typeText.IndexOf('.', StringComparison.Ordinal);
 
-			return type.GenericTypeArguments.Length == 0 ? type.FullName : type.Namespace + "." + type.Name + string.Join("", type.GenericTypeArguments.Select(innerType => '[' + innerType.GetUnifiedName() + ']'));
+		if ((index <= 0) || (index >= typeText.Length - 1)) {
+			return null;
 		}
 
-		internal static Type? ParseType(string typeText) {
-			if (string.IsNullOrEmpty(typeText)) {
-				throw new ArgumentNullException(nameof(typeText));
-			}
-
-			Type? targetType = Type.GetType(typeText);
-
-			if (targetType != null) {
-				return targetType;
-			}
-
-			// We can try one more time by trying to smartly guess the assembly name from the namespace, this will work for custom libraries like SteamKit2
-			int index = typeText.IndexOf('.');
-
-			if ((index <= 0) || (index >= typeText.Length - 1)) {
-				return null;
-			}
-
-			return Type.GetType(typeText + "," + typeText[..index]);
-		}
+		return Type.GetType($"{typeText},{typeText[..index]}");
 	}
 }

@@ -1,0 +1,26 @@
+<Project>
+	<ItemGroup>
+		<PackageVersion Include="AngleSharp" Version="1.4.0" />
+		<PackageVersion Include="CryptSharpStandard" Version="1.0.0" />
+		<PackageVersion Include="Humanizer" Version="3.0.10" />
+		<PackageVersion Include="JetBrains.Annotations.Sources" Version="2025.2.4" />
+		<PackageVersion Include="Markdig.Signed" Version="1.1.1" />
+		<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+		<PackageVersion Include="Microsoft.CodeAnalysis.ResxSourceGenerator" Version="5.0.0-1.25277.114" />
+		<PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.16.0" />
+		<PackageVersion Include="MSTest" Version="4.1.0" />
+		<PackageVersion Include="Nito.AsyncEx.Coordination" Version="5.1.2" />
+		<PackageVersion Include="NLog.Web.AspNetCore" Version="6.1.2" />
+		<PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.15.0-beta.1" />
+		<PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.0" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.1" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.0" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.0" />
+		<PackageVersion Include="Scalar.AspNetCore" Version="2.13.10" />
+		<PackageVersion Include="SteamKit2" Version="3.4.0" />
+		<PackageVersion Include="System.Composition" Version="10.0.5" />
+		<PackageVersion Include="System.Composition.AttributedModel" Version="10.0.5" />
+		<PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.5" />
+		<PackageVersion Include="Tmds.DBus.Protocol" Version="0.91.0" />
+	</ItemGroup>
+</Project>

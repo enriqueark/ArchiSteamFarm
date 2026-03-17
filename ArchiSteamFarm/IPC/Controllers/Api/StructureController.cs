@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,44 +22,40 @@
 // limitations under the License.
 
 using System;
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using ArchiSteamFarm.IPC.Responses;
 using ArchiSteamFarm.Localization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace ArchiSteamFarm.IPC.Controllers.Api {
-	[Route("Api/Structure")]
-	public sealed class StructureController : ArchiController {
-		/// <summary>
-		///     Fetches structure of given type.
-		/// </summary>
-		/// <remarks>
-		///     Structure is defined as a representation of given object in its default state.
-		/// </remarks>
-		[HttpGet("{structure:required}")]
-		[ProducesResponseType(typeof(GenericResponse<object>), (int) HttpStatusCode.OK)]
-		[ProducesResponseType(typeof(GenericResponse), (int) HttpStatusCode.BadRequest)]
-		public ActionResult<GenericResponse> StructureGet(string structure) {
-			if (string.IsNullOrEmpty(structure)) {
-				throw new ArgumentNullException(nameof(structure));
-			}
+namespace ArchiSteamFarm.IPC.Controllers.Api;
 
-			Type? targetType = WebUtilities.ParseType(structure);
+[Route("Api/Structure")]
+public sealed class StructureController : ArchiController {
+	[EndpointDescription("Structure is defined as a representation of given object in its default state")]
+	[EndpointSummary("Fetches structure of given type")]
+	[HttpGet("{structure:required}")]
+	[ProducesResponseType<GenericResponse<object>>((int) HttpStatusCode.OK)]
+	[ProducesResponseType<GenericResponse>((int) HttpStatusCode.BadRequest)]
+	[UnconditionalSuppressMessage("AssemblyLoadTrimming", "IL2072", Justification = "We don't care about trimmed assemblies, as we need it to work only with the known (used) ones")]
+	public ActionResult<GenericResponse> StructureGet(string structure) {
+		ArgumentException.ThrowIfNullOrEmpty(structure);
 
-			if (targetType == null) {
-				return BadRequest(new GenericResponse(false, string.Format(CultureInfo.CurrentCulture, Strings.ErrorIsInvalid, structure)));
-			}
+		Type? targetType = WebUtilities.ParseType(structure);
 
-			object? obj;
-
-			try {
-				obj = Activator.CreateInstance(targetType, true);
-			} catch (Exception e) {
-				return BadRequest(new GenericResponse(false, string.Format(CultureInfo.CurrentCulture, Strings.ErrorParsingObject, nameof(targetType)) + Environment.NewLine + e));
-			}
-
-			return Ok(new GenericResponse<object>(obj));
+		if (targetType == null) {
+			return BadRequest(new GenericResponse(false, Strings.FormatErrorIsInvalid(structure)));
 		}
+
+		object? obj;
+
+		try {
+			obj = Activator.CreateInstance(targetType, true);
+		} catch (Exception e) {
+			return BadRequest(new GenericResponse(false, $"{Strings.FormatErrorParsingObject(nameof(targetType))}{Environment.NewLine}{e}"));
+		}
+
+		return Ok(new GenericResponse<object>(obj));
 	}
 }

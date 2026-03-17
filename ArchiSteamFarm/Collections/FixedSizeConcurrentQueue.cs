@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,54 +25,52 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 
-namespace ArchiSteamFarm.Collections {
-	internal sealed class FixedSizeConcurrentQueue<T> : IEnumerable<T> {
-		private readonly ConcurrentQueue<T> BackingQueue = new();
+namespace ArchiSteamFarm.Collections;
 
-		internal byte MaxCount {
-			get => BackingMaxCount;
+internal sealed class FixedSizeConcurrentQueue<T> : IEnumerable<T> where T : notnull {
+	private readonly ConcurrentQueue<T> BackingQueue = new();
 
-			set {
-				if (value == 0) {
-					ASF.ArchiLogger.LogNullError(nameof(value));
+	internal byte MaxCount {
+		get;
 
-					return;
-				}
+		set {
+			ArgumentOutOfRangeException.ThrowIfZero(value);
 
-				BackingMaxCount = value;
-
-				Resize();
-			}
-		}
-
-		private byte BackingMaxCount;
-
-		internal FixedSizeConcurrentQueue(byte maxCount) {
-			if (maxCount == 0) {
-				throw new ArgumentNullException(nameof(maxCount));
-			}
-
-			MaxCount = maxCount;
-		}
-
-		public IEnumerator<T> GetEnumerator() => BackingQueue.GetEnumerator();
-		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-		internal void Enqueue(T obj) {
-			BackingQueue.Enqueue(obj);
+			field = value;
 
 			Resize();
 		}
+	}
 
-		private void Resize() {
-			if (BackingQueue.Count <= MaxCount) {
-				return;
-			}
+	internal FixedSizeConcurrentQueue(byte maxCount) {
+		ArgumentOutOfRangeException.ThrowIfZero(maxCount);
 
-			lock (BackingQueue) {
-				while ((BackingQueue.Count > MaxCount) && BackingQueue.TryDequeue(out _)) { }
-			}
+		MaxCount = maxCount;
+	}
+
+	[MustDisposeResource]
+	public IEnumerator<T> GetEnumerator() => BackingQueue.GetEnumerator();
+
+	[MustDisposeResource]
+	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+	internal void Enqueue(T obj) {
+		ArgumentNullException.ThrowIfNull(obj);
+
+		BackingQueue.Enqueue(obj);
+
+		Resize();
+	}
+
+	private void Resize() {
+		if (BackingQueue.Count <= MaxCount) {
+			return;
+		}
+
+		lock (BackingQueue) {
+			while ((BackingQueue.Count > MaxCount) && BackingQueue.TryDequeue(out _)) { }
 		}
 	}
 }

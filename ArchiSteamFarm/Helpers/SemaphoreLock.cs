@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,12 +24,16 @@
 using System;
 using System.Threading;
 
-namespace ArchiSteamFarm.Helpers {
-	internal sealed class SemaphoreLock : IDisposable {
-		private readonly SemaphoreSlim Semaphore;
+namespace ArchiSteamFarm.Helpers;
 
-		internal SemaphoreLock(SemaphoreSlim semaphore) => Semaphore = semaphore ?? throw new ArgumentNullException(nameof(semaphore));
+internal sealed class SemaphoreLock : IDisposable {
+	private readonly SemaphoreSlim Semaphore;
 
-		public void Dispose() => Semaphore.Release();
+	internal SemaphoreLock(SemaphoreSlim semaphore) {
+		ArgumentNullException.ThrowIfNull(semaphore);
+
+		Semaphore = semaphore;
 	}
+
+	public void Dispose() => Semaphore.Release();
 }

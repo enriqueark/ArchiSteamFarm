@@ -1,10 +1,12 @@
+// ----------------------------------------------------------------------------------------------
 //     _                _      _  ____   _                           _____
 //    / \    _ __  ___ | |__  (_)/ ___| | |_  ___   __ _  _ __ ___  |  ___|__ _  _ __  _ __ ___
 //   / _ \  | '__|/ __|| '_ \ | |\___ \ | __|/ _ \ / _` || '_ ` _ \ | |_  / _` || '__|| '_ ` _ \
 //  / ___ \ | |  | (__ | | | || | ___) || |_|  __/| (_| || | | | | ||  _|| (_| || |   | | | | | |
 // /_/   \_\|_|   \___||_| |_||_||____/  \__|\___| \__,_||_| |_| |_||_|   \__,_||_|   |_| |_| |_|
+// ----------------------------------------------------------------------------------------------
 // |
-// Copyright 2015-2020 Łukasz "JustArchi" Domeradzki
+// Copyright 2015-2026 Łukasz "JustArchi" Domeradzki
 // Contact: JustArchi@JustArchi.net
 // |
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,14 +21,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
-namespace ArchiSteamFarm.OfficialPlugins.SteamTokenDumper {
-	public sealed class GlobalConfigExtension {
-		[JsonProperty]
-		public bool SteamTokenDumperPluginEnabled { get; private set; }
+namespace ArchiSteamFarm.OfficialPlugins.SteamTokenDumper;
 
-		[JsonConstructor]
-		internal GlobalConfigExtension() { }
-	}
+public sealed class GlobalConfigExtension {
+	[JsonInclude]
+	public SteamTokenDumperConfig? SteamTokenDumperPlugin { get; private init; }
+
+	[JsonInclude]
+	public bool SteamTokenDumperPluginEnabled { get; private init; }
+
+	[JsonConstructor]
+	internal GlobalConfigExtension() { }
 }
