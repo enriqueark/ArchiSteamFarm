@@ -9,8 +9,8 @@ fi
 echo "DATABASE_URL: $DATABASE_URL"
 echo "Starting migrations..."
 
-# Ejecutar migraciones con el config especificado
-npx prisma migrate deploy --schema=./prisma/schema.prisma --config=./prisma.config.mjs
+# Ejecutar sin config, Prisma usará schema.prisma + DATABASE_URL
+DATABASE_URL="$DATABASE_URL" npx prisma migrate deploy --schema=./prisma/schema.prisma
 
 echo "Starting server..."
 npm run start
