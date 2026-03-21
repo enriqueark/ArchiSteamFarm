@@ -25,6 +25,11 @@ COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY prisma ./prisma
 COPY --from=builder /app/dist ./dist
 
+# COPIAR Y HACER EJECUTABLE EL ENTRYPOINT
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run prisma:deploy && npm run start"]
+# USAR ENTRYPOINT EN LUGAR DE CMD
+ENTRYPOINT ["/app/entrypoint.sh"]
