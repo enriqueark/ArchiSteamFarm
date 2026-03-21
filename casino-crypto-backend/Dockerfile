@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY tsconfig*.json ./
 COPY src ./src
 # PASAR DATABASE_URL PARA EL BUILD
@@ -18,6 +19,7 @@ RUN npm ci
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/dist ./dist
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
