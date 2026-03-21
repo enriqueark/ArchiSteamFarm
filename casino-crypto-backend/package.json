@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "start:prod": "npm run prisma:migrate && npm run start",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "audit:integrity": "tsx src/scripts/integrity-audit.ts",
@@ -14,7 +15,7 @@
     "audit:anchor:verify": "tsx src/scripts/integrity-anchor.ts --verify-only",
     "audit:fraud": "npm run audit:integrity && npm run audit:anchor",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate": "prisma migrate deploy --schema=prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy"
   },
   "keywords": [],

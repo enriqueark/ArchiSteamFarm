@@ -29,4 +29,4 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run prisma:migrate && npm run start"]
+CMD ["npm", "run", "start:prod"]
