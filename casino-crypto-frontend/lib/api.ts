@@ -1,5 +1,19 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-const API = `${BASE_URL}/api/v1`;
+function getBaseUrl(): string {
+  if (typeof window !== "undefined" && window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL) {
+    return window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+}
+
+declare global {
+  interface Window {
+    __RUNTIME_CONFIG__?: { NEXT_PUBLIC_API_URL?: string };
+  }
+}
+
+function getApi(): string {
+  return `${getBaseUrl()}/api/v1`;
+}
 
 let accessToken: string | null = null;
 
@@ -44,7 +58,7 @@ async function request<T>(
     headers["Idempotency-Key"] = idempotencyKey();
   }
 
-  const res = await fetch(`${API}${path}`, { ...options, headers });
+  const res = await fetch(`${getApi()}${path}`, { ...options, headers });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -270,10 +284,10 @@ export async function getMe(): Promise<User> {
 }
 
 export function getApiUrl() {
-  return API;
+  return getApi();
 }
 
 export function getWsUrl() {
-  const base = BASE_URL.replace(/^http/, "ws");
+  const base = getBaseUrl().replace(/^http/, "ws");
   return `${base}/api/v1/roulette/ws`;
 }
