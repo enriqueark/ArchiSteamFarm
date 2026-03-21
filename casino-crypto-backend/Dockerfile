@@ -18,7 +18,6 @@ RUN npm ci
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY prisma ./prisma
-COPY prisma.config.mjs ./prisma.config.mjs
 COPY --from=builder /app/dist ./dist
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
