@@ -43,6 +43,15 @@ const issueTokenPair = async (
   user: { id: string; email: string; role: "PLAYER" | "ADMIN" | "SUPPORT" },
   sessionId: string
 ): Promise<TokenPair> => {
+  const refreshJwt = (
+    fastify.jwt as typeof fastify.jwt & {
+      refresh: {
+        sign: typeof fastify.jwt.sign;
+        verify: typeof fastify.jwt.verify;
+      };
+    }
+  ).refresh;
+
   const payload = {
     sub: user.id,
     role: user.role,
@@ -60,7 +69,7 @@ const issueTokenPair = async (
     }
   );
 
-  const refreshToken = await fastify.jwt.refresh.sign(
+  const refreshToken = await refreshJwt.sign(
     {
       ...payload,
       tokenType: "refresh"
@@ -186,7 +195,16 @@ export const refreshSession = async (
   userAgent?: string,
   ipAddress?: string
 ) => {
-  const decoded = await fastify.jwt.refresh.verify<{
+  const refreshJwt = (
+    fastify.jwt as typeof fastify.jwt & {
+      refresh: {
+        sign: typeof fastify.jwt.sign;
+        verify: typeof fastify.jwt.verify;
+      };
+    }
+  ).refresh;
+
+  const decoded = await refreshJwt.verify<{
     sub: string;
     role: "PLAYER" | "ADMIN" | "SUPPORT";
     sessionId: string;
