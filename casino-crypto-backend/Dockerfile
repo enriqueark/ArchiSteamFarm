@@ -1,6 +1,8 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
+ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
+ENV DATABASE_URL=$DATABASE_URL
 
 COPY package*.json ./
 RUN npm ci

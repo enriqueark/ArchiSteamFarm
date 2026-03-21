@@ -30,7 +30,7 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@fastify/websocket": "^11.2.0",
     "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.4.2",
+    "@prisma/client": "^7.5.0",
     "argon2": "^0.44.0",
     "bullmq": "^5.70.1",
     "dotenv": "^17.3.1",
@@ -38,15 +38,15 @@
     "ioredis": "^5.10.0",
     "pg": "^8.19.0",
     "pino": "^10.3.1",
+    "prisma": "^7.5.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
     "@types/pg": "^8.18.0",
     "@types/ws": "^8.18.1",
-    "prisma": "^7.4.2",
-    "vitest": "^3.2.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
