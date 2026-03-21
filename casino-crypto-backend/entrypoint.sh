@@ -9,8 +9,8 @@ fi
 echo "DATABASE_URL: $DATABASE_URL"
 echo "Starting migrations..."
 
-# Ejecutar migraciones
-npx prisma migrate deploy
+# Ejecutar migraciones con el schema especificado
+npx prisma migrate deploy --schema=./prisma/schema.prisma
 
 echo "Starting server..."
 npm run start
