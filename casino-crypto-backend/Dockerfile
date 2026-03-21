@@ -27,6 +27,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/dist ./dist
 
 # COPIAR Y HACER EJECUTABLE EL ENTRYPOINT
