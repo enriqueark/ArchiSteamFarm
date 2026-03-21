@@ -1,5 +1,4 @@
 import "@fastify/jwt";
-import { FastifyJwtNamespace } from "@fastify/jwt";
 import "fastify";
 
 declare module "@fastify/jwt" {
@@ -24,8 +23,6 @@ declare module "@fastify/jwt" {
 }
 
 declare module "fastify" {
-  interface FastifyInstance extends FastifyJwtNamespace<{ namespace: "refresh" }> {}
-
   interface FastifyRequest {
     idempotencyKey?: string;
     serviceRole?: "GAME_ENGINE";

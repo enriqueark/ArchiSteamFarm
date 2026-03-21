@@ -60,7 +60,7 @@ const issueTokenPair = async (
     }
   );
 
-  const refreshToken = await fastify.refreshJwtSign(
+  const refreshToken = await fastify.jwt.refresh.sign(
     {
       ...payload,
       tokenType: "refresh"
@@ -186,7 +186,7 @@ export const refreshSession = async (
   userAgent?: string,
   ipAddress?: string
 ) => {
-  const decoded = await fastify.refreshJwtVerify<{
+  const decoded = await fastify.jwt.refresh.verify<{
     sub: string;
     role: "PLAYER" | "ADMIN" | "SUPPORT";
     sessionId: string;
