@@ -14,7 +14,7 @@
     "audit:anchor:verify": "tsx src/scripts/integrity-anchor.ts --verify-only",
     "audit:fraud": "npm run audit:integrity && npm run audit:anchor",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:deploy": "prisma migrate deploy"
   },
   "keywords": [],
