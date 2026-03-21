@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -29,7 +30,18 @@ const envSchema = z.object({
   ROULETTE_WORKER_TICK_MS: z.coerce.number().int().min(200).max(5000).default(1000)
 });
 
-const parsed = envSchema.safeParse(process.env);
+const deriveSecretFallback = (label: string): string => {
+  const source = process.env.JWT_SECRET ?? process.env.DATABASE_URL ?? randomBytes(32).toString("hex");
+  return createHash("sha256").update(`${label}:${source}`).digest("hex");
+};
+
+const normalizedEnv = {
+  ...process.env,
+  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-access"),
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-refresh")
+};
+
+const parsed = envSchema.safeParse(normalizedEnv);
 
 if (!parsed.success) {
   const errors = parsed.error.flatten().fieldErrors;
