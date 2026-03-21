@@ -13,6 +13,7 @@ import { ZodError } from "zod";
 import { env } from "./config/env";
 import { isAppError, toZodDetails } from "./core/errors";
 import { redis } from "./infrastructure/cache/redis";
+import { adminRoutes } from "./modules/admin/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { betsRoutes } from "./modules/bets/routes";
 import { healthRoutes } from "./modules/health/routes";
@@ -70,6 +71,7 @@ export const buildApp = (): FastifyInstance => {
       tags: [
         { name: "health", description: "Health checks" },
         { name: "auth", description: "Authentication and sessions" },
+        { name: "admin", description: "Administrative operations and panel" },
         { name: "bets", description: "Transactional generic bet placement and settlement" },
         { name: "wallets", description: "Wallet management and bet reservations" },
         { name: "ledger", description: "Ledger accounting entries" },
@@ -86,6 +88,7 @@ export const buildApp = (): FastifyInstance => {
 
   app.register(healthRoutes, { prefix: "/api/v1/health" });
   app.register(authRoutes, { prefix: "/api/v1/auth" });
+  app.register(adminRoutes, { prefix: "/api/v1/admin" });
   app.register(betsRoutes, { prefix: "/api/v1/bets" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
