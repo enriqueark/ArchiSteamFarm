@@ -10,7 +10,7 @@ fi
 echo "DATABASE_URL: $DATABASE_URL"
 echo "Starting migrations..."
 
-# Ejecutar migraciones con la variable de entorno explícita
+# Ejecutar migraciones
 DATABASE_URL="$DATABASE_URL" npx prisma migrate deploy
 
 echo "Starting server..."
