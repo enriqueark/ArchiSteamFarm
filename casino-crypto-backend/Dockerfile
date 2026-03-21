@@ -1,7 +1,7 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
+ARG DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy?schema=public
 ENV DATABASE_URL=$DATABASE_URL
 
 COPY package*.json ./
