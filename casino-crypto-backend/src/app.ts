@@ -33,6 +33,22 @@ export const buildApp = (): FastifyInstance => {
     genReqId: (request) => (request.headers["x-request-id"] as string | undefined) ?? randomUUID()
   });
 
+  // Accept empty JSON bodies (e.g. POST cashout with Content-Type: application/json and no payload).
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    const bodyText = typeof body === "string" ? body : body.toString("utf8");
+
+    if (bodyText.length === 0) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(bodyText));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   app.register(sensible);
   app.register(cors, {
     origin: true,
