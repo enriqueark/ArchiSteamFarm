@@ -1005,6 +1005,14 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
       throw new AppError("Mines game already lost", 409, "MINES_GAME_ALREADY_LOST");
     }
 
+    if (game.safeReveals <= 0) {
+      throw new AppError(
+        "You must reveal at least one safe tile before cashout",
+        409,
+        "MINES_CASHOUT_REQUIRES_REVEAL"
+      );
+    }
+
     const multiplier = calculateMultiplier(game.mineCount, game.safeReveals, game.boardSize);
     const payoutAtomic = calculatePayoutAtomic(game.betAtomic, multiplier);
 

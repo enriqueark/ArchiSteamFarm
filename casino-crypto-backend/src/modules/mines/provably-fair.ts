@@ -7,6 +7,8 @@ export const BOARD_SIZE = 25;
 export const MIN_MINES = 1;
 export const MAX_MINES = BOARD_SIZE - 1;
 export const HOUSE_EDGE = 0.01;
+export const BREAK_EVEN_REFERENCE_MINE_COUNT = 1;
+export const BREAK_EVEN_REFERENCE_SAFE_REVEALS = 3;
 
 export const generateServerSeed = (): string => randomBytes(32).toString("hex");
 
@@ -41,7 +43,7 @@ export const buildMineIndexes = (
   return pool.slice(0, mineCount).sort((a, b) => a - b);
 };
 
-export const calculateMultiplier = (
+const calculateRawMultiplier = (
   mineCount: number,
   safeReveals: number,
   boardSize = BOARD_SIZE,
@@ -63,7 +65,29 @@ export const calculateMultiplier = (
     multiplier *= remainingTiles / remainingSafeTiles;
   }
 
-  return Number((multiplier * (1 - houseEdge)).toFixed(8));
+  return multiplier * (1 - houseEdge);
+};
+
+const BREAK_EVEN_NORMALIZER = calculateRawMultiplier(
+  BREAK_EVEN_REFERENCE_MINE_COUNT,
+  BREAK_EVEN_REFERENCE_SAFE_REVEALS,
+  BOARD_SIZE,
+  HOUSE_EDGE
+);
+
+export const calculateMultiplier = (
+  mineCount: number,
+  safeReveals: number,
+  boardSize = BOARD_SIZE,
+  houseEdge = HOUSE_EDGE
+): number => {
+  if (safeReveals <= 0) {
+    return 1;
+  }
+
+  const raw = calculateRawMultiplier(mineCount, safeReveals, boardSize, houseEdge);
+  const normalized = raw / BREAK_EVEN_NORMALIZER;
+  return Number(normalized.toFixed(8));
 };
 
 export const toScaledMultiplier = (multiplier: number): bigint => {
