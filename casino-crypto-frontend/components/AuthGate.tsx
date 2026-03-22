@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { login, register, getAccessToken } from "@/lib/api";
+import { login, register } from "@/lib/api";
 import Button from "./Button";
 import Input from "./Input";
 import Card from "./Card";
@@ -15,8 +15,6 @@ export default function AuthGate({ children, onAuth }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (getAccessToken()) return <>{children}</>;
 
   const submit = async () => {
     setError(null);
