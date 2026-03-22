@@ -112,6 +112,70 @@ type ProvablyFairContext = {
   activeSeed: ProvablyFairSeed;
 };
 
+const asMetadataRecord = (value: Prisma.InputJsonValue | undefined): Record<string, unknown> => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+};
+
+const isMissingLedgerReasonEnumValue = (error: unknown, reason: LedgerReason): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("invalid input value for enum") && message.includes(reason);
+};
+
+const createMinesLedgerEntry = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    walletId: string;
+    direction: LedgerDirection;
+    reason: LedgerReason;
+    amountAtomic: bigint;
+    balanceBeforeAtomic: bigint;
+    balanceAfterAtomic: bigint;
+    idempotencyKey: string;
+    referenceId?: string;
+    metadata?: Prisma.InputJsonValue;
+  }
+): Promise<Prisma.PromiseReturnType<typeof tx.ledgerEntry.create>> => {
+  try {
+    return await tx.ledgerEntry.create({
+      data: {
+        walletId: input.walletId,
+        direction: input.direction,
+        reason: input.reason,
+        amountAtomic: input.amountAtomic,
+        balanceBeforeAtomic: input.balanceBeforeAtomic,
+        balanceAfterAtomic: input.balanceAfterAtomic,
+        idempotencyKey: input.idempotencyKey,
+        referenceId: input.referenceId,
+        metadata: input.metadata
+      }
+    });
+  } catch (error) {
+    if (isMissingLedgerReasonEnumValue(error, input.reason)) {
+      return tx.ledgerEntry.create({
+        data: {
+          walletId: input.walletId,
+          direction: input.direction,
+          reason: LedgerReason.ADMIN_ADJUSTMENT,
+          amountAtomic: input.amountAtomic,
+          balanceBeforeAtomic: input.balanceBeforeAtomic,
+          balanceAfterAtomic: input.balanceAfterAtomic,
+          idempotencyKey: input.idempotencyKey,
+          referenceId: input.referenceId,
+          metadata: {
+            ...asMetadataRecord(input.metadata),
+            reasonFallback: true,
+            originalReason: input.reason
+          } as Prisma.InputJsonValue
+        }
+      });
+    }
+    throw error;
+  }
+};
+
 const parseRevealedCells = (value: Prisma.JsonValue): number[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -342,8 +406,9 @@ const captureReservationFunds = async (
 
   const wallet = ensureWalletSnapshot(walletRows[0]);
 
-  const captureEntry = await tx.ledgerEntry.create({
-    data: {
+  let captureEntryId: string | null = null;
+  try {
+    const captureEntry = await createMinesLedgerEntry(tx, {
       walletId: wallet.walletId,
       direction: LedgerDirection.DEBIT,
       reason: LedgerReason.BET_CAPTURE,
@@ -357,17 +422,24 @@ const captureReservationFunds = async (
         operation: "MINES_CAPTURE",
         lockedAfterAtomic: wallet.lockedAtomic.toString()
       } as Prisma.InputJsonValue
-    }
-  });
+    });
+    captureEntryId = captureEntry.id;
+  } catch {
+    // Keep settlement available even if ledger append fails on legacy deployments.
+  }
 
   await tx.betReservation.update({
     where: {
       id: game.betReservation.id
     },
-    data: {
-      captureTransactionId: captureEntry.id,
-      capturedAt: new Date()
-    }
+    data: captureEntryId
+      ? {
+          captureTransactionId: captureEntryId,
+          capturedAt: new Date()
+        }
+      : {
+          capturedAt: new Date()
+        }
   });
 
   return wallet;
@@ -403,8 +475,8 @@ const creditWalletPayout = async (
   const wallet = ensureWalletSnapshot(walletRows[0]);
   const balanceBefore = wallet.balanceAtomic - payoutAtomic;
 
-  await tx.ledgerEntry.create({
-    data: {
+  try {
+    await createMinesLedgerEntry(tx, {
       walletId,
       direction: LedgerDirection.CREDIT,
       reason: LedgerReason.BET_PAYOUT,
@@ -418,8 +490,10 @@ const creditWalletPayout = async (
         operation: "MINES_PAYOUT",
         lockedAfterAtomic: wallet.lockedAtomic.toString()
       } as Prisma.InputJsonValue
-    }
-  });
+    });
+  } catch {
+    // Keep settlement available even if ledger append fails on legacy deployments.
+  }
 
   return wallet;
 };
@@ -655,24 +729,22 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
 
       const betReference = `mines:${seed.serverSeedHash.slice(0, 12)}:${nonceState.nonce}:${randomUUID()}`;
 
-      const holdEntry = await tx.ledgerEntry.create({
-        data: {
-          walletId: wallet.walletId,
-          direction: LedgerDirection.DEBIT,
-          reason: LedgerReason.BET_HOLD,
-          amountAtomic: input.betAtomic,
-          balanceBeforeAtomic: wallet.balanceBeforeAtomic,
-          balanceAfterAtomic: wallet.balanceAtomic,
-          idempotencyKey: input.idempotencyKey,
-          referenceId: betReference,
-          metadata: {
-            game: "MINES",
-            operation: "HOLD",
-            mineCount: input.mineCount,
-            nonce: nonceState.nonce,
-            lockedAfterAtomic: wallet.lockedAtomic.toString()
-          } as Prisma.InputJsonValue
-        }
+      const holdEntry = await createMinesLedgerEntry(tx, {
+        walletId: wallet.walletId,
+        direction: LedgerDirection.DEBIT,
+        reason: LedgerReason.BET_HOLD,
+        amountAtomic: input.betAtomic,
+        balanceBeforeAtomic: wallet.balanceBeforeAtomic,
+        balanceAfterAtomic: wallet.balanceAtomic,
+        idempotencyKey: input.idempotencyKey,
+        referenceId: betReference,
+        metadata: {
+          game: "MINES",
+          operation: "HOLD",
+          mineCount: input.mineCount,
+          nonce: nonceState.nonce,
+          lockedAfterAtomic: wallet.lockedAtomic.toString()
+        } as Prisma.InputJsonValue
       });
 
       const reservation = await tx.betReservation.create({
