@@ -5,9 +5,14 @@ import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { login, logout, refreshSession, register } from "./service";
 
-const credentialSchema = z.object({
+const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128)
+});
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1).max(128)
 });
 
 const refreshSchema = z.object({
@@ -16,7 +21,7 @@ const refreshSchema = z.object({
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/register", async (request, reply) => {
-    const body = credentialSchema.parse(request.body);
+    const body = registerSchema.parse(request.body);
     const result = await register(fastify, {
       ...body,
       userAgent: request.headers["user-agent"],
@@ -27,7 +32,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post("/login", async (request, reply) => {
-    const body = credentialSchema.parse(request.body);
+    const body = loginSchema.parse(request.body);
     const result = await login(fastify, {
       ...body,
       userAgent: request.headers["user-agent"],
