@@ -381,6 +381,17 @@ const creditWalletPayout = async (
   referenceId: string,
   gameId: string
 ): Promise<WalletSnapshot> => {
+  if (payoutAtomic <= 0n) {
+    const wallet = await tx.wallet.findUnique({
+      where: { id: walletId },
+      select: { id: true, balanceAtomic: true, lockedAtomic: true }
+    });
+
+    return ensureWalletSnapshot(
+      wallet ? { id: wallet.id, balanceAtomic: wallet.balanceAtomic, lockedAtomic: wallet.lockedAtomic } : undefined
+    );
+  }
+
   const walletRows = await tx.$queryRaw<WalletUpdateRow[]>`
     UPDATE "wallets"
     SET "balanceAtomic" = "balanceAtomic" + ${payoutAtomic},
