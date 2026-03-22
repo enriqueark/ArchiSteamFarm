@@ -280,6 +280,10 @@ export async function getMinesGame(gameId: string): Promise<MinesGame> {
   return request<MinesGame>(`/mines/games/${gameId}`);
 }
 
+export async function getActiveMinesGame(): Promise<MinesGame | null> {
+  return request<MinesGame | null>("/mines/games/active");
+}
+
 export async function revealMine(gameId: string, cellIndex: number): Promise<MinesRevealResponse> {
   return request<MinesRevealResponse>(
     `/mines/games/${gameId}/reveal`,

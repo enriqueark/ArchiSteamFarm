@@ -674,6 +674,11 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET_AMOUNT");
   }
 
+  const active = await getActiveMinesGame(input.userId);
+  if (active) {
+    return active;
+  }
+
   const existing = await resolveExistingStartRequest(input.userId, input.idempotencyKey);
   if (existing) {
     return existing;
@@ -853,6 +858,32 @@ export const getMinesGameById = async (userId: string, gameId: string): Promise<
 
   if (!game || !game.betReservation) {
     throw new AppError("Mines game not found", 404, "MINES_GAME_NOT_FOUND");
+  }
+
+  const wallet = await getWalletSnapshotById(game.betReservation.walletId);
+  return toMinesGameState(game, wallet);
+};
+
+export const getActiveMinesGame = async (userId: string): Promise<MinesGameState | null> => {
+  const game = await prisma.minesGame.findFirst({
+    where: {
+      userId,
+      status: MinesGameStatus.ACTIVE
+    },
+    orderBy: {
+      createdAt: "desc"
+    },
+    include: {
+      betReservation: {
+        select: {
+          walletId: true
+        }
+      }
+    }
+  });
+
+  if (!game || !game.betReservation) {
+    return null;
   }
 
   const wallet = await getWalletSnapshotById(game.betReservation.walletId);

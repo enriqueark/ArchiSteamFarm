@@ -7,7 +7,9 @@ import { AppError, isAppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import {
   cashoutMinesGame,
+  getActiveMinesGame,
   getMinesGameById,
+  type MinesGameState,
   getOrCreateProvablyFairState,
   revealMinesTile,
   rotateProvablyFairServerSeed,
@@ -38,7 +40,7 @@ const gameParamsSchema = z.object({
   gameId: z.string().cuid()
 });
 
-const toGameResponse = (result: Awaited<ReturnType<typeof getMinesGameById>>) => ({
+const toGameResponse = (result: MinesGameState) => ({
   gameId: result.gameId,
   status: result.status,
   currency: result.currency,
@@ -122,6 +124,11 @@ export const minesRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send(toGameResponse(result));
     }
   );
+
+  fastify.get("/games/active", { preHandler: requireAuth }, async (request, reply) => {
+    const result = await getActiveMinesGame(request.user.sub);
+    return reply.send(result ? toGameResponse(result) : null);
+  });
 
   fastify.get("/games/:gameId", { preHandler: requireAuth }, async (request, reply) => {
     const params = gameParamsSchema.parse(request.params);

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import {
+  getActiveMinesGame,
   startMinesGame,
   revealMine,
   cashoutMines,
@@ -31,6 +32,41 @@ export default function MinesPage() {
     setLastReveal(null);
   };
 
+  const hydrateBoardFromGame = (g: MinesGame) => {
+    const next = [...Array(BOARD_SIZE).fill("hidden")] as CellState[];
+    g.revealedCells?.forEach((idx) => {
+      next[idx] = "safe";
+    });
+    setCells(next);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadActiveGame = async () => {
+      try {
+        const active = await getActiveMinesGame();
+        if (cancelled || !active) {
+          return;
+        }
+
+        setGame(active);
+        setCurrency(active.currency);
+        setBetAtomic(active.betAtomic);
+        setMineCount(String(active.mineCount));
+        hydrateBoardFromGame(active);
+        setResponse(JSON.stringify(active, null, 2));
+      } catch {
+        // Ignore on page load; user might be logged out or have no session yet.
+      }
+    };
+
+    void loadActiveGame();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleStart = async () => {
     setError(null);
     setResponse("");
@@ -40,11 +76,7 @@ export default function MinesPage() {
       const g = await startMinesGame(currency, betAtomic, parseInt(mineCount));
       setGame(g);
       setResponse(JSON.stringify(g, null, 2));
-      if (g.revealedCells?.length) {
-        const next = [...Array(BOARD_SIZE).fill("hidden")] as CellState[];
-        g.revealedCells.forEach((idx) => (next[idx] = "safe"));
-        setCells(next);
-      }
+      hydrateBoardFromGame(g);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to start game");
     } finally {
