@@ -7,12 +7,12 @@ import { AppError } from "../../core/errors";
 import { login, logout, refreshSession, register } from "./service";
 
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(8).max(128)
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(1).max(128)
 });
 
