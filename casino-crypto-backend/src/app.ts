@@ -97,6 +97,21 @@ export const buildApp = (): FastifyInstance => {
   app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });
 
   app.setErrorHandler((error, request, reply) => {
+    const jwtErrorCode =
+      typeof (error as { code?: unknown }).code === "string" ? ((error as { code: string }).code as string) : null;
+    const isJwtError = jwtErrorCode?.startsWith("FST_JWT_") || jwtErrorCode?.startsWith("FAST_JWT_");
+    if (isJwtError) {
+      const statusCode =
+        typeof (error as { statusCode?: unknown }).statusCode === "number"
+          ? ((error as { statusCode: number }).statusCode as number)
+          : 401;
+
+      return reply.code(statusCode).send({
+        code: jwtErrorCode,
+        message: typeof (error as { message?: unknown }).message === "string" ? (error as { message: string }).message : "Unauthorized"
+      });
+    }
+
     if (error instanceof ZodError) {
       return reply.code(400).send({
         code: "VALIDATION_ERROR",
