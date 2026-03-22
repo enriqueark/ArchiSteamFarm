@@ -70,6 +70,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       <div class="row">
         <label>Access token:</label>
         <input id="token" style="min-width:520px" placeholder="Paste admin Bearer token" />
+        <button id="checkTokenBtn">Verify token</button>
         <button id="logoutBtn">Logout current token</button>
       </div>
       <div id="authStatus" class="mono"></div>
@@ -96,17 +97,38 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const usersTbody = document.querySelector("#usersTable tbody");
       const searchStatus = document.getElementById("searchStatus");
       const authStatus = document.getElementById("authStatus");
+      const checkTokenBtn = document.getElementById("checkTokenBtn");
 
       const req = async (url, options = {}) => {
         const token = tokenInput.value.trim();
         const headers = Object.assign({}, options.headers || {}, token ? { Authorization: "Bearer " + token } : {});
-        return fetch(url, Object.assign({}, options, { headers }));
+        try {
+          return await fetch(url, Object.assign({}, options, { headers }));
+        } catch (_error) {
+          throw new Error("Network error while contacting backend.");
+        }
       };
 
       const amountToAtomic = (amount, decimals = 8) => {
         const n = Number(amount);
         if (!Number.isFinite(n) || n <= 0) return null;
         return String(Math.round(n * Math.pow(10, decimals)));
+      };
+
+      const getErrorMessage = async (res, fallback) => {
+        const data = await res.json().catch(() => ({}));
+        return (data && data.message) ? data.message : fallback;
+      };
+
+      const persistToken = () => {
+        try { localStorage.setItem("admin_panel_token", tokenInput.value.trim()); } catch (_e) {}
+      };
+
+      const restoreToken = () => {
+        try {
+          const saved = localStorage.getItem("admin_panel_token");
+          if (saved) tokenInput.value = saved;
+        } catch (_e) {}
       };
 
       const renderUsers = (users) => {
@@ -140,34 +162,39 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           const amountEl = tr.querySelector(".amount");
           const msgEl = tr.querySelector(".msg");
           const doAdjust = async (sign) => {
-            msgEl.textContent = "";
-            const atomic = amountToAtomic(amountEl.value);
-            if (!atomic) {
-              msgEl.textContent = "Invalid amount.";
+            try {
+              msgEl.textContent = "";
+              const atomic = amountToAtomic(amountEl.value);
+              if (!atomic) {
+                msgEl.textContent = "Invalid amount.";
+                msgEl.className = "mono msg err";
+                return;
+              }
+              const idempotency = "admin-panel:" + Date.now() + ":" + Math.random().toString(16).slice(2);
+              const amountAtomic = sign === "-" ? "-" + atomic : atomic;
+              const res = await req("/api/v1/admin/wallets/adjust", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
+                body: JSON.stringify({
+                  userId: user.id,
+                  currency: currencyEl.value,
+                  amountAtomic,
+                  reason: "ADMIN_ADJUSTMENT",
+                  referenceId: "admin-panel"
+                })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                msgEl.textContent = (data && data.message) ? data.message : "Adjustment failed.";
+                msgEl.className = "mono msg err";
+                return;
+              }
+              msgEl.textContent = "OK. New balanceAtomic=" + data.balanceAtomic;
+              msgEl.className = "mono msg ok";
+            } catch (error) {
+              msgEl.textContent = error && error.message ? error.message : "Adjustment failed.";
               msgEl.className = "mono msg err";
-              return;
             }
-            const idempotency = "admin-panel:" + Date.now() + ":" + Math.random().toString(16).slice(2);
-            const amountAtomic = sign === "-" ? "-" + atomic : atomic;
-            const res = await req("/api/v1/admin/wallets/adjust", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
-              body: JSON.stringify({
-                userId: user.id,
-                currency: currencyEl.value,
-                amountAtomic,
-                reason: "ADMIN_ADJUSTMENT",
-                referenceId: "admin-panel"
-              })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              msgEl.textContent = (data && data.message) ? data.message : "Adjustment failed.";
-              msgEl.className = "mono msg err";
-              return;
-            }
-            msgEl.textContent = "OK. New balanceAtomic=" + data.balanceAtomic;
-            msgEl.className = "mono msg ok";
           };
 
           tr.querySelector(".credit").addEventListener("click", () => void doAdjust("+"));
@@ -177,18 +204,57 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       };
 
       document.getElementById("searchBtn").addEventListener("click", async () => {
-        searchStatus.textContent = "";
-        const q = encodeURIComponent(queryInput.value.trim());
-        const res = await req("/api/v1/admin/users" + (q ? ("?q=" + q) : ""));
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          searchStatus.textContent = (data && data.message) ? data.message : "Search failed";
+        try {
+          persistToken();
+          searchStatus.textContent = "Searching...";
+          searchStatus.className = "mono";
+          const q = encodeURIComponent(queryInput.value.trim());
+          const res = await req("/api/v1/admin/users" + (q ? ("?q=" + q) : ""));
+          if (!res.ok) {
+            searchStatus.textContent = await getErrorMessage(res, "Search failed");
+            searchStatus.className = "err";
+            usersTbody.innerHTML = "";
+            return;
+          }
+          const data = await res.json().catch(() => ({ users: [] }));
+          searchStatus.textContent = "Found " + data.users.length + " user(s)";
+          searchStatus.className = "ok";
+          renderUsers(data.users);
+        } catch (error) {
+          searchStatus.textContent = error && error.message ? error.message : "Search failed";
           searchStatus.className = "err";
+        }
+      });
+
+      checkTokenBtn.addEventListener("click", async () => {
+        authStatus.textContent = "";
+        authStatus.className = "mono";
+        const token = tokenInput.value.trim();
+        if (!token) {
+          authStatus.textContent = "Paste access token first.";
+          authStatus.className = "mono err";
           return;
         }
-        searchStatus.textContent = "Found " + data.users.length + " user(s)";
-        searchStatus.className = "ok";
-        renderUsers(data.users);
+        try {
+          persistToken();
+          const meRes = await req("/api/v1/users/me");
+          if (!meRes.ok) {
+            authStatus.textContent = await getErrorMessage(meRes, "Token is invalid.");
+            authStatus.className = "mono err";
+            return;
+          }
+          const me = await meRes.json();
+          if (me.role !== "ADMIN") {
+            authStatus.textContent = "Token valid, but user role is " + me.role + " (ADMIN required).";
+            authStatus.className = "mono err";
+            return;
+          }
+          authStatus.textContent = "Token valid. ADMIN access granted for " + me.email + ".";
+          authStatus.className = "mono ok";
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Unable to validate token.";
+          authStatus.className = "mono err";
+        }
       });
 
       document.getElementById("logoutBtn").addEventListener("click", async () => {
@@ -198,22 +264,41 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           authStatus.className = "mono err";
           return;
         }
-        const res = await req("/api/v1/auth/logout", { method: "POST" });
-        if (res.status === 204) {
-          authStatus.textContent = "Logout OK for current token/session.";
-          authStatus.className = "mono ok";
-          return;
+        try {
+          const res = await req("/api/v1/auth/logout", { method: "POST" });
+          if (res.status === 204) {
+            authStatus.textContent = "Logout OK for current token/session.";
+            authStatus.className = "mono ok";
+            return;
+          }
+          authStatus.textContent = await getErrorMessage(res, "Logout failed.");
+          authStatus.className = "mono err";
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Logout failed.";
+          authStatus.className = "mono err";
         }
-        const data = await res.json().catch(() => ({}));
-        authStatus.textContent = (data && data.message) ? data.message : "Logout failed.";
-        authStatus.className = "mono err";
       });
+
+      queryInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          document.getElementById("searchBtn").click();
+        }
+      });
+
+      tokenInput.addEventListener("change", persistToken);
+      restoreToken();
     </script>
   </body>
 </html>`;
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/panel", async (_request, reply) => {
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+    );
+    reply.header("Cache-Control", "no-store");
     return reply.type("text/html; charset=utf-8").send(ADMIN_PANEL_HTML);
   });
 
