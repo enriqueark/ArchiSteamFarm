@@ -17,7 +17,14 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { SUPPORTED_CURRENCIES, debitBalanceInTx } from "../wallets/service";
-import { computePayoutAtomic, evaluateRouletteBet, getRouletteColor, validateRouletteBetInput } from "./rules";
+import {
+  ROULETTE_MAX_NUMBER,
+  ROULETTE_MIN_NUMBER,
+  computePayoutAtomic,
+  evaluateRouletteBet,
+  getRouletteColor,
+  validateRouletteBetInput
+} from "./rules";
 import { RouletteRealtimeEvent } from "./ws-hub";
 
 type RoundTransitionRow = {
@@ -138,7 +145,7 @@ const toBetState = (bet: RouletteBet): RouletteBetState => ({
 const emitRoundEvent = (round: RouletteRound): void => {
   broadcaster?.broadcast({
     type: "roulette.round",
-    payload: {
+    data: {
       roundId: round.id,
       roundNumber: round.roundNumber,
       currency: round.currency,
@@ -158,7 +165,7 @@ const emitRoundEvent = (round: RouletteRound): void => {
 const emitTotalsEvent = (roundId: string, currency: Currency, totalStakedAtomic: bigint): void => {
   broadcaster?.broadcast({
     type: "roulette.betTotals",
-    payload: {
+    data: {
       roundId,
       currency,
       totalStakedAtomic: totalStakedAtomic.toString()
@@ -465,7 +472,7 @@ const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
       return null;
     }
 
-    const winningNumber = randomInt(0, 37);
+    const winningNumber = randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
     const winningColor = getRouletteColor(winningNumber);
     let totalPayoutAtomic = 0n;
 

@@ -16,6 +16,7 @@ import {
   startRouletteRoundWorker,
   stopRouletteRoundWorker
 } from "./service";
+import { ROULETTE_ALLOWED_BET_TYPES } from "./rules";
 import { RouletteWebsocketHub } from "./ws-hub";
 
 const websocketHub = new RouletteWebsocketHub();
@@ -31,8 +32,12 @@ const websocketQuerySchema = z.object({
 const placeBetSchema = z.object({
   currency: z.nativeEnum(Currency),
   roundId: z.string().cuid().optional(),
-  betType: z.nativeEnum(RouletteBetType),
-  betValue: z.number().int().optional(),
+  betType: z
+    .nativeEnum(RouletteBetType)
+    .refine(
+      (value) => (ROULETTE_ALLOWED_BET_TYPES as readonly RouletteBetType[]).includes(value),
+      "betType must be RED, BLACK, GREEN or BAIT"
+    ),
   stakeAtomic: z
     .string()
     .regex(/^\d+$/, "stakeAtomic must be an integer string")
@@ -73,7 +78,7 @@ const toRoundResponse = (round: RouletteRoundState) => ({
 
 const toRoundWsEvent = (round: RouletteRoundState) => ({
   type: "roulette.round",
-  payload: {
+  data: {
     roundId: round.id,
     roundNumber: round.roundNumber,
     currency: round.currency,
@@ -143,7 +148,6 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
         currency: body.currency,
         roundId: body.roundId,
         betType: body.betType,
-        betValue: body.betValue,
         stakeAtomic: body.stakeAtomic,
         idempotencyKey: ensureIdempotencyKey(request)
       });

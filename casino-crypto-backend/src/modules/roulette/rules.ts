@@ -1,9 +1,23 @@
 import { RouletteBetType } from "@prisma/client";
 
-const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+export const ROULETTE_MIN_NUMBER = 0;
+export const ROULETTE_MAX_NUMBER = 14;
+export const ROULETTE_GREEN_NUMBER = 0;
+export const ROULETTE_BAIT_LEFT_NUMBER = 14;
+export const ROULETTE_BAIT_RIGHT_NUMBER = 1;
+export const ROULETTE_ALLOWED_BET_TYPES = [
+  RouletteBetType.RED,
+  RouletteBetType.BLACK,
+  RouletteBetType.GREEN,
+  RouletteBetType.BAIT
+] as const;
+const ALLOWED_BET_TYPE_SET = new Set<RouletteBetType>(ROULETTE_ALLOWED_BET_TYPES);
+
+// 15-slot custom wheel: 7 red, 7 black, 1 green.
+const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 11, 13]);
 
 const getColor = (winningNumber: number): "GREEN" | "RED" | "BLACK" => {
-  if (winningNumber === 0) {
+  if (winningNumber === ROULETTE_GREEN_NUMBER) {
     return "GREEN";
   }
 
@@ -13,12 +27,8 @@ const getColor = (winningNumber: number): "GREEN" | "RED" | "BLACK" => {
 export const getRouletteColor = (winningNumber: number): "GREEN" | "RED" | "BLACK" => getColor(winningNumber);
 
 export const validateRouletteBetInput = (betType: RouletteBetType, betValue?: number): void => {
-  if (betType === RouletteBetType.STRAIGHT) {
-    const value = betValue;
-    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 36) {
-      throw new Error("STRAIGHT bet requires betValue between 0 and 36");
-    }
-    return;
+  if (!ALLOWED_BET_TYPE_SET.has(betType)) {
+    throw new Error("Unsupported betType. Allowed: RED, BLACK, GREEN, BAIT");
   }
 
   if (typeof betValue !== "undefined") {
@@ -29,34 +39,22 @@ export const validateRouletteBetInput = (betType: RouletteBetType, betValue?: nu
 export const evaluateRouletteBet = (
   betType: RouletteBetType,
   winningNumber: number,
-  betValue?: number
+  _betValue?: number
 ): { won: boolean; payoutMultiplier: number } => {
   const color = getColor(winningNumber);
 
   switch (betType) {
-    case RouletteBetType.STRAIGHT:
-      return {
-        won: typeof betValue === "number" && winningNumber === betValue,
-        payoutMultiplier: 36
-      };
     case RouletteBetType.RED:
       return { won: color === "RED", payoutMultiplier: 2 };
     case RouletteBetType.BLACK:
       return { won: color === "BLACK", payoutMultiplier: 2 };
-    case RouletteBetType.EVEN:
-      return { won: winningNumber !== 0 && winningNumber % 2 === 0, payoutMultiplier: 2 };
-    case RouletteBetType.ODD:
-      return { won: winningNumber % 2 === 1, payoutMultiplier: 2 };
-    case RouletteBetType.LOW:
-      return { won: winningNumber >= 1 && winningNumber <= 18, payoutMultiplier: 2 };
-    case RouletteBetType.HIGH:
-      return { won: winningNumber >= 19 && winningNumber <= 36, payoutMultiplier: 2 };
-    case RouletteBetType.DOZEN_1:
-      return { won: winningNumber >= 1 && winningNumber <= 12, payoutMultiplier: 3 };
-    case RouletteBetType.DOZEN_2:
-      return { won: winningNumber >= 13 && winningNumber <= 24, payoutMultiplier: 3 };
-    case RouletteBetType.DOZEN_3:
-      return { won: winningNumber >= 25 && winningNumber <= 36, payoutMultiplier: 3 };
+    case RouletteBetType.GREEN:
+      return { won: winningNumber === ROULETTE_GREEN_NUMBER, payoutMultiplier: 14 };
+    case RouletteBetType.BAIT:
+      return {
+        won: winningNumber === ROULETTE_BAIT_LEFT_NUMBER || winningNumber === ROULETTE_BAIT_RIGHT_NUMBER,
+        payoutMultiplier: 7
+      };
     default:
       return { won: false, payoutMultiplier: 0 };
   }

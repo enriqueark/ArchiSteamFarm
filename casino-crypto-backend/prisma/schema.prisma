@@ -90,6 +90,8 @@ enum RouletteBetType {
   STRAIGHT
   RED
   BLACK
+  GREEN
+  BAIT
   EVEN
   ODD
   LOW

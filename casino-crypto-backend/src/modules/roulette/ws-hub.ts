@@ -5,7 +5,7 @@ import { RawData, WebSocket } from "ws";
 type RouletteRealtimeEvent =
   | {
       type: "roulette.round";
-      payload: {
+      data: {
         roundId: string;
         roundNumber: number;
         currency: Currency;
@@ -22,7 +22,7 @@ type RouletteRealtimeEvent =
     }
   | {
       type: "roulette.betTotals";
-      payload: {
+      data: {
         roundId: string;
         currency: Currency;
         totalStakedAtomic: string;
@@ -125,7 +125,7 @@ export class RouletteWebsocketHub {
 
   public broadcast(event: RouletteRealtimeEvent): void {
     const payload = JSON.stringify(event);
-    const currency = event.payload.currency;
+    const currency = event.data.currency;
 
     this.clients.forEach((client) => {
       if (client.currency && client.currency !== currency) {
