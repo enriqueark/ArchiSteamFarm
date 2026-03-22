@@ -112,6 +112,13 @@ type ProvablyFairContext = {
   activeSeed: ProvablyFairSeed;
 };
 
+const ensureLedgerReasonValues = async (tx: Prisma.TransactionClient): Promise<void> => {
+  await tx.$executeRawUnsafe(`ALTER TYPE "LedgerReason" ADD VALUE IF NOT EXISTS 'BET_HOLD'`);
+  await tx.$executeRawUnsafe(`ALTER TYPE "LedgerReason" ADD VALUE IF NOT EXISTS 'BET_RELEASE'`);
+  await tx.$executeRawUnsafe(`ALTER TYPE "LedgerReason" ADD VALUE IF NOT EXISTS 'BET_CAPTURE'`);
+  await tx.$executeRawUnsafe(`ALTER TYPE "LedgerReason" ADD VALUE IF NOT EXISTS 'BET_PAYOUT'`);
+};
+
 const parseRevealedCells = (value: Prisma.JsonValue): number[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -341,6 +348,7 @@ const captureReservationFunds = async (
   `;
 
   const wallet = ensureWalletSnapshot(walletRows[0]);
+  await ensureLedgerReasonValues(tx);
 
   const captureEntry = await tx.ledgerEntry.create({
     data: {
@@ -402,6 +410,7 @@ const creditWalletPayout = async (
 
   const wallet = ensureWalletSnapshot(walletRows[0]);
   const balanceBefore = wallet.balanceAtomic - payoutAtomic;
+  await ensureLedgerReasonValues(tx);
 
   await tx.ledgerEntry.create({
     data: {
@@ -652,6 +661,7 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
         amountAtomic: input.betAtomic,
         lockAmountAtomic: input.betAtomic
       });
+      await ensureLedgerReasonValues(tx);
 
       const betReference = `mines:${seed.serverSeedHash.slice(0, 12)}:${nonceState.nonce}:${randomUUID()}`;
 
