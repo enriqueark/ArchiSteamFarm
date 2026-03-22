@@ -28,13 +28,13 @@ export default function App({ Component, pageProps }: AppProps) {
     );
   }
 
+  if (!authed) {
+    return <AuthGate onAuth={() => setAuthed(true)} />;
+  }
+
   return (
-    <AuthGate onAuth={() => setAuthed(true)}>
-      {authed && (
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-      )}
-    </AuthGate>
+    <Layout>
+      <Component {...pageProps} />
+    </Layout>
   );
 }
