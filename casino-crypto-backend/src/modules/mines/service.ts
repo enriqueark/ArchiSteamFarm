@@ -1100,16 +1100,40 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
     const payoutAtomic = calculatePayoutAtomic(game.betAtomic, multiplier);
     const lockToRelease = game.betReservation.status === BetReservationStatus.HELD ? game.betAtomic : 0n;
 
-    const walletRows = await tx.$queryRaw<WalletUpdateRow[]>`
-      UPDATE "wallets"
-      SET "balanceAtomic" = "balanceAtomic" + ${payoutAtomic},
-          "lockedAtomic" = GREATEST("lockedAtomic" - ${lockToRelease}, 0),
-          "updatedAt" = NOW()
-      WHERE "id" = ${game.betReservation.walletId}
-      RETURNING id, "balanceAtomic", "lockedAtomic"
-    `;
+    const currentWallet = await tx.wallet.findUnique({
+      where: { id: game.betReservation.walletId },
+      select: { id: true, balanceAtomic: true, lockedAtomic: true }
+    });
+    const walletBefore = ensureWalletSnapshot(
+      currentWallet
+        ? {
+            id: currentWallet.id,
+            balanceAtomic: currentWallet.balanceAtomic,
+            lockedAtomic: currentWallet.lockedAtomic
+          }
+        : undefined
+    );
+    const nextLocked = walletBefore.lockedAtomic - lockToRelease;
+    if (nextLocked < 0n) {
+      throw new AppError("Wallet locked balance is inconsistent", 409, "WALLET_LOCKED_INCONSISTENT");
+    }
 
-    const wallet = ensureWalletSnapshot(walletRows[0]);
+    const walletUpdated = await tx.wallet.update({
+      where: { id: walletBefore.walletId },
+      data: {
+        balanceAtomic: {
+          increment: payoutAtomic
+        },
+        lockedAtomic: nextLocked,
+        updatedAt: new Date()
+      },
+      select: { id: true, balanceAtomic: true, lockedAtomic: true }
+    });
+    const wallet = ensureWalletSnapshot({
+      id: walletUpdated.id,
+      balanceAtomic: walletUpdated.balanceAtomic,
+      lockedAtomic: walletUpdated.lockedAtomic
+    });
 
     if (game.betReservation.status === BetReservationStatus.HELD) {
       await tx.betReservation.update({

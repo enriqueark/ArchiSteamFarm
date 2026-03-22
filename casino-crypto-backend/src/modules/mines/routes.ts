@@ -3,7 +3,7 @@ import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import { requireAuth } from "../../core/auth";
-import { AppError } from "../../core/errors";
+import { AppError, isAppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import {
   cashoutMinesGame,
@@ -156,13 +156,25 @@ export const minesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const params = gameParamsSchema.parse(request.params);
-      const result = await cashoutMinesGame({
-        userId: request.user.sub,
-        gameId: params.gameId,
-        idempotencyKey: ensureIdempotencyKey(request)
-      });
+      try {
+        const result = await cashoutMinesGame({
+          userId: request.user.sub,
+          gameId: params.gameId,
+          idempotencyKey: ensureIdempotencyKey(request)
+        });
 
-      return reply.send(toGameResponse(result));
+        return reply.send(toGameResponse(result));
+      } catch (error) {
+        if (isAppError(error)) {
+          throw error;
+        }
+
+        request.log.error({ err: error, gameId: params.gameId, userId: request.user.sub }, "Mines cashout failed");
+        return reply.code(500).send({
+          code: "MINES_CASHOUT_INTERNAL_ERROR",
+          message: error instanceof Error ? error.message : "Cashout failed"
+        });
+      }
     }
   );
 };
