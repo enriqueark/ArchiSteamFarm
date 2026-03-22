@@ -34,6 +34,30 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+export function clearSession() {
+  accessToken = null;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+  }
+}
+
+export async function validateSession(): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`${getApi()}/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) return true;
+    clearSession();
+    return false;
+  } catch {
+    clearSession();
+    return false;
+  }
+}
+
 function idempotencyKey(): string {
   return `fe-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -61,6 +85,9 @@ async function request<T>(
   const res = await fetch(`${getApi()}${path}`, { ...options, headers });
 
   if (!res.ok) {
+    if (res.status === 401 && needsAuth) {
+      clearSession();
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || body.error || `HTTP ${res.status}`);
   }
@@ -103,11 +130,12 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function logout(): Promise<void> {
-  await request<void>("/auth/logout", { method: "POST" }, true);
-  setAccessToken(null);
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("refreshToken");
+  try {
+    await request<void>("/auth/logout", { method: "POST" }, true);
+  } catch {
+    // ignore — clear local session regardless
   }
+  clearSession();
 }
 
 // ── Health ──────────────────────────────────────────────────────────────
