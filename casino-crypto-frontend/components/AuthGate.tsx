@@ -5,11 +5,10 @@ import Input from "./Input";
 import Card from "./Card";
 
 interface Props {
-  children: React.ReactNode;
   onAuth: () => void;
 }
 
-export default function AuthGate({ children, onAuth }: Props) {
+export default function AuthGate({ onAuth }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
