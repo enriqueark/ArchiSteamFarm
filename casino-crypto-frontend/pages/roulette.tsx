@@ -10,7 +10,7 @@ import {
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
-const BET_TYPES = ["RED", "BLACK", "GREEN", "EVEN", "ODD", "LOW", "HIGH", "STRAIGHT"] as const;
+const BET_TYPES = ["RED", "BLACK", "GREEN", "BAIT"] as const;
 const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
 
 export default function RoulettePage() {
@@ -19,7 +19,6 @@ export default function RoulettePage() {
   const [currency, setCurrency] = useState<string>("USDT");
   const [stakeAtomic, setStakeAtomic] = useState("1000000");
   const [betType, setBetType] = useState<string>("RED");
-  const [betValue, setBetValue] = useState("");
   const [response, setResponse] = useState<RouletteBetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,8 +93,7 @@ export default function RoulettePage() {
       const res = await placeRouletteBet(
         currency,
         betType,
-        stakeAtomic,
-        betType === "STRAIGHT" ? betValue : undefined
+        stakeAtomic
       );
       setResponse(res);
     } catch (e: unknown) {
@@ -239,15 +237,11 @@ export default function RoulettePage() {
               onChange={(e) => setStakeAtomic(e.target.value)}
               placeholder="1000000"
             />
-            {betType === "STRAIGHT" && (
-              <Input
-                label="Number (0-36)"
-                value={betValue}
-                onChange={(e) => setBetValue(e.target.value)}
-                placeholder="0"
-              />
-            )}
           </div>
+
+          <p className="text-xs text-gray-400">
+            BAIT wins when the wheel lands on either number adjacent to GREEN.
+          </p>
 
           <div className="flex flex-wrap gap-2">
             {BET_TYPES.map((bt) => (
@@ -260,6 +254,8 @@ export default function RoulettePage() {
                       ? "black"
                       : bt === "GREEN"
                         ? "green"
+                        : bt === "BAIT"
+                          ? "primary"
                         : betType === bt
                           ? "primary"
                           : "secondary"
