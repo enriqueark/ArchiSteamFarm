@@ -11,7 +11,7 @@ import {
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
-import { AppError, isAppError } from "../../core/errors";
+import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { debitBalanceInTx } from "../wallets/service";
@@ -1067,7 +1067,7 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
 };
 
 export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameState> => {
-  const settleCashout = async (tx: Prisma.TransactionClient): Promise<MinesGameState> => {
+  const result = await prisma.$transaction(async (tx) => {
     const game = await lockGameForUpdate(tx, input.gameId, input.userId);
 
     if (game.status === MinesGameStatus.CASHED_OUT) {
@@ -1098,16 +1098,29 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
 
     const multiplier = calculateMultiplier(game.mineCount, game.safeReveals, game.boardSize);
     const payoutAtomic = calculatePayoutAtomic(game.betAtomic, multiplier);
+    const lockToRelease = game.betReservation.status === BetReservationStatus.HELD ? game.betAtomic : 0n;
 
-    const capturedWallet = await captureReservationFunds(tx, game, `${input.idempotencyKey}:capture`);
-    const paidWallet = await creditWalletPayout(
-      tx,
-      capturedWallet.walletId,
-      payoutAtomic,
-      `${input.idempotencyKey}:payout`,
-      game.betReference,
-      game.id
-    );
+    const walletRows = await tx.$queryRaw<WalletUpdateRow[]>`
+      UPDATE "wallets"
+      SET "balanceAtomic" = "balanceAtomic" + ${payoutAtomic},
+          "lockedAtomic" = GREATEST("lockedAtomic" - ${lockToRelease}, 0),
+          "updatedAt" = NOW()
+      WHERE "id" = ${game.betReservation.walletId}
+      RETURNING id, "balanceAtomic", "lockedAtomic"
+    `;
+
+    const wallet = ensureWalletSnapshot(walletRows[0]);
+
+    if (game.betReservation.status === BetReservationStatus.HELD) {
+      await tx.betReservation.update({
+        where: { id: game.betReservation.id },
+        data: {
+          status: BetReservationStatus.CAPTURED,
+          captureIdempotencyKey: `${input.idempotencyKey}:cashout`,
+          capturedAt: new Date()
+        }
+      });
+    }
 
     const updatedGame = await tx.minesGame.update({
       where: { id: game.id },
@@ -1119,98 +1132,8 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
       }
     });
 
-    await tx.outboxEvent.create({
-      data: {
-        type: "MINES_GAME_CASHED_OUT",
-        payload: {
-          userId: input.userId,
-          gameId: game.id,
-          payoutAtomic: payoutAtomic.toString(),
-          auto: false
-        }
-      }
-    });
-
-    return toMinesGameState(updatedGame, paidWallet);
-  };
-
-  let result: MinesGameState;
-  try {
-    result = await prisma.$transaction((tx) => settleCashout(tx));
-  } catch (error) {
-    if (isAppError(error)) {
-      throw error;
-    }
-
-    // Emergency fallback for legacy deployments: settle cashout without ledger writes.
-    result = await prisma.$transaction(async (tx) => {
-      const game = await lockGameForUpdate(tx, input.gameId, input.userId);
-
-      if (game.status === MinesGameStatus.CASHED_OUT) {
-        const wallet = await tx.wallet.findUnique({
-          where: { id: game.betReservation.walletId },
-          select: { id: true, balanceAtomic: true, lockedAtomic: true }
-        });
-
-        return toMinesGameState(
-          game,
-          ensureWalletSnapshot(
-            wallet ? { id: wallet.id, balanceAtomic: wallet.balanceAtomic, lockedAtomic: wallet.lockedAtomic } : undefined
-          )
-        );
-      }
-
-      if (game.status === MinesGameStatus.LOST) {
-        throw new AppError("Mines game already lost", 409, "MINES_GAME_ALREADY_LOST");
-      }
-
-      if (game.safeReveals <= 0) {
-        throw new AppError(
-          "You must reveal at least one safe tile before cashout",
-          409,
-          "MINES_CASHOUT_REQUIRES_REVEAL"
-        );
-      }
-
-      const multiplier = calculateMultiplier(game.mineCount, game.safeReveals, game.boardSize);
-      const payoutAtomic = calculatePayoutAtomic(game.betAtomic, multiplier);
-      const lockToRelease = game.betReservation.status === BetReservationStatus.HELD ? game.betAtomic : 0n;
-
-      const walletRows = await tx.$queryRaw<WalletUpdateRow[]>`
-        UPDATE "wallets"
-        SET "balanceAtomic" = "balanceAtomic" + ${payoutAtomic},
-            "lockedAtomic" = GREATEST("lockedAtomic" - ${lockToRelease}, 0),
-            "updatedAt" = NOW()
-        WHERE "id" = ${game.betReservation.walletId}
-        RETURNING id, "balanceAtomic", "lockedAtomic"
-      `;
-
-      const wallet = ensureWalletSnapshot(walletRows[0]);
-
-      if (game.betReservation.status === BetReservationStatus.HELD) {
-        await tx.betReservation.update({
-          where: { id: game.betReservation.id },
-          data: {
-            status: BetReservationStatus.CAPTURED,
-            captureIdempotencyKey: `${input.idempotencyKey}:fallback-capture`,
-            capturedAt: new Date()
-          }
-        });
-      }
-
-      const updatedGame = await tx.minesGame.update({
-        where: { id: game.id },
-        data: {
-          status: MinesGameStatus.CASHED_OUT,
-          currentMultiplier: multiplier.toFixed(8),
-          payoutAtomic,
-          finishedAt: new Date()
-        }
-      });
-
-      return toMinesGameState(updatedGame, wallet);
-    });
-  }
+    return toMinesGameState(updatedGame, wallet);
+  });
 
   void enqueueAuditEvent({
     type: "MINES_GAME_CASHED_OUT",
