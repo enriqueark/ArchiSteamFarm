@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { requireAuth } from "../../core/auth";
@@ -20,6 +21,13 @@ const refreshSchema = z.object({
 });
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
+  // Backward-compat endpoint for clients that request an auth nonce before login/register.
+  fastify.get("/nonce", async (_request, reply) => {
+    return reply.send({
+      nonce: randomUUID()
+    });
+  });
+
   fastify.post("/register", async (request, reply) => {
     const body = registerSchema.parse(request.body);
     const result = await register(fastify, {
