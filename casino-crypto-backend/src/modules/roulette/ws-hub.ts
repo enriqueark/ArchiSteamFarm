@@ -27,6 +27,36 @@ type RouletteRealtimeEvent =
         currency: Currency;
         totalStakedAtomic: string;
       };
+    }
+  | {
+      type: "roulette.betBreakdown";
+      data: {
+        roundId: string;
+        roundNumber: number;
+        currency: Currency;
+        totalsAtomic: {
+          RED: string;
+          BLACK: string;
+          GREEN: string;
+          BAIT: string;
+        };
+        totalStakedAtomic: string;
+      };
+    }
+  | {
+      type: "roulette.settlementSummary";
+      data: {
+        roundId: string;
+        roundNumber: number;
+        currency: Currency;
+        winningNumber: number;
+        winningColor: string;
+        outcomes: Array<{
+          userId: string;
+          userLabel: string;
+          netAtomic: string;
+        }>;
+      };
     };
 
 type ClientConnection = {

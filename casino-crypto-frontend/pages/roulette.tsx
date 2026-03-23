@@ -3,10 +3,14 @@ import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import {
+  getCurrentRouletteBetBreakdown,
   placeRouletteBet,
   getCurrentRound,
+  getRouletteRecentResults,
+  type RouletteBetBreakdown,
   type RouletteRound,
   type RouletteBetResponse,
+  type RouletteResultHistoryItem,
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
@@ -24,8 +28,45 @@ export default function RoulettePage() {
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
   const [lastResult, setLastResult] = useState<{ number: number | null; color: string | null } | null>(null);
+  const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
+  const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
+  const [settlementSummary, setSettlementSummary] = useState<
+    | {
+        roundNumber: number;
+        winningNumber: number;
+        winningColor: string;
+        outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
+      }
+    | null
+  >(null);
 
   const socketRef = useRef<CasinoSocket | null>(null);
+  const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
+    setHistory((prev) => {
+      const next = [item, ...prev.filter((existing) => existing.roundId !== item.roundId)];
+      return next.slice(0, 20);
+    });
+  }, []);
+
+  const showSettlementSummary = useCallback(
+    (payload: {
+      roundNumber: number;
+      winningNumber: number;
+      winningColor: string;
+      outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
+    }) => {
+      setSettlementSummary(payload);
+      if (settlementHideTimerRef.current) {
+        clearTimeout(settlementHideTimerRef.current);
+      }
+      settlementHideTimerRef.current = setTimeout(() => {
+        setSettlementSummary(null);
+      }, 5_000);
+    },
+    []
+  );
 
   const updateCountdown = useCallback(() => {
     if (!round) {
@@ -57,17 +98,35 @@ export default function RoulettePage() {
   }, [round]);
 
   useEffect(() => {
+    return () => {
+      if (settlementHideTimerRef.current) {
+        clearTimeout(settlementHideTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(updateCountdown, 500);
     updateCountdown();
     return () => clearInterval(interval);
   }, [updateCountdown]);
 
   useEffect(() => {
-    getCurrentRound(currency)
-      .then((current) => {
+    Promise.all([
+      getCurrentRound(currency),
+      getRouletteRecentResults(currency, 20),
+      getCurrentRouletteBetBreakdown(currency),
+    ])
+      .then(([current, recentResults, breakdown]) => {
         setRound(current);
+        setHistory(recentResults);
+        setBetBreakdown(breakdown);
         if (current.status === "SETTLED" && current.winningNumber !== null) {
           setLastResult({ number: current.winningNumber, color: current.winningColor ?? null });
+        } else if (recentResults[0]) {
+          setLastResult({ number: recentResults[0].winningNumber, color: recentResults[0].winningColor });
+        } else {
+          setLastResult(null);
         }
       })
       .catch(() => {});
@@ -89,6 +148,16 @@ export default function RoulettePage() {
         case "roulette.round":
           if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
             setLastResult({ number: ev.data.winningNumber, color: ev.data.winningColor ?? null });
+            pushHistoryItem({
+              roundId: ev.data.roundId,
+              roundNumber: ev.data.roundNumber,
+              currency: ev.data.currency,
+              winningNumber: ev.data.winningNumber,
+              winningColor: ev.data.winningColor ?? "GREEN",
+              totalStakedAtomic: ev.data.totalStakedAtomic,
+              totalPayoutAtomic: ev.data.totalPayoutAtomic,
+              settledAt: new Date().toISOString(),
+            });
           }
           setRound((previous) => {
             if (!previous) {
@@ -98,12 +167,23 @@ export default function RoulettePage() {
             return ev.data.roundNumber >= previous.roundNumber ? ev.data : previous;
           });
           break;
+        case "roulette.betBreakdown":
+          setBetBreakdown(ev.data);
+          break;
+        case "roulette.settlementSummary":
+          showSettlementSummary({
+            roundNumber: ev.data.roundNumber,
+            winningNumber: ev.data.winningNumber,
+            winningColor: ev.data.winningColor,
+            outcomes: ev.data.outcomes,
+          });
+          break;
       }
     });
 
     sock.connect();
     return () => sock.disconnect();
-  }, [currency]);
+  }, [currency, pushHistoryItem, showSettlementSummary]);
 
   const placeBet = async () => {
     if (!round || round.status !== "OPEN") {
@@ -143,6 +223,34 @@ export default function RoulettePage() {
         </span>
       </div>
 
+      {settlementSummary && (
+        <Card title="Settlement Summary (5s)">
+          <div className="space-y-2">
+            <p className="text-sm text-gray-300">
+              Round #{settlementSummary.roundNumber} — Winning number {settlementSummary.winningNumber} (
+              {settlementSummary.winningColor})
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {settlementSummary.outcomes.map((entry) => {
+                const positive = !entry.netAtomic.startsWith("-");
+                return (
+                  <div
+                    key={entry.userId}
+                    className="text-sm rounded bg-gray-900 border border-gray-800 px-3 py-2 flex justify-between"
+                  >
+                    <span className="text-gray-300">{entry.userLabel}</span>
+                    <span className={positive ? "text-green-400 font-mono" : "text-red-400 font-mono"}>
+                      {positive ? "+" : ""}
+                      {entry.netAtomic}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card title="Current Round">
           {round ? (
@@ -179,6 +287,29 @@ export default function RoulettePage() {
                 <span className="text-gray-400">Total Staked</span>
                 <span className="font-mono">{round.totalStakedAtomic}</span>
               </div>
+              {betBreakdown && (
+                <>
+                  <div className="pt-2 border-t border-gray-800 mt-2 text-xs text-gray-400">Bets this round</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-red-400">RED</span>
+                      <span className="font-mono">{betBreakdown.totalsAtomic.RED}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-300">BLACK</span>
+                      <span className="font-mono">{betBreakdown.totalsAtomic.BLACK}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-400">GREEN</span>
+                      <span className="font-mono">{betBreakdown.totalsAtomic.GREEN}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-indigo-300">BAIT</span>
+                      <span className="font-mono">{betBreakdown.totalsAtomic.BAIT}</span>
+                    </div>
+                  </div>
+                </>
+              )}
               {round.winningNumber !== null && (
                 <>
                   <div className="flex justify-between">
@@ -207,35 +338,63 @@ export default function RoulettePage() {
           )}
         </Card>
 
-        <Card title="Last Result">
-          {lastResult ? (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <div
-                className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold ${
-                  lastResult.color === "RED"
-                    ? "bg-red-700"
-                    : lastResult.color === "BLACK"
+        <Card title="Last Result + History (20)">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {lastResult ? (
+              <div className="flex flex-col items-center gap-2 py-4">
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold ${
+                    lastResult.color === "RED"
+                      ? "bg-red-700"
+                      : lastResult.color === "BLACK"
                       ? "bg-gray-800 border border-gray-600"
                       : "bg-emerald-700"
-                }`}
-              >
-                {lastResult.number}
-              </div>
-              <span
-                className={`text-sm font-medium ${
-                  lastResult.color === "RED"
-                    ? "text-red-400"
-                    : lastResult.color === "BLACK"
+                  }`}
+                >
+                  {lastResult.number}
+                </div>
+                <span
+                  className={`text-sm font-medium ${
+                    lastResult.color === "RED"
+                      ? "text-red-400"
+                      : lastResult.color === "BLACK"
                       ? "text-gray-300"
                       : "text-green-400"
-                }`}
-              >
-                {lastResult.color}
-              </span>
+                  }`}
+                >
+                  {lastResult.color}
+                </span>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-4">No results yet</p>
+            )}
+
+            <div className="max-h-56 overflow-auto space-y-1 pr-1">
+              {history.length > 0 ? (
+                history.map((item) => (
+                  <div
+                    key={item.roundId}
+                    className="text-xs rounded border border-gray-800 bg-gray-900 px-2 py-1 flex items-center justify-between"
+                  >
+                    <span className="text-gray-400">#{item.roundNumber}</span>
+                    <span
+                      className={`font-semibold ${
+                        item.winningColor === "RED"
+                          ? "text-red-400"
+                          : item.winningColor === "BLACK"
+                          ? "text-gray-300"
+                          : "text-green-400"
+                      }`}
+                    >
+                      {item.winningNumber} {item.winningColor}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-4">No results yet</p>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-500 text-sm text-center py-4">No results yet</p>
-          )}
+          </div>
         </Card>
       </div>
 

@@ -203,8 +203,40 @@ export interface RouletteBetResponse {
   wallet: Wallet;
 }
 
+export interface RouletteResultHistoryItem {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  winningNumber: number;
+  winningColor: string;
+  totalStakedAtomic: string;
+  totalPayoutAtomic: string;
+  settledAt: string;
+}
+
+export interface RouletteBetBreakdown {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  totalsAtomic: {
+    RED: string;
+    BLACK: string;
+    GREEN: string;
+    BAIT: string;
+  };
+  totalStakedAtomic: string;
+}
+
 export async function getCurrentRound(currency = "USDT"): Promise<RouletteRound> {
   return request<RouletteRound>(`/roulette/rounds/current?currency=${currency}`, {}, false);
+}
+
+export async function getRouletteRecentResults(currency = "USDT", limit = 20): Promise<RouletteResultHistoryItem[]> {
+  return request<RouletteResultHistoryItem[]>(`/roulette/results?currency=${currency}&limit=${limit}`, {}, false);
+}
+
+export async function getCurrentRouletteBetBreakdown(currency = "USDT"): Promise<RouletteBetBreakdown> {
+  return request<RouletteBetBreakdown>(`/roulette/rounds/current/breakdown?currency=${currency}`, {}, false);
 }
 
 export async function placeRouletteBet(

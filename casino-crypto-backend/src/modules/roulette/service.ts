@@ -46,6 +46,10 @@ type ReservationSnapshot = {
 type RouletteBetWithRelations = RouletteBet & {
   reservation: ReservationSnapshot;
   round: RouletteRound;
+  user: {
+    id: string;
+    email: string;
+  };
 };
 
 type RouletteBroadcaster = {
@@ -91,6 +95,43 @@ export type RouletteBetPlacementResult = {
   };
 };
 
+type BetBreakdownTotals = {
+  RED: bigint;
+  BLACK: bigint;
+  GREEN: bigint;
+  BAIT: bigint;
+};
+
+export type RouletteBetBreakdownState = {
+  roundId: string;
+  roundNumber: number;
+  currency: Currency;
+  totalsAtomic: {
+    RED: bigint;
+    BLACK: bigint;
+    GREEN: bigint;
+    BAIT: bigint;
+  };
+  totalStakedAtomic: bigint;
+};
+
+export type RouletteSettlementOutcome = {
+  userId: string;
+  userLabel: string;
+  netAtomic: bigint;
+};
+
+export type RouletteResultHistoryItem = {
+  roundId: string;
+  roundNumber: number;
+  currency: Currency;
+  winningNumber: number;
+  winningColor: string;
+  totalStakedAtomic: bigint;
+  totalPayoutAtomic: bigint;
+  settledAt: Date;
+};
+
 type PlaceRouletteBetInput = {
   userId: string;
   currency: Currency;
@@ -106,6 +147,7 @@ const ROUND_OPEN_MS = env.ROULETTE_ROUND_OPEN_SECONDS * 1000;
 const ROUND_CLOSE_TO_SPIN_MS = 0;
 const ROUND_SPIN_MS = env.ROULETTE_SPIN_SECONDS * 1000;
 const WORKER_TICK_MS = env.ROULETTE_WORKER_TICK_MS;
+const ROUND_RESULTS_PAUSE_MS = 5_000;
 
 let broadcaster: RouletteBroadcaster | null = null;
 let workerTimer: NodeJS.Timeout | null = null;
@@ -174,6 +216,65 @@ const emitTotalsEvent = (roundId: string, currency: Currency, totalStakedAtomic:
   });
 };
 
+const emitBetBreakdownEvent = (state: RouletteBetBreakdownState): void => {
+  broadcaster?.broadcast({
+    type: "roulette.betBreakdown",
+    data: {
+      roundId: state.roundId,
+      roundNumber: state.roundNumber,
+      currency: state.currency,
+      totalsAtomic: {
+        RED: state.totalsAtomic.RED.toString(),
+        BLACK: state.totalsAtomic.BLACK.toString(),
+        GREEN: state.totalsAtomic.GREEN.toString(),
+        BAIT: state.totalsAtomic.BAIT.toString()
+      },
+      totalStakedAtomic: state.totalStakedAtomic.toString()
+    }
+  });
+};
+
+const emitSettlementSummaryEvent = (payload: {
+  roundId: string;
+  roundNumber: number;
+  currency: Currency;
+  winningNumber: number;
+  winningColor: string;
+  outcomes: RouletteSettlementOutcome[];
+}): void => {
+  broadcaster?.broadcast({
+    type: "roulette.settlementSummary",
+    data: {
+      roundId: payload.roundId,
+      roundNumber: payload.roundNumber,
+      currency: payload.currency,
+      winningNumber: payload.winningNumber,
+      winningColor: payload.winningColor,
+      outcomes: payload.outcomes.map((entry) => ({
+        userId: entry.userId,
+        userLabel: entry.userLabel,
+        netAtomic: entry.netAtomic.toString()
+      }))
+    }
+  });
+};
+
+const getEmptyBetBreakdownTotals = (): BetBreakdownTotals => ({
+  RED: 0n,
+  BLACK: 0n,
+  GREEN: 0n,
+  BAIT: 0n
+});
+
+const formatUserLabel = (email: string, userId: string): string => {
+  const local = email.split("@")[0]?.trim();
+  if (local && local.length > 0) {
+    return `Usuario ${local.slice(0, 18)}`;
+  }
+
+  return `Usuario ${userId.slice(0, 8)}`;
+};
+
 const createRoundForCurrencyTx = async (
   tx: Prisma.TransactionClient,
   currency: Currency,
@@ -220,6 +321,56 @@ const findActiveRound = async (currency: Currency): Promise<RouletteRound | null
     }
   });
 
+const findLatestSettledRound = async (currency: Currency): Promise<RouletteRound | null> =>
+  prisma.rouletteRound.findFirst({
+    where: {
+      currency,
+      status: RouletteRoundStatus.SETTLED
+    },
+    orderBy: {
+      settledAt: "desc"
+    }
+  });
+
+const shouldWaitBeforeOpeningRound = async (currency: Currency): Promise<boolean> => {
+  const latestSettled = await findLatestSettledRound(currency);
+  if (!latestSettled?.settledAt) {
+    return false;
+  }
+
+  return Date.now() - latestSettled.settledAt.getTime() < ROUND_RESULTS_PAUSE_MS;
+};
+
+const loadBetBreakdownTotalsByRoundId = async (roundId: string): Promise<BetBreakdownTotals> => {
+  const grouped = await prisma.rouletteBet.groupBy({
+    by: ["betType"],
+    where: {
+      roundId,
+      betType: {
+        in: [RouletteBetType.RED, RouletteBetType.BLACK, RouletteBetType.GREEN, RouletteBetType.BAIT]
+      }
+    },
+    _sum: {
+      stakeAtomic: true
+    }
+  });
+
+  const totals = getEmptyBetBreakdownTotals();
+  for (const row of grouped) {
+    if (row.betType === RouletteBetType.RED) {
+      totals.RED = row._sum.stakeAtomic ?? 0n;
+    } else if (row.betType === RouletteBetType.BLACK) {
+      totals.BLACK = row._sum.stakeAtomic ?? 0n;
+    } else if (row.betType === RouletteBetType.GREEN) {
+      totals.GREEN = row._sum.stakeAtomic ?? 0n;
+    } else if (row.betType === RouletteBetType.BAIT) {
+      totals.BAIT = row._sum.stakeAtomic ?? 0n;
+    }
+  }
+
+  return totals;
+};
+
 const ensureOpenRoundForCurrency = async (currency: Currency): Promise<RouletteRound> => {
   const existingOpen = await prisma.rouletteRound.findFirst({
     where: {
@@ -241,6 +392,13 @@ const ensureOpenRoundForCurrency = async (currency: Currency): Promise<RouletteR
   try {
     const created = await prisma.$transaction((tx) => createRoundForCurrencyTx(tx, currency));
     emitRoundEvent(created);
+    emitBetBreakdownEvent({
+      roundId: created.id,
+      roundNumber: created.roundNumber,
+      currency: created.currency,
+      totalsAtomic: getEmptyBetBreakdownTotals(),
+      totalStakedAtomic: created.totalStakedAtomic
+    });
     return created;
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -429,7 +587,9 @@ const creditRoulettePayout = async (
   };
 };
 
-const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
+const settleRoundOnce = async (
+  now: Date
+): Promise<{ round: RouletteRound; outcomes: RouletteSettlementOutcome[] } | null> =>
   prisma.$transaction(async (tx) => {
     const lockedRows = await tx.$queryRaw<RoundTransitionRow[]>`
       SELECT id
@@ -463,7 +623,13 @@ const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
                 status: true
               }
             },
-            round: true
+            round: true,
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
           }
         }
       }
@@ -476,6 +642,7 @@ const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
     const winningNumber = randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
     const winningColor = getRouletteColor(winningNumber);
     let totalPayoutAtomic = 0n;
+    const perUserNet = new Map<string, RouletteSettlementOutcome>();
 
     for (const bet of round.bets as RouletteBetWithRelations[]) {
       const captureKey = `roulette:${round.id}:${bet.id}:capture`;
@@ -497,6 +664,17 @@ const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
       }
 
       totalPayoutAtomic += payoutAtomic;
+      const netAtomic = payoutAtomic - bet.stakeAtomic;
+      const existing = perUserNet.get(bet.userId);
+      if (existing) {
+        existing.netAtomic += netAtomic;
+      } else {
+        perUserNet.set(bet.userId, {
+          userId: bet.userId,
+          userLabel: formatUserLabel(bet.user.email, bet.user.id),
+          netAtomic
+        });
+      }
 
       await tx.rouletteBet.update({
         where: { id: bet.id },
@@ -536,7 +714,14 @@ const settleRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
       }
     });
 
-    return updatedRound;
+    const outcomes = Array.from(perUserNet.values()).sort((a, b) => {
+      if (a.netAtomic === b.netAtomic) {
+        return a.userId.localeCompare(b.userId);
+      }
+      return a.netAtomic > b.netAtomic ? -1 : 1;
+    });
+
+    return { round: updatedRound, outcomes };
   });
 
 const closeRoundOnce = async (now: Date): Promise<RouletteRound | null> =>
@@ -624,28 +809,38 @@ const processTransitions = async (logger: FastifyBaseLogger): Promise<void> => {
       break;
     }
 
-    emitRoundEvent(settled);
+    emitRoundEvent(settled.round);
+    if (settled.round.winningNumber !== null && settled.round.winningColor) {
+      emitSettlementSummaryEvent({
+        roundId: settled.round.id,
+        roundNumber: settled.round.roundNumber,
+        currency: settled.round.currency,
+        winningNumber: settled.round.winningNumber,
+        winningColor: settled.round.winningColor,
+        outcomes: settled.outcomes
+      });
+    }
     void enqueueAuditEvent({
       type: "ROULETTE_ROUND_SETTLED",
       metadata: {
-        roundId: settled.id,
-        roundNumber: settled.roundNumber,
-        currency: settled.currency,
-        winningNumber: settled.winningNumber,
-        winningColor: settled.winningColor,
-        totalStakedAtomic: settled.totalStakedAtomic.toString(),
-        totalPayoutAtomic: settled.totalPayoutAtomic.toString()
+        roundId: settled.round.id,
+        roundNumber: settled.round.roundNumber,
+        currency: settled.round.currency,
+        winningNumber: settled.round.winningNumber,
+        winningColor: settled.round.winningColor,
+        totalStakedAtomic: settled.round.totalStakedAtomic.toString(),
+        totalPayoutAtomic: settled.round.totalPayoutAtomic.toString()
       }
     });
 
-    logger.debug({ roundId: settled.id, roundNumber: settled.roundNumber }, "Roulette round settled");
+    logger.debug({ roundId: settled.round.id, roundNumber: settled.round.roundNumber }, "Roulette round settled");
   }
 };
 
 const ensureOpenRounds = async (): Promise<void> => {
   for (const currency of SUPPORTED_CURRENCIES) {
     const active = await findActiveRound(currency);
-    if (!active) {
+    if (!active && !(await shouldWaitBeforeOpeningRound(currency))) {
       await ensureOpenRoundForCurrency(currency);
     }
   }
@@ -721,8 +916,88 @@ export const stopRouletteRoundWorker = (): void => {
 
 export const getCurrentRouletteRound = async (currency: Currency): Promise<RouletteRoundState> => {
   const active = await findActiveRound(currency);
-  const round = active ?? (await ensureOpenRoundForCurrency(currency));
+  if (active) {
+    return toRoundState(active);
+  }
+
+  if (await shouldWaitBeforeOpeningRound(currency)) {
+    const latestSettled = await findLatestSettledRound(currency);
+    if (latestSettled) {
+      return toRoundState(latestSettled);
+    }
+  }
+
+  const round = await ensureOpenRoundForCurrency(currency);
   return toRoundState(round);
+};
+
+export const getCurrentRouletteBetBreakdown = async (currency: Currency): Promise<RouletteBetBreakdownState> => {
+  const round = await getCurrentRouletteRound(currency);
+  const totalsAtomic = await loadBetBreakdownTotalsByRoundId(round.id);
+  return {
+    roundId: round.id,
+    roundNumber: round.roundNumber,
+    currency: round.currency,
+    totalsAtomic,
+    totalStakedAtomic: round.totalStakedAtomic
+  };
+};
+
+export const getRouletteBetBreakdownByRoundId = async (roundId: string): Promise<RouletteBetBreakdownState> => {
+  const round = await prisma.rouletteRound.findUnique({
+    where: { id: roundId }
+  });
+
+  if (!round) {
+    throw new AppError("Roulette round not found", 404, "ROULETTE_ROUND_NOT_FOUND");
+  }
+
+  const totalsAtomic = await loadBetBreakdownTotalsByRoundId(round.id);
+  return {
+    roundId: round.id,
+    roundNumber: round.roundNumber,
+    currency: round.currency,
+    totalsAtomic,
+    totalStakedAtomic: round.totalStakedAtomic
+  };
+};
+
+export const listRecentRouletteResults = async (
+  currency: Currency,
+  limit: number
+): Promise<RouletteResultHistoryItem[]> => {
+  const rounds = await prisma.rouletteRound.findMany({
+    where: {
+      currency,
+      status: RouletteRoundStatus.SETTLED,
+      winningNumber: {
+        not: null
+      }
+    },
+    orderBy: {
+      settledAt: "desc"
+    },
+    take: limit
+  });
+
+  return rounds
+    .filter((round): round is RouletteRound & { winningNumber: number; winningColor: string; settledAt: Date } => {
+      return (
+        typeof round.winningNumber === "number" &&
+        typeof round.winningColor === "string" &&
+        round.settledAt instanceof Date
+      );
+    })
+    .map((round) => ({
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      currency: round.currency,
+      winningNumber: round.winningNumber,
+      winningColor: round.winningColor,
+      totalStakedAtomic: round.totalStakedAtomic,
+      totalPayoutAtomic: round.totalPayoutAtomic,
+      settledAt: round.settledAt
+    }));
 };
 
 export const getRouletteRoundById = async (roundId: string): Promise<RouletteRoundState> => {
@@ -800,6 +1075,30 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
             409,
             "ROULETTE_BETTING_CLOSED"
           );
+        } else {
+          const latestSettled = await tx.rouletteRound.findFirst({
+            where: {
+              currency: input.currency,
+              status: RouletteRoundStatus.SETTLED
+            },
+            orderBy: {
+              settledAt: "desc"
+            },
+            select: {
+              settledAt: true
+            }
+          });
+
+          if (
+            latestSettled?.settledAt &&
+            Date.now() - latestSettled.settledAt.getTime() < ROUND_RESULTS_PAUSE_MS
+          ) {
+            throw new AppError(
+              "Roulette is showing settlement results. Betting will reopen shortly.",
+              409,
+              "ROULETTE_RESULTS_PAUSE_ACTIVE"
+            );
+          }
         }
       }
 
@@ -944,6 +1243,8 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
     });
 
     emitTotalsEvent(result.round.id, result.round.currency, result.round.totalStakedAtomic);
+    const breakdown = await getRouletteBetBreakdownByRoundId(result.round.id);
+    emitBetBreakdownEvent(breakdown);
 
     void enqueueAuditEvent({
       type: "ROULETTE_BET_PLACED",

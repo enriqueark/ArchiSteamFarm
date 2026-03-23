@@ -21,9 +21,37 @@ export type BetTotalsEvent = {
   totalStakedAtomic: string;
 };
 
+export type BetBreakdownEvent = {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  totalsAtomic: {
+    RED: string;
+    BLACK: string;
+    GREEN: string;
+    BAIT: string;
+  };
+  totalStakedAtomic: string;
+};
+
+export type RouletteSettlementSummaryEvent = {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  winningNumber: number;
+  winningColor: string;
+  outcomes: Array<{
+    userId: string;
+    userLabel: string;
+    netAtomic: string;
+  }>;
+};
+
 export type SocketEvent =
   | { type: "roulette.round"; data: RouletteRoundEvent }
   | { type: "roulette.betTotals"; data: BetTotalsEvent }
+  | { type: "roulette.betBreakdown"; data: BetBreakdownEvent }
+  | { type: "roulette.settlementSummary"; data: RouletteSettlementSummaryEvent }
   | { type: "pong"; data: { type: "pong"; ts: string } }
   | { type: "open" }
   | { type: "close" }
@@ -78,6 +106,10 @@ export class CasinoSocket {
           this.emit({ type: "roulette.round", data: parsed.data || parsed });
         } else if (eventType === "roulette.betTotals") {
           this.emit({ type: "roulette.betTotals", data: parsed.data || parsed });
+        } else if (eventType === "roulette.betBreakdown") {
+          this.emit({ type: "roulette.betBreakdown", data: parsed.data || parsed });
+        } else if (eventType === "roulette.settlementSummary") {
+          this.emit({ type: "roulette.settlementSummary", data: parsed.data || parsed });
         } else if (eventType === "pong") {
           this.emit({ type: "pong", data: parsed });
         }
