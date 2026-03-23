@@ -34,6 +34,8 @@ const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 11, 13]);
 const WHEEL_SEQUENCE = [14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const WHEEL_VISIBLE_SLOTS = 17;
 const WHEEL_CENTER_SLOT = Math.floor(WHEEL_VISIBLE_SLOTS / 2);
+const WHEEL_TRACK_SIDE_BUFFER = 3;
+const POINTER_VISUAL_FACTOR = 0.3;
 const WHEEL_FAST_STEPS_PER_SECOND = 18;
 const WHEEL_SLOW_STEPS_PER_SECOND = 0.35;
 const COUNTDOWN_TICK_MS = 50;
@@ -150,7 +152,7 @@ export default function RoulettePage() {
   }, []);
 
   const setPointerOffsetSafe = useCallback((nextOffsetPx: number, force = false) => {
-    if (!force && Math.abs(nextOffsetPx - pointerOffsetRef.current) < 0.2) {
+    if (!force && Math.abs(nextOffsetPx - pointerOffsetRef.current) < 0.05) {
       return;
     }
     pointerOffsetRef.current = nextOffsetPx;
@@ -562,14 +564,21 @@ export default function RoulettePage() {
 
   const wheelNumbers = useMemo(
     () =>
-      Array.from({ length: WHEEL_VISIBLE_SLOTS }, (_, offset) => {
-        const idx = mod(wheelIndex - WHEEL_CENTER_SLOT + offset, WHEEL_SEQUENCE.length);
+      Array.from({ length: WHEEL_VISIBLE_SLOTS + WHEEL_TRACK_SIDE_BUFFER * 2 }, (_, offset) => {
+        const idx = mod(wheelIndex - WHEEL_CENTER_SLOT - WHEEL_TRACK_SIDE_BUFFER + offset, WHEEL_SEQUENCE.length);
         return WHEEL_SEQUENCE[idx];
       }),
     [wheelIndex]
   );
-  const pointerSlotShift = Math.round(pointerOffsetPx / Math.max(1, slotWidthPx));
-  const highlightedSlotIndex = mod(WHEEL_CENTER_SLOT + pointerSlotShift, WHEEL_VISIBLE_SLOTS);
+  const slotWidthSafePx = Math.max(1, slotWidthPx);
+  const pointerVisualOffsetPx = pointerOffsetPx * POINTER_VISUAL_FACTOR;
+  const trackVisualOffsetPx = -(pointerOffsetPx - pointerVisualOffsetPx);
+  const trackBaseOffsetPx = -WHEEL_TRACK_SIDE_BUFFER * slotWidthSafePx;
+  const pointerSlotShift = Math.round(pointerOffsetPx / slotWidthSafePx);
+  const highlightedSlotIndex = mod(
+    WHEEL_TRACK_SIDE_BUFFER + WHEEL_CENTER_SLOT + pointerSlotShift,
+    WHEEL_VISIBLE_SLOTS + WHEEL_TRACK_SIDE_BUFFER * 2
+  );
 
   const totalBreakdownCoins = betBreakdown ? toCoinsNumber(betBreakdown.totalStakedAtomic) : 0;
   const getBetTotalCoins = (type: BetType): number =>
@@ -616,31 +625,39 @@ export default function RoulettePage() {
           <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-4">
             <div
               className="absolute top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300"
-              style={{ left: `calc(50% + ${pointerOffsetPx}px)` }}
+              style={{ left: `calc(50% + ${pointerVisualOffsetPx}px)` }}
             />
             <div
               ref={wheelGridRef}
-              className="grid gap-1 py-2"
-              style={{ gridTemplateColumns: `repeat(${WHEEL_VISIBLE_SLOTS}, minmax(0, 1fr))` }}
+              className="overflow-hidden py-2"
             >
-              {wheelNumbers.map((n, idx) => {
-                const color = getNumberColor(n);
-                const isHighlighted = idx === highlightedSlotIndex;
-                return (
-                  <div
-                    key={`${n}-${idx}`}
-                    className={`w-full h-9 rounded flex items-center justify-center text-xs font-semibold transition-all ${
-                      color === "RED"
-                        ? "bg-red-700 text-white"
-                        : color === "BLACK"
-                        ? "bg-gray-800 text-gray-300 border border-gray-700"
-                        : "bg-emerald-700 text-white"
-                    } ${isHighlighted ? "ring-2 ring-yellow-300 scale-105" : ""}`}
-                  >
-                    {n}
-                  </div>
-                );
-              })}
+              <div
+                className="flex"
+                style={{
+                  transform: `translateX(${trackBaseOffsetPx + trackVisualOffsetPx}px)`,
+                  willChange: "transform"
+                }}
+              >
+                {wheelNumbers.map((n, idx) => {
+                  const color = getNumberColor(n);
+                  const isHighlighted = idx === highlightedSlotIndex;
+                  return (
+                    <div
+                      key={`${n}-${idx}`}
+                      className={`h-9 rounded flex shrink-0 items-center justify-center text-xs font-semibold transition-all ${
+                        color === "RED"
+                          ? "bg-red-700 text-white"
+                          : color === "BLACK"
+                          ? "bg-gray-800 text-gray-300 border border-gray-700"
+                          : "bg-emerald-700 text-white"
+                      } ${isHighlighted ? "ring-2 ring-yellow-300 scale-105" : ""}`}
+                      style={{ width: `${slotWidthSafePx}px` }}
+                    >
+                      {n}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
