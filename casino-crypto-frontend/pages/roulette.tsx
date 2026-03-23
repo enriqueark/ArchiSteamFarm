@@ -34,7 +34,8 @@ const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 11, 13]);
 const WHEEL_SEQUENCE = [14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const WHEEL_VISIBLE_SLOTS = 17;
 const WHEEL_CENTER_SLOT = Math.floor(WHEEL_VISIBLE_SLOTS / 2);
-const WHEEL_SPIN_STEP_MS = 60;
+const WHEEL_FAST_STEPS_PER_SECOND = 26;
+const WHEEL_SLOW_STEPS_PER_SECOND = 2.25;
 
 const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -42,6 +43,7 @@ const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
 });
 
 const mod = (value: number, length: number): number => ((value % length) + length) % length;
+const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 
 const getNumberColor = (n: number): "GREEN" | "RED" | "BLACK" => {
   if (n === 0) {
@@ -108,6 +110,7 @@ export default function RoulettePage() {
   const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
   const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
   const [wheelIndex, setWheelIndex] = useState(0);
+  const [pointerOffsetPx, setPointerOffsetPx] = useState(0);
   const [settlementSummary, setSettlementSummary] = useState<
     | {
         roundNumber: number;
@@ -120,7 +123,116 @@ export default function RoulettePage() {
 
   const socketRef = useRef<CasinoSocket | null>(null);
   const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wheelSpinTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wheelIndexRef = useRef(0);
+  const wheelProgressRef = useRef(0);
+  const wheelSpinRafRef = useRef<number | null>(null);
+  const wheelSettleRafRef = useRef<number | null>(null);
+  const previousRoundStatusRef = useRef<string | null>(null);
+
+  const setWheelIndexSafe = useCallback((nextValue: number) => {
+    const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
+    wheelIndexRef.current = normalized;
+    setWheelIndex(normalized);
+  }, []);
+
+  const stopWheelSpinAnimation = useCallback(() => {
+    if (wheelSpinRafRef.current !== null) {
+      cancelAnimationFrame(wheelSpinRafRef.current);
+      wheelSpinRafRef.current = null;
+    }
+    wheelProgressRef.current = 0;
+  }, []);
+
+  const stopWheelSettleAnimation = useCallback(() => {
+    if (wheelSettleRafRef.current !== null) {
+      cancelAnimationFrame(wheelSettleRafRef.current);
+      wheelSettleRafRef.current = null;
+    }
+  }, []);
+
+  const startWheelSpinAnimation = useCallback(
+    (spinStartsAtMs: number, settleAtMs: number) => {
+      stopWheelSettleAnimation();
+      if (wheelSpinRafRef.current !== null) {
+        return;
+      }
+
+      const totalDurationMs = Math.max(1, settleAtMs - spinStartsAtMs);
+      let lastTimestamp = performance.now();
+
+      const tick = (timestamp: number) => {
+        const deltaSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
+        lastTimestamp = timestamp;
+
+        const remainingMs = Math.max(0, settleAtMs - Date.now());
+        const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
+        const stepsPerSecond =
+          WHEEL_SLOW_STEPS_PER_SECOND +
+          (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 0.65;
+
+        wheelProgressRef.current += stepsPerSecond * deltaSeconds;
+        if (wheelProgressRef.current >= 1) {
+          const steps = Math.floor(wheelProgressRef.current);
+          wheelProgressRef.current -= steps;
+          setWheelIndexSafe(wheelIndexRef.current + steps);
+        }
+
+        wheelSpinRafRef.current = requestAnimationFrame(tick);
+      };
+
+      wheelSpinRafRef.current = requestAnimationFrame(tick);
+    },
+    [setWheelIndexSafe, stopWheelSettleAnimation]
+  );
+
+  const animateWheelSettlement = useCallback(
+    (winningNumber: number) => {
+      stopWheelSpinAnimation();
+      stopWheelSettleAnimation();
+
+      const targetIndex = WHEEL_SEQUENCE.indexOf(winningNumber);
+      if (targetIndex < 0) {
+        return;
+      }
+
+      const startIndex = wheelIndexRef.current;
+      const forwardDistance = mod(targetIndex - startIndex, WHEEL_SEQUENCE.length);
+      const extraLoops = 1 + Math.floor(Math.random() * 2);
+      const totalSteps = forwardDistance + extraLoops * WHEEL_SEQUENCE.length;
+      const durationMs = 1050 + Math.random() * 500;
+      let renderedSteps = -1;
+      const startTime = performance.now();
+
+      const tick = (timestamp: number) => {
+        const progress = Math.max(0, Math.min(1, (timestamp - startTime) / durationMs));
+        const easedProgress = easeOutCubic(progress);
+        const nextSteps = Math.floor(totalSteps * easedProgress);
+
+        if (nextSteps !== renderedSteps) {
+          renderedSteps = nextSteps;
+          setWheelIndexSafe(startIndex + nextSteps);
+        }
+
+        if (progress < 1) {
+          wheelSettleRafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+
+        setWheelIndexSafe(targetIndex);
+        const shouldLandNearEdge = Math.random() < 0.45;
+        if (shouldLandNearEdge) {
+          const direction = Math.random() < 0.5 ? -1 : 1;
+          setPointerOffsetPx(direction * (6 + Math.random() * 4));
+        } else {
+          setPointerOffsetPx(0);
+        }
+        wheelSettleRafRef.current = null;
+      };
+
+      wheelSettleRafRef.current = requestAnimationFrame(tick);
+    },
+    [setWheelIndexSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]
+  );
 
   const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
     setHistory((prev) => [item, ...prev.filter((existing) => existing.roundId !== item.roundId)].slice(0, 20));
@@ -258,39 +370,52 @@ export default function RoulettePage() {
       return;
     }
 
+    const previousStatus = previousRoundStatusRef.current;
+    previousRoundStatusRef.current = round.status;
+
     if (round.status === "SPINNING") {
-      if (!wheelSpinTimerRef.current) {
-        wheelSpinTimerRef.current = setInterval(() => {
-          setWheelIndex((prev) => mod(prev + 1, WHEEL_SEQUENCE.length));
-        }, WHEEL_SPIN_STEP_MS);
-      }
+      setPointerOffsetPx(0);
+      startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), new Date(round.settleAt).getTime());
       return;
     }
 
-    if (wheelSpinTimerRef.current) {
-      clearInterval(wheelSpinTimerRef.current);
-      wheelSpinTimerRef.current = null;
-    }
+    stopWheelSpinAnimation();
 
     if (round.status === "SETTLED" && round.winningNumber !== null) {
-      const target = WHEEL_SEQUENCE.indexOf(round.winningNumber);
-      if (target >= 0) {
-        setWheelIndex(target);
+      if (previousStatus === "SPINNING") {
+        animateWheelSettlement(round.winningNumber);
+        return;
       }
+
+      stopWheelSettleAnimation();
+      const targetIndex = WHEEL_SEQUENCE.indexOf(round.winningNumber);
+      if (targetIndex >= 0) {
+        setWheelIndexSafe(targetIndex);
+      }
+      setPointerOffsetPx(0);
+      return;
     }
-  }, [round]);
+
+    stopWheelSettleAnimation();
+    setPointerOffsetPx(0);
+  }, [
+    animateWheelSettlement,
+    round,
+    setWheelIndexSafe,
+    startWheelSpinAnimation,
+    stopWheelSettleAnimation,
+    stopWheelSpinAnimation
+  ]);
 
   useEffect(() => {
     return () => {
       if (settlementHideTimerRef.current) {
         clearTimeout(settlementHideTimerRef.current);
       }
-
-      if (wheelSpinTimerRef.current) {
-        clearInterval(wheelSpinTimerRef.current);
-      }
+      stopWheelSpinAnimation();
+      stopWheelSettleAnimation();
     };
-  }, []);
+  }, [stopWheelSettleAnimation, stopWheelSpinAnimation]);
 
   const placeBet = async (forcedType?: BetType) => {
     if (!round || round.status !== "OPEN") {
@@ -371,7 +496,6 @@ export default function RoulettePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-wide">Roulette Live</h1>
         <div className="flex items-center gap-2">
-          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300">{VIRTUAL_CURRENCY_LABEL}</span>
           <span
             className={`px-2 py-1 rounded text-xs font-medium ${
               wsStatus === "connected" ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-400"
@@ -406,7 +530,10 @@ export default function RoulettePage() {
           </div>
 
           <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-4">
-            <div className="absolute left-1/2 top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300" />
+            <div
+              className="absolute top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300 transition-[left] duration-500"
+              style={{ left: `calc(50% + ${pointerOffsetPx}px)` }}
+            />
             <div
               className="grid gap-1 py-2"
               style={{ gridTemplateColumns: `repeat(${WHEEL_VISIBLE_SLOTS}, minmax(0, 1fr))` }}
@@ -434,7 +561,7 @@ export default function RoulettePage() {
 
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-gray-400">
-              <span>{round ? `Round #${round.roundNumber}` : "Waiting round..."}</span>
+              <span>{round ? round.status : "Waiting round..."}</span>
               <span className="text-yellow-300">{countdown}</span>
             </div>
             <div className="w-full h-2 rounded bg-gray-800 overflow-hidden">
