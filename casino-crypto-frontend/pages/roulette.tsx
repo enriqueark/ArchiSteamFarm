@@ -34,12 +34,16 @@ export default function RoulettePage() {
     }
     const now = Date.now();
     const betsClose = new Date(round.betsCloseAt).getTime();
+    const spinStarts = new Date(round.spinStartsAt).getTime();
     const settle = new Date(round.settleAt).getTime();
 
     if (round.status === "OPEN") {
       const diff = Math.max(0, Math.floor((betsClose - now) / 1000));
       setCountdown(`Bets close in ${diff}s`);
-    } else if (round.status === "CLOSED" || round.status === "SPINNING") {
+    } else if (round.status === "CLOSED") {
+      const diff = Math.max(0, Math.floor((spinStarts - now) / 1000));
+      setCountdown(`Spinning in ${diff}s`);
+    } else if (round.status === "SPINNING") {
       const diff = Math.max(0, Math.floor((settle - now) / 1000));
       setCountdown(`Settling in ${diff}s`);
     } else if (round.status === "SETTLED") {
@@ -59,7 +63,14 @@ export default function RoulettePage() {
   }, [updateCountdown]);
 
   useEffect(() => {
-    getCurrentRound(currency).then(setRound).catch(() => {});
+    getCurrentRound(currency)
+      .then((current) => {
+        setRound(current);
+        if (current.status === "SETTLED" && current.winningNumber !== null) {
+          setLastResult({ number: current.winningNumber, color: current.winningColor ?? null });
+        }
+      })
+      .catch(() => {});
 
     const sock = new CasinoSocket(currency);
     socketRef.current = sock;
@@ -76,7 +87,16 @@ export default function RoulettePage() {
           setWsStatus("error");
           break;
         case "roulette.round":
-          setRound(ev.data);
+          if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
+            setLastResult({ number: ev.data.winningNumber, color: ev.data.winningColor ?? null });
+          }
+          setRound((previous) => {
+            if (!previous) {
+              return ev.data;
+            }
+
+            return ev.data.roundNumber >= previous.roundNumber ? ev.data : previous;
+          });
           break;
       }
     });
@@ -86,6 +106,11 @@ export default function RoulettePage() {
   }, [currency]);
 
   const placeBet = async () => {
+    if (!round || round.status !== "OPEN") {
+      setError("Betting is closed for this round. Wait for the next OPEN round.");
+      return;
+    }
+
     setError(null);
     setResponse(null);
     setLoading(true);
@@ -268,7 +293,7 @@ export default function RoulettePage() {
             ))}
           </div>
 
-          <Button onClick={placeBet} disabled={loading || !stakeAtomic}>
+          <Button onClick={placeBet} disabled={loading || !stakeAtomic || round?.status !== "OPEN"}>
             {loading ? "Placing..." : `BET ${betType}`}
           </Button>
         </div>

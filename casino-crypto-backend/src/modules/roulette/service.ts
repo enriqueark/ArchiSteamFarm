@@ -102,7 +102,8 @@ type PlaceRouletteBetInput = {
 };
 
 const ROUND_OPEN_MS = env.ROULETTE_ROUND_OPEN_SECONDS * 1000;
-const ROUND_CLOSE_TO_SPIN_MS = env.ROULETTE_CLOSE_TO_SPIN_SECONDS * 1000;
+// Security/business rule: spin starts exactly when betting window closes.
+const ROUND_CLOSE_TO_SPIN_MS = 0;
 const ROUND_SPIN_MS = env.ROULETTE_SPIN_SECONDS * 1000;
 const WORKER_TICK_MS = env.ROULETTE_WORKER_TICK_MS;
 
@@ -644,12 +645,7 @@ const processTransitions = async (logger: FastifyBaseLogger): Promise<void> => {
 const ensureOpenRounds = async (): Promise<void> => {
   for (const currency of SUPPORTED_CURRENCIES) {
     const active = await findActiveRound(currency);
-    if (!active || active.status === RouletteRoundStatus.SETTLED || active.status === RouletteRoundStatus.CANCELLED) {
-      await ensureOpenRoundForCurrency(currency);
-      continue;
-    }
-
-    if (active.status !== RouletteRoundStatus.OPEN) {
+    if (!active) {
       await ensureOpenRoundForCurrency(currency);
     }
   }
@@ -784,15 +780,27 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
           }
         });
       } else {
-        round = await tx.rouletteRound.findFirst({
+        const latestActive = await tx.rouletteRound.findFirst({
           where: {
             currency: input.currency,
-            status: RouletteRoundStatus.OPEN
+            status: {
+              in: [RouletteRoundStatus.OPEN, RouletteRoundStatus.CLOSED, RouletteRoundStatus.SPINNING]
+            }
           },
           orderBy: {
-            betsCloseAt: "asc"
+            roundNumber: "desc"
           }
         });
+
+        if (latestActive?.status === RouletteRoundStatus.OPEN) {
+          round = latestActive;
+        } else if (latestActive) {
+          throw new AppError(
+            "Roulette betting is closed while the current round is spinning/settling",
+            409,
+            "ROULETTE_BETTING_CLOSED"
+          );
+        }
       }
 
       if (!round) {
