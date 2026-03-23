@@ -120,6 +120,7 @@ export default function RoulettePage() {
   const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
   const [wheelIndex, setWheelIndex] = useState(0);
   const [pointerOffsetPx, setPointerOffsetPx] = useState(0);
+  const [slotWidthPx, setSlotWidthPx] = useState(0);
   const [settlementSummary, setSettlementSummary] = useState<
     | {
         roundNumber: number;
@@ -131,17 +132,29 @@ export default function RoulettePage() {
   >(null);
 
   const socketRef = useRef<CasinoSocket | null>(null);
+  const wheelGridRef = useRef<HTMLDivElement | null>(null);
   const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerOffsetRef = useRef(0);
   const wheelIndexRef = useRef(0);
   const wheelProgressRef = useRef(0);
   const wheelSpinRafRef = useRef<number | null>(null);
   const wheelSettleRafRef = useRef<number | null>(null);
   const previousRoundStatusRef = useRef<string | null>(null);
+  const lastRoundIdRef = useRef<string | null>(null);
+  const finalizedRoundIdRef = useRef<string | null>(null);
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
     const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
     wheelIndexRef.current = normalized;
     setWheelIndex(normalized);
+  }, []);
+
+  const setPointerOffsetSafe = useCallback((nextOffsetPx: number, force = false) => {
+    if (!force && Math.abs(nextOffsetPx - pointerOffsetRef.current) < 0.2) {
+      return;
+    }
+    pointerOffsetRef.current = nextOffsetPx;
+    setPointerOffsetPx(nextOffsetPx);
   }, []);
 
   const stopWheelSpinAnimation = useCallback(() => {
@@ -181,7 +194,11 @@ export default function RoulettePage() {
       const tick = (timestamp: number) => {
         const progress = Math.max(0, Math.min(1, (timestamp - startTime) / effectiveDurationMs));
         const easedProgress = easeOutCubic(progress);
-        const nextSteps = Math.floor(totalSteps * easedProgress);
+        const progressedSteps = totalSteps * easedProgress;
+        const nextSteps = Math.floor(progressedSteps);
+        const fractional = progressedSteps - nextSteps;
+        const swingPx = Math.max(4, slotWidthPx * 0.48);
+        setPointerOffsetSafe((fractional - 0.5) * 2 * swingPx);
 
         if (nextSteps !== renderedSteps) {
           renderedSteps = nextSteps;
@@ -197,16 +214,16 @@ export default function RoulettePage() {
         const shouldLandNearEdge = Math.random() < 0.45;
         if (shouldLandNearEdge) {
           const direction = Math.random() < 0.5 ? -1 : 1;
-          setPointerOffsetPx(direction * (6 + Math.random() * 4));
+          setPointerOffsetSafe(direction * (6 + Math.random() * 4), true);
         } else {
-          setPointerOffsetPx(0);
+          setPointerOffsetSafe(0, true);
         }
         wheelSettleRafRef.current = null;
       };
 
       wheelSettleRafRef.current = requestAnimationFrame(tick);
     },
-    [setWheelIndexSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]
+    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation, stopWheelSpinAnimation]
   );
 
   const startWheelSpinAnimation = useCallback(
@@ -222,6 +239,19 @@ export default function RoulettePage() {
       const tick = (timestamp: number) => {
         const deltaSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
         lastTimestamp = timestamp;
+        const nowMs = Date.now();
+
+        if (nowMs < spinStartsAtMs) {
+          setPointerOffsetSafe(0);
+          wheelSpinRafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+
+        if (nowMs >= settleAtMs) {
+          setPointerOffsetSafe(0, true);
+          stopWheelSpinAnimation();
+          return;
+        }
 
         const remainingMs = Math.max(0, settleAtMs - Date.now());
         const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
@@ -230,6 +260,9 @@ export default function RoulettePage() {
           (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 2.25;
 
         wheelProgressRef.current += stepsPerSecond * deltaSeconds;
+        const swingPx = Math.max(4, slotWidthPx * 0.48);
+        setPointerOffsetSafe((wheelProgressRef.current - 0.5) * 2 * swingPx);
+
         if (wheelProgressRef.current >= 1) {
           const steps = Math.floor(wheelProgressRef.current);
           wheelProgressRef.current -= steps;
@@ -241,7 +274,7 @@ export default function RoulettePage() {
 
       wheelSpinRafRef.current = requestAnimationFrame(tick);
     },
-    [setWheelIndexSafe, stopWheelSettleAnimation]
+    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation, stopWheelSpinAnimation]
   );
 
   const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
@@ -373,50 +406,82 @@ export default function RoulettePage() {
   }, [pushHistoryItem, showSettlementSummary]);
 
   useEffect(() => {
+    const node = wheelGridRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateSlotWidth = () => {
+      const width = node.getBoundingClientRect().width;
+      if (!Number.isFinite(width) || width <= 0) {
+        return;
+      }
+      setSlotWidthPx(width / WHEEL_VISIBLE_SLOTS);
+    };
+
+    updateSlotWidth();
+    const observer = new ResizeObserver(updateSlotWidth);
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!round) {
       return;
+    }
+
+    const roundKey = "roundId" in round ? round.roundId : round.id;
+
+    if (lastRoundIdRef.current !== roundKey) {
+      lastRoundIdRef.current = roundKey;
+      finalizedRoundIdRef.current = null;
     }
 
     const previousStatus = previousRoundStatusRef.current;
     previousRoundStatusRef.current = round.status;
 
     if (round.status === "SPINNING") {
-      setPointerOffsetPx(0);
+      setPointerOffsetSafe(0, true);
       startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), new Date(round.settleAt).getTime());
       return;
     }
-
-    stopWheelSpinAnimation();
 
     if (round.status === "SETTLED" && round.winningNumber !== null) {
       const settleAtMs = new Date(round.settleAt).getTime();
       const remainingUntilSettleMs = settleAtMs - Date.now();
 
       if (remainingUntilSettleMs > 250) {
-        // If server sends SETTLED early, start a long brake animation and stop exactly at settleAt.
-        setPointerOffsetPx(0);
-        animateWheelToWinning(round.winningNumber, remainingUntilSettleMs, 2, 3);
+        // If server marks round as SETTLED early, keep a single spin animation alive until settleAt.
+        startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), settleAtMs);
         return;
       }
 
-      stopWheelSettleAnimation();
-      if (previousStatus === "SPINNING") {
-        animateWheelToWinning(round.winningNumber, 850, 0, 1);
-      } else {
+      if (finalizedRoundIdRef.current !== roundKey) {
+        finalizedRoundIdRef.current = roundKey;
+        if (previousStatus === "SPINNING" || previousStatus === "SETTLED") {
+          animateWheelToWinning(round.winningNumber, 700, 0, 1);
+          return;
+        }
+
+        stopWheelSettleAnimation();
+        stopWheelSpinAnimation();
         const targetIndex = WHEEL_SEQUENCE.indexOf(round.winningNumber);
         if (targetIndex >= 0) {
           setWheelIndexSafe(targetIndex);
         }
-        setPointerOffsetPx(0);
+        setPointerOffsetSafe(0, true);
       }
       return;
     }
 
+    stopWheelSpinAnimation();
     stopWheelSettleAnimation();
-    setPointerOffsetPx(0);
+    setPointerOffsetSafe(0, true);
   }, [
     animateWheelToWinning,
     round,
+    setPointerOffsetSafe,
     setWheelIndexSafe,
     startWheelSpinAnimation,
     stopWheelSettleAnimation,
@@ -430,8 +495,9 @@ export default function RoulettePage() {
       }
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
+      setPointerOffsetSafe(0, true);
     };
-  }, [stopWheelSettleAnimation, stopWheelSpinAnimation]);
+  }, [setPointerOffsetSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]);
 
   const placeBet = async (forcedType?: BetType) => {
     if (!round || round.status !== "OPEN") {
@@ -502,6 +568,8 @@ export default function RoulettePage() {
       }),
     [wheelIndex]
   );
+  const pointerSlotShift = Math.round(pointerOffsetPx / Math.max(1, slotWidthPx));
+  const highlightedSlotIndex = mod(WHEEL_CENTER_SLOT + pointerSlotShift, WHEEL_VISIBLE_SLOTS);
 
   const totalBreakdownCoins = betBreakdown ? toCoinsNumber(betBreakdown.totalStakedAtomic) : 0;
   const getBetTotalCoins = (type: BetType): number =>
@@ -547,16 +615,17 @@ export default function RoulettePage() {
 
           <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-4">
             <div
-              className="absolute top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300 transition-[left] duration-500"
+              className="absolute top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300"
               style={{ left: `calc(50% + ${pointerOffsetPx}px)` }}
             />
             <div
+              ref={wheelGridRef}
               className="grid gap-1 py-2"
               style={{ gridTemplateColumns: `repeat(${WHEEL_VISIBLE_SLOTS}, minmax(0, 1fr))` }}
             >
               {wheelNumbers.map((n, idx) => {
                 const color = getNumberColor(n);
-                const isCenter = idx === WHEEL_CENTER_SLOT;
+                const isHighlighted = idx === highlightedSlotIndex;
                 return (
                   <div
                     key={`${n}-${idx}`}
@@ -566,7 +635,7 @@ export default function RoulettePage() {
                         : color === "BLACK"
                         ? "bg-gray-800 text-gray-300 border border-gray-700"
                         : "bg-emerald-700 text-white"
-                    } ${isCenter ? "ring-2 ring-yellow-300 scale-105" : ""}`}
+                    } ${isHighlighted ? "ring-2 ring-yellow-300 scale-105" : ""}`}
                   >
                     {n}
                   </div>
