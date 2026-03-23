@@ -3,6 +3,17 @@ import Card from "@/components/Card";
 import Button from "@/components/Button";
 import { getWallets, type Wallet } from "@/lib/api";
 
+const VIRTUAL_CURRENCY_LABEL = "COINS";
+const COIN_DECIMALS = 8;
+
+const atomicToCoins = (atomic: string): string => {
+  const value = Number(atomic);
+  if (!Number.isFinite(value)) {
+    return "0.00";
+  }
+  return (value / 10 ** COIN_DECIMALS).toFixed(2);
+};
+
 export default function WalletPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,15 +59,15 @@ export default function WalletPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {wallets.map((w) => (
-          <Card key={w.id} title={w.currency}>
+          <Card key={w.id} title={VIRTUAL_CURRENCY_LABEL}>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">Balance (atomic)</span>
-                <span className="font-mono">{w.balanceAtomic}</span>
+                <span className="text-gray-400">Balance ({VIRTUAL_CURRENCY_LABEL})</span>
+                <span className="font-mono">{atomicToCoins(w.balanceAtomic)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Locked (atomic)</span>
-                <span className="font-mono">{w.lockedAtomic}</span>
+                <span className="text-gray-400">Locked ({VIRTUAL_CURRENCY_LABEL})</span>
+                <span className="font-mono">{atomicToCoins(w.lockedAtomic)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">ID</span>

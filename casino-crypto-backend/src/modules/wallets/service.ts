@@ -3,7 +3,10 @@ import { Currency, Prisma } from "@prisma/client";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 
-export const SUPPORTED_CURRENCIES: Currency[] = [Currency.BTC, Currency.ETH, Currency.USDT, Currency.USDC];
+export const PLATFORM_INTERNAL_CURRENCY: Currency = Currency.USDT;
+export const PLATFORM_VIRTUAL_COIN_SYMBOL = "COINS";
+export const PLATFORM_VIRTUAL_COIN_DECIMALS = 8;
+export const SUPPORTED_CURRENCIES: Currency[] = [PLATFORM_INTERNAL_CURRENCY];
 
 export const createDefaultWallets = async (userId: string): Promise<void> => {
   await prisma.wallet.createMany({
@@ -18,7 +21,8 @@ export const createDefaultWallets = async (userId: string): Promise<void> => {
 export const getWalletsByUser = async (userId: string) =>
   prisma.wallet.findMany({
     where: {
-      userId
+      userId,
+      currency: PLATFORM_INTERNAL_CURRENCY
     },
     orderBy: {
       createdAt: "asc"

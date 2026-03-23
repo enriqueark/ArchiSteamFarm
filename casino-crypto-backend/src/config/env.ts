@@ -26,7 +26,7 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   ROULETTE_ROUND_OPEN_SECONDS: z.coerce.number().int().min(5).max(120).default(20),
   ROULETTE_CLOSE_TO_SPIN_SECONDS: z.coerce.number().int().min(1).max(30).default(3),
-  ROULETTE_SPIN_SECONDS: z.coerce.number().int().min(2).max(30).default(8),
+  ROULETTE_SPIN_SECONDS: z.coerce.number().int().min(2).max(30).default(10),
   ROULETTE_WORKER_TICK_MS: z.coerce.number().int().min(200).max(5000).default(1000)
 });
 

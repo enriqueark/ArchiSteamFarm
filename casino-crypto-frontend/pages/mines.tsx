@@ -11,14 +11,15 @@ import {
   type MinesRevealResponse,
 } from "@/lib/api";
 
-const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
+const INTERNAL_GAME_CURRENCY = "USDT";
+const VIRTUAL_CURRENCY_LABEL = "COINS";
+const COIN_DECIMALS = 8;
 const BOARD_SIZE = 25;
 
 type CellState = "hidden" | "safe" | "mine";
 
 export default function MinesPage() {
-  const [currency, setCurrency] = useState("USDT");
-  const [betAtomic, setBetAtomic] = useState("1000000");
+  const [betCoins, setBetCoins] = useState("10.00");
   const [mineCount, setMineCount] = useState("3");
   const [game, setGame] = useState<MinesGame | null>(null);
   const [cells, setCells] = useState<CellState[]>(Array(BOARD_SIZE).fill("hidden"));
@@ -30,6 +31,22 @@ export default function MinesPage() {
   const resetBoard = () => {
     setCells(Array(BOARD_SIZE).fill("hidden"));
     setLastReveal(null);
+  };
+
+  const atomicToCoins = (atomic: string): string => {
+    const value = Number(atomic);
+    if (!Number.isFinite(value)) {
+      return "0.00";
+    }
+    return (value / 10 ** COIN_DECIMALS).toFixed(2);
+  };
+
+  const coinsToAtomic = (coinsRaw: string): string => {
+    const value = Number(coinsRaw);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error("Bet must be a positive COINS value");
+    }
+    return String(Math.round(value * 10 ** COIN_DECIMALS));
   };
 
   const hydrateBoardFromGame = (g: MinesGame) => {
@@ -51,8 +68,7 @@ export default function MinesPage() {
         }
 
         setGame(active);
-        setCurrency(active.currency);
-        setBetAtomic(active.betAtomic);
+        setBetCoins(atomicToCoins(active.betAtomic));
         setMineCount(String(active.mineCount));
         hydrateBoardFromGame(active);
         setResponse(JSON.stringify(active, null, 2));
@@ -73,7 +89,7 @@ export default function MinesPage() {
     setLoading(true);
     resetBoard();
     try {
-      const g = await startMinesGame(currency, betAtomic, parseInt(mineCount));
+      const g = await startMinesGame(INTERNAL_GAME_CURRENCY, coinsToAtomic(betCoins), parseInt(mineCount));
       setGame(g);
       setResponse(JSON.stringify(g, null, 2));
       hydrateBoardFromGame(g);
@@ -136,25 +152,10 @@ export default function MinesPage() {
           <Card title="New Game">
             <div className="space-y-3">
               <div className="flex gap-2 items-end">
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm text-gray-400">Currency</label>
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100"
-                    disabled={isActive}
-                  >
-                    {CURRENCIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <Input
-                  label="Bet (atomic)"
-                  value={betAtomic}
-                  onChange={(e) => setBetAtomic(e.target.value)}
+                  label={`Bet (${VIRTUAL_CURRENCY_LABEL})`}
+                  value={betCoins}
+                  onChange={(e) => setBetCoins(e.target.value)}
                   disabled={isActive}
                 />
                 <Input
@@ -200,7 +201,9 @@ export default function MinesPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Bet</span>
-                  <span className="font-mono">{game.betAtomic}</span>
+                  <span className="font-mono">
+                    {atomicToCoins(game.betAtomic)} {VIRTUAL_CURRENCY_LABEL}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Mines</span>
@@ -216,12 +219,16 @@ export default function MinesPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Potential Payout</span>
-                  <span className="font-mono">{game.potentialPayoutAtomic}</span>
+                  <span className="font-mono">
+                    {atomicToCoins(game.potentialPayoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
+                  </span>
                 </div>
                 {game.payoutAtomic && (
                   <div className="flex justify-between">
                     <span className="text-gray-400">Final Payout</span>
-                    <span className="font-mono text-green-400">{game.payoutAtomic}</span>
+                    <span className="font-mono text-green-400">
+                      {atomicToCoins(game.payoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
+                    </span>
                   </div>
                 )}
                 {lastReveal && (

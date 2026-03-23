@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { debitBalanceInTx } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
 import {
   BOARD_SIZE,
   MAX_MINES,
@@ -669,6 +669,14 @@ export const rotateProvablyFairServerSeed = async (userId: string) => {
 
 export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesGameState> => {
   ensureMineCount(input.mineCount);
+
+  if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {
+    throw new AppError(
+      `Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`,
+      400,
+      "UNSUPPORTED_CURRENCY"
+    );
+  }
 
   if (input.betAtomic <= 0n) {
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET_AMOUNT");

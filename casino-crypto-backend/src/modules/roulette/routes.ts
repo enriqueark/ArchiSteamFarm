@@ -1,4 +1,4 @@
-import { Currency, RouletteBetType } from "@prisma/client";
+import { RouletteBetType } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -22,19 +22,20 @@ import {
 } from "./service";
 import { ROULETTE_ALLOWED_BET_TYPES } from "./rules";
 import { RouletteWebsocketHub } from "./ws-hub";
+import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 const websocketHub = new RouletteWebsocketHub();
 
 const currentRoundQuerySchema = z.object({
-  currency: z.nativeEnum(Currency)
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY)
 });
 
 const websocketQuerySchema = z.object({
-  currency: z.nativeEnum(Currency).optional()
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY).optional()
 });
 
 const placeBetSchema = z.object({
-  currency: z.nativeEnum(Currency),
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
   roundId: z.string().cuid().optional(),
   betType: z
     .nativeEnum(RouletteBetType)
@@ -58,7 +59,7 @@ const listMyBetsQuerySchema = z.object({
 });
 
 const recentResultsQuerySchema = z.object({
-  currency: z.nativeEnum(Currency),
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
   limit: z.coerce.number().int().min(1).max(20).default(20)
 });
 

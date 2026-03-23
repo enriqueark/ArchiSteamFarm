@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { SUPPORTED_CURRENCIES, debitBalanceInTx } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, SUPPORTED_CURRENCIES, debitBalanceInTx } from "../wallets/service";
 import {
   ROULETTE_MAX_NUMBER,
   ROULETTE_MIN_NUMBER,
@@ -915,6 +915,14 @@ export const stopRouletteRoundWorker = (): void => {
 };
 
 export const getCurrentRouletteRound = async (currency: Currency): Promise<RouletteRoundState> => {
+  if (currency !== PLATFORM_INTERNAL_CURRENCY) {
+    throw new AppError(
+      `Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`,
+      400,
+      "UNSUPPORTED_CURRENCY"
+    );
+  }
+
   const active = await findActiveRound(currency);
   if (active) {
     return toRoundState(active);
@@ -1029,6 +1037,14 @@ export const listUserRouletteBets = async (userId: string, limit: number): Promi
 };
 
 export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<RouletteBetPlacementResult> => {
+  if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {
+    throw new AppError(
+      `Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`,
+      400,
+      "UNSUPPORTED_CURRENCY"
+    );
+  }
+
   if (input.stakeAtomic <= 0n) {
     throw new AppError("stakeAtomic must be greater than 0", 400, "INVALID_STAKE");
   }

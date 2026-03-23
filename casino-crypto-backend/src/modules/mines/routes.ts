@@ -1,4 +1,3 @@
-import { Currency } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -16,9 +15,10 @@ import {
   setProvablyFairClientSeed,
   startMinesGame
 } from "./service";
+import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 const startGameSchema = z.object({
-  currency: z.nativeEnum(Currency),
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
   betAtomic: z
     .string()
     .regex(/^\d+$/, "betAtomic must be an integer string")

@@ -19,6 +19,7 @@ import { betsRoutes } from "./modules/bets/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { ledgerRoutes } from "./modules/ledger/routes";
 import { minesRoutes } from "./modules/mines/routes";
+import { pricingRoutes } from "./modules/pricing/routes";
 import { rouletteRoutes } from "./modules/roulette/routes";
 import { userRoutes } from "./modules/users/routes";
 import { walletRoutes } from "./modules/wallets/routes";
@@ -90,6 +91,7 @@ export const buildApp = (): FastifyInstance => {
         { name: "admin", description: "Administrative operations and panel" },
         { name: "bets", description: "Transactional generic bet placement and settlement" },
         { name: "wallets", description: "Wallet management and bet reservations" },
+        { name: "pricing", description: "Market FX rates and COINS conversion quotes" },
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "mines", description: "Mines game with provably fair backend generation" },
         { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
@@ -108,6 +110,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(betsRoutes, { prefix: "/api/v1/bets" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
+  app.register(pricingRoutes, { prefix: "/api/v1/pricing" });
   app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });
   app.register(minesRoutes, { prefix: "/api/v1/mines" });
   app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });

@@ -7,7 +7,7 @@ import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
 import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "./bet-reservation.service";
-import { getWalletsByUser } from "./service";
+import { PLATFORM_VIRTUAL_COIN_SYMBOL, getWalletsByUser } from "./service";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
@@ -46,7 +46,7 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(
       wallets.map((wallet) => ({
         id: wallet.id,
-        currency: wallet.currency,
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         balanceAtomic: wallet.balanceAtomic.toString(),
         lockedAtomic: wallet.lockedAtomic.toString(),
         updatedAt: wallet.updatedAt

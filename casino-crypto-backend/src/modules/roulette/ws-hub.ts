@@ -1,6 +1,7 @@
 import { Currency, RouletteRoundStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { RawData, WebSocket } from "ws";
+import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 type RouletteRealtimeEvent =
   | {
@@ -73,7 +74,7 @@ const parseCurrencyFilter = (value: string | undefined): Currency | undefined =>
     return undefined;
   }
 
-  if (value === Currency.BTC || value === Currency.ETH || value === Currency.USDT || value === Currency.USDC) {
+  if (value === PLATFORM_INTERNAL_CURRENCY) {
     return value;
   }
 
