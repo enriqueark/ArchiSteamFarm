@@ -8,7 +8,6 @@ import {
   getRouletteRecentResults,
   placeRouletteBet,
   type RouletteBetBreakdown,
-  type RouletteBetResponse,
   type RouletteResultHistoryItem,
   type RouletteRound
 } from "@/lib/api";
@@ -78,8 +77,6 @@ const toCoinsNumber = (atomic: string): number => {
 
 const formatCoins = (value: number): string => `${COINS_FORMATTER.format(value)} ${VIRTUAL_CURRENCY_LABEL}`;
 
-const formatAtomicAsCoins = (atomic: string): string => formatCoins(toCoinsNumber(atomic));
-
 const formatSignedAtomicAsCoins = (atomic: string): string => {
   const coins = toCoinsNumber(atomic);
   const sign = coins >= 0 ? "+" : "-";
@@ -105,11 +102,9 @@ export default function RoulettePage() {
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [stakeCoins, setStakeCoins] = useState("10.00");
   const [betType, setBetType] = useState<BetType>("RED");
-  const [response, setResponse] = useState<RouletteBetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
-  const [lastResult, setLastResult] = useState<{ number: number | null; color: string | null } | null>(null);
   const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
   const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
   const [wheelIndex, setWheelIndex] = useState(0);
@@ -180,9 +175,6 @@ export default function RoulettePage() {
 
     if (round.status === "SETTLED") {
       setCountdown("Settled");
-      if (round.winningNumber !== null) {
-        setLastResult({ number: round.winningNumber, color: round.winningColor ?? null });
-      }
       return;
     }
 
@@ -205,14 +197,6 @@ export default function RoulettePage() {
         setRound(current);
         setHistory(recentResults);
         setBetBreakdown(breakdown);
-
-        if (current.status === "SETTLED" && current.winningNumber !== null) {
-          setLastResult({ number: current.winningNumber, color: current.winningColor ?? null });
-        } else if (recentResults[0]) {
-          setLastResult({ number: recentResults[0].winningNumber, color: recentResults[0].winningColor });
-        } else {
-          setLastResult(null);
-        }
       })
       .catch(() => {});
 
@@ -232,7 +216,6 @@ export default function RoulettePage() {
           break;
         case "roulette.round":
           if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
-            setLastResult({ number: ev.data.winningNumber, color: ev.data.winningColor ?? null });
             pushHistoryItem({
               roundId: ev.data.roundId,
               roundNumber: ev.data.roundNumber,
@@ -316,15 +299,13 @@ export default function RoulettePage() {
     }
 
     setError(null);
-    setResponse(null);
     setLoading(true);
 
     try {
       const selectedType = forcedType ?? betType;
       const stakeAtomic = coinsToAtomicString(stakeCoins);
-      const res = await placeRouletteBet(INTERNAL_GAME_CURRENCY, selectedType, stakeAtomic);
+      await placeRouletteBet(INTERNAL_GAME_CURRENCY, selectedType, stakeAtomic);
       setBetType(selectedType);
-      setResponse(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Bet failed");
     } finally {
@@ -426,14 +407,17 @@ export default function RoulettePage() {
 
           <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-4">
             <div className="absolute left-1/2 top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300" />
-            <div className="flex items-center gap-1 overflow-x-auto py-2">
+            <div
+              className="grid gap-1 py-2"
+              style={{ gridTemplateColumns: `repeat(${WHEEL_VISIBLE_SLOTS}, minmax(0, 1fr))` }}
+            >
               {wheelNumbers.map((n, idx) => {
                 const color = getNumberColor(n);
                 const isCenter = idx === WHEEL_CENTER_SLOT;
                 return (
                   <div
                     key={`${n}-${idx}`}
-                    className={`min-w-9 h-9 rounded flex items-center justify-center text-xs font-semibold transition-all ${
+                    className={`w-full h-9 rounded flex items-center justify-center text-xs font-semibold transition-all ${
                       color === "RED"
                         ? "bg-red-700 text-white"
                         : color === "BLACK"
@@ -578,45 +562,9 @@ export default function RoulettePage() {
         })}
       </div>
 
-      {(response || error) && (
-        <Card title="Bet Result">
-          {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
-          {response && (
-            <div className="text-sm text-gray-300 space-y-1 bg-gray-800 p-3 rounded">
-              <p>
-                Bet placed in round <span className="font-mono">#{response.round.roundNumber}</span>
-              </p>
-              <p>
-                Type: <span className="font-semibold">{response.bet.betType}</span>
-              </p>
-              <p>
-                Stake ({VIRTUAL_CURRENCY_LABEL}):{" "}
-                <span className="font-mono">{formatAtomicAsCoins(response.bet.stakeAtomic)}</span>
-              </p>
-              <p>
-                Status: <span className="font-semibold">{response.bet.status}</span>
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {lastResult && (
-        <Card title="Last Result">
-          <div className="flex items-center gap-3">
-            <span
-              className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center ${
-                lastResult.color === "RED"
-                  ? "bg-red-700 text-white"
-                  : lastResult.color === "BLACK"
-                  ? "bg-gray-800 text-gray-200 border border-gray-600"
-                  : "bg-emerald-700 text-white"
-              }`}
-            >
-              {lastResult.number}
-            </span>
-            <span className="text-sm text-gray-300">{lastResult.color}</span>
-          </div>
+      {error && (
+        <Card>
+          <p className="text-red-400 text-sm">{error}</p>
         </Card>
       )}
     </div>
