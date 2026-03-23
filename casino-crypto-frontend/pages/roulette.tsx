@@ -35,7 +35,6 @@ const WHEEL_SEQUENCE = [14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const WHEEL_VISIBLE_SLOTS = 17;
 const WHEEL_CENTER_SLOT = Math.floor(WHEEL_VISIBLE_SLOTS / 2);
 const WHEEL_TRACK_SIDE_BUFFER = 3;
-const POINTER_VISUAL_FACTOR = 0.3;
 const WHEEL_FAST_STEPS_PER_SECOND = 18;
 const WHEEL_SLOW_STEPS_PER_SECOND = 0.35;
 const COUNTDOWN_TICK_MS = 50;
@@ -199,8 +198,8 @@ export default function RoulettePage() {
         const progressedSteps = totalSteps * easedProgress;
         const nextSteps = Math.floor(progressedSteps);
         const fractional = progressedSteps - nextSteps;
-        const swingPx = Math.max(4, slotWidthPx * 0.48);
-        setPointerOffsetSafe((fractional - 0.5) * 2 * swingPx);
+        const slotPx = Math.max(1, slotWidthPx);
+        setPointerOffsetSafe(fractional * slotPx);
 
         if (nextSteps !== renderedSteps) {
           renderedSteps = nextSteps;
@@ -212,13 +211,23 @@ export default function RoulettePage() {
           return;
         }
 
-        setWheelIndexSafe(targetIndex);
         const shouldLandNearEdge = Math.random() < 0.45;
-        if (shouldLandNearEdge) {
-          const direction = Math.random() < 0.5 ? -1 : 1;
-          setPointerOffsetSafe(direction * (6 + Math.random() * 4), true);
-        } else {
+        const edgeMagnitude = 0.38 + Math.random() * 0.08;
+        if (!shouldLandNearEdge) {
+          setWheelIndexSafe(targetIndex);
           setPointerOffsetSafe(0, true);
+          wheelSettleRafRef.current = null;
+          return;
+        }
+
+        // Fixed pointer + moving strip: land close to either side of winning slot.
+        const landOnLeftEdge = Math.random() < 0.5;
+        if (landOnLeftEdge) {
+          setWheelIndexSafe(targetIndex - 1);
+          setPointerOffsetSafe((0.54 + Math.random() * 0.08) * Math.max(1, slotWidthPx), true);
+        } else {
+          setWheelIndexSafe(targetIndex);
+          setPointerOffsetSafe(edgeMagnitude * Math.max(1, slotWidthPx), true);
         }
         wheelSettleRafRef.current = null;
       };
@@ -262,14 +271,13 @@ export default function RoulettePage() {
           (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 2.25;
 
         wheelProgressRef.current += stepsPerSecond * deltaSeconds;
-        const swingPx = Math.max(4, slotWidthPx * 0.48);
-        setPointerOffsetSafe((wheelProgressRef.current - 0.5) * 2 * swingPx);
 
         if (wheelProgressRef.current >= 1) {
           const steps = Math.floor(wheelProgressRef.current);
           wheelProgressRef.current -= steps;
           setWheelIndexSafe(wheelIndexRef.current + steps);
         }
+        setPointerOffsetSafe(wheelProgressRef.current * Math.max(1, slotWidthPx));
 
         wheelSpinRafRef.current = requestAnimationFrame(tick);
       };
@@ -444,7 +452,6 @@ export default function RoulettePage() {
     previousRoundStatusRef.current = round.status;
 
     if (round.status === "SPINNING") {
-      setPointerOffsetSafe(0, true);
       startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), new Date(round.settleAt).getTime());
       return;
     }
@@ -571,8 +578,7 @@ export default function RoulettePage() {
     [wheelIndex]
   );
   const slotWidthSafePx = Math.max(1, slotWidthPx);
-  const pointerVisualOffsetPx = pointerOffsetPx * POINTER_VISUAL_FACTOR;
-  const trackVisualOffsetPx = -(pointerOffsetPx - pointerVisualOffsetPx);
+  const trackVisualOffsetPx = -pointerOffsetPx;
   const trackBaseOffsetPx = -WHEEL_TRACK_SIDE_BUFFER * slotWidthSafePx;
   const pointerSlotShift = Math.round(pointerOffsetPx / slotWidthSafePx);
   const highlightedSlotIndex = mod(
@@ -625,7 +631,7 @@ export default function RoulettePage() {
           <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-4">
             <div
               className="absolute top-1 -translate-x-1/2 w-0 h-0 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300"
-              style={{ left: `calc(50% + ${pointerVisualOffsetPx}px)` }}
+              style={{ left: "50%" }}
             />
             <div
               ref={wheelGridRef}
