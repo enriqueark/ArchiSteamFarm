@@ -34,8 +34,9 @@ const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 11, 13]);
 const WHEEL_SEQUENCE = [14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const WHEEL_VISIBLE_SLOTS = 17;
 const WHEEL_CENTER_SLOT = Math.floor(WHEEL_VISIBLE_SLOTS / 2);
-const WHEEL_FAST_STEPS_PER_SECOND = 26;
-const WHEEL_SLOW_STEPS_PER_SECOND = 2.25;
+const WHEEL_FAST_STEPS_PER_SECOND = 18;
+const WHEEL_SLOW_STEPS_PER_SECOND = 0.35;
+const COUNTDOWN_TICK_MS = 50;
 
 const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -44,6 +45,14 @@ const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
 
 const mod = (value: number, length: number): number => ((value % length) + length) % length;
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
+const formatSecondsWithMilliseconds = (remainingMs: number): string => {
+  const safeMs = Math.max(0, remainingMs);
+  const wholeSeconds = Math.floor(safeMs / 1000);
+  const milliseconds = Math.floor(safeMs % 1000)
+    .toString()
+    .padStart(3, "0");
+  return `${wholeSeconds}.${milliseconds}s`;
+};
 
 const getNumberColor = (n: number): "GREEN" | "RED" | "BLACK" => {
   if (n === 0) {
@@ -150,43 +159,8 @@ export default function RoulettePage() {
     }
   }, []);
 
-  const startWheelSpinAnimation = useCallback(
-    (spinStartsAtMs: number, settleAtMs: number) => {
-      stopWheelSettleAnimation();
-      if (wheelSpinRafRef.current !== null) {
-        return;
-      }
-
-      const totalDurationMs = Math.max(1, settleAtMs - spinStartsAtMs);
-      let lastTimestamp = performance.now();
-
-      const tick = (timestamp: number) => {
-        const deltaSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
-        lastTimestamp = timestamp;
-
-        const remainingMs = Math.max(0, settleAtMs - Date.now());
-        const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
-        const stepsPerSecond =
-          WHEEL_SLOW_STEPS_PER_SECOND +
-          (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 0.65;
-
-        wheelProgressRef.current += stepsPerSecond * deltaSeconds;
-        if (wheelProgressRef.current >= 1) {
-          const steps = Math.floor(wheelProgressRef.current);
-          wheelProgressRef.current -= steps;
-          setWheelIndexSafe(wheelIndexRef.current + steps);
-        }
-
-        wheelSpinRafRef.current = requestAnimationFrame(tick);
-      };
-
-      wheelSpinRafRef.current = requestAnimationFrame(tick);
-    },
-    [setWheelIndexSafe, stopWheelSettleAnimation]
-  );
-
-  const animateWheelSettlement = useCallback(
-    (winningNumber: number) => {
+  const animateWheelToWinning = useCallback(
+    (winningNumber: number, durationMs: number, minLoops: number, maxLoops: number) => {
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
 
@@ -197,14 +171,15 @@ export default function RoulettePage() {
 
       const startIndex = wheelIndexRef.current;
       const forwardDistance = mod(targetIndex - startIndex, WHEEL_SEQUENCE.length);
-      const extraLoops = 1 + Math.floor(Math.random() * 2);
-      const totalSteps = forwardDistance + extraLoops * WHEEL_SEQUENCE.length;
-      const durationMs = 1050 + Math.random() * 500;
-      let renderedSteps = -1;
+      const loopSpan = Math.max(minLoops, maxLoops) - Math.min(minLoops, maxLoops) + 1;
+      const randomLoops = Math.min(minLoops, maxLoops) + Math.floor(Math.random() * loopSpan);
+      const totalSteps = forwardDistance + randomLoops * WHEEL_SEQUENCE.length;
+      const effectiveDurationMs = Math.max(250, durationMs);
       const startTime = performance.now();
+      let renderedSteps = -1;
 
       const tick = (timestamp: number) => {
-        const progress = Math.max(0, Math.min(1, (timestamp - startTime) / durationMs));
+        const progress = Math.max(0, Math.min(1, (timestamp - startTime) / effectiveDurationMs));
         const easedProgress = easeOutCubic(progress);
         const nextSteps = Math.floor(totalSteps * easedProgress);
 
@@ -232,6 +207,41 @@ export default function RoulettePage() {
       wheelSettleRafRef.current = requestAnimationFrame(tick);
     },
     [setWheelIndexSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]
+  );
+
+  const startWheelSpinAnimation = useCallback(
+    (spinStartsAtMs: number, settleAtMs: number) => {
+      stopWheelSettleAnimation();
+      if (wheelSpinRafRef.current !== null) {
+        return;
+      }
+
+      const totalDurationMs = Math.max(1, settleAtMs - spinStartsAtMs);
+      let lastTimestamp = performance.now();
+
+      const tick = (timestamp: number) => {
+        const deltaSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
+        lastTimestamp = timestamp;
+
+        const remainingMs = Math.max(0, settleAtMs - Date.now());
+        const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
+        const stepsPerSecond =
+          WHEEL_SLOW_STEPS_PER_SECOND +
+          (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 2.25;
+
+        wheelProgressRef.current += stepsPerSecond * deltaSeconds;
+        if (wheelProgressRef.current >= 1) {
+          const steps = Math.floor(wheelProgressRef.current);
+          wheelProgressRef.current -= steps;
+          setWheelIndexSafe(wheelIndexRef.current + steps);
+        }
+
+        wheelSpinRafRef.current = requestAnimationFrame(tick);
+      };
+
+      wheelSpinRafRef.current = requestAnimationFrame(tick);
+    },
+    [setWheelIndexSafe, stopWheelSettleAnimation]
   );
 
   const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
@@ -268,20 +278,17 @@ export default function RoulettePage() {
     const settle = new Date(round.settleAt).getTime();
 
     if (round.status === "OPEN") {
-      const diff = Math.max(0, Math.floor((betsClose - now) / 1000));
-      setCountdown(`Bets close in ${diff}s`);
+      setCountdown(`Bets close in ${formatSecondsWithMilliseconds(betsClose - now)}`);
       return;
     }
 
     if (round.status === "CLOSED") {
-      const diff = Math.max(0, Math.floor((spinStarts - now) / 1000));
-      setCountdown(`Spinning in ${diff}s`);
+      setCountdown(`Spinning in ${formatSecondsWithMilliseconds(spinStarts - now)}`);
       return;
     }
 
     if (round.status === "SPINNING") {
-      const diff = Math.max(0, Math.floor((settle - now) / 1000));
-      setCountdown(`Rolling in ${diff}s`);
+      setCountdown(`Rolling in ${formatSecondsWithMilliseconds(settle - now)}`);
       return;
     }
 
@@ -294,7 +301,7 @@ export default function RoulettePage() {
   }, [round]);
 
   useEffect(() => {
-    const interval = setInterval(updateCountdown, 500);
+    const interval = setInterval(updateCountdown, COUNTDOWN_TICK_MS);
     updateCountdown();
     return () => clearInterval(interval);
   }, [updateCountdown]);
@@ -382,24 +389,33 @@ export default function RoulettePage() {
     stopWheelSpinAnimation();
 
     if (round.status === "SETTLED" && round.winningNumber !== null) {
-      if (previousStatus === "SPINNING") {
-        animateWheelSettlement(round.winningNumber);
+      const settleAtMs = new Date(round.settleAt).getTime();
+      const remainingUntilSettleMs = settleAtMs - Date.now();
+
+      if (remainingUntilSettleMs > 250) {
+        // If server sends SETTLED early, start a long brake animation and stop exactly at settleAt.
+        setPointerOffsetPx(0);
+        animateWheelToWinning(round.winningNumber, remainingUntilSettleMs, 2, 3);
         return;
       }
 
       stopWheelSettleAnimation();
-      const targetIndex = WHEEL_SEQUENCE.indexOf(round.winningNumber);
-      if (targetIndex >= 0) {
-        setWheelIndexSafe(targetIndex);
+      if (previousStatus === "SPINNING") {
+        animateWheelToWinning(round.winningNumber, 850, 0, 1);
+      } else {
+        const targetIndex = WHEEL_SEQUENCE.indexOf(round.winningNumber);
+        if (targetIndex >= 0) {
+          setWheelIndexSafe(targetIndex);
+        }
+        setPointerOffsetPx(0);
       }
-      setPointerOffsetPx(0);
       return;
     }
 
     stopWheelSettleAnimation();
     setPointerOffsetPx(0);
   }, [
-    animateWheelSettlement,
+    animateWheelToWinning,
     round,
     setWheelIndexSafe,
     startWheelSpinAnimation,
