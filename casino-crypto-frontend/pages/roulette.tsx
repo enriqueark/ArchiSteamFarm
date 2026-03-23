@@ -30,6 +30,40 @@ const USD_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 });
+const RED_NUMBERS = new Set([1, 3, 5, 7, 9, 11, 13]);
+const WHEEL_SEQUENCE = [14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const WHEEL_TRACK = [...WHEEL_SEQUENCE, ...WHEEL_SEQUENCE];
+
+type BetType = (typeof BET_TYPES)[number];
+const BET_CONFIG: Record<
+  BetType,
+  { label: string; payoutLabel: string; accent: string; buttonVariant: "red" | "black" | "green" | "primary" }
+> = {
+  RED: { label: "RED", payoutLabel: "Win 2x", accent: "text-red-400", buttonVariant: "red" },
+  BLACK: { label: "BLACK", payoutLabel: "Win 2x", accent: "text-gray-200", buttonVariant: "black" },
+  GREEN: { label: "GREEN", payoutLabel: "Win 14x", accent: "text-green-400", buttonVariant: "green" },
+  BAIT: { label: "BAIT", payoutLabel: "Win 7x", accent: "text-indigo-300", buttonVariant: "primary" }
+};
+
+const getNumberColor = (n: number): "GREEN" | "RED" | "BLACK" => {
+  if (n === 0) {
+    return "GREEN";
+  }
+  return RED_NUMBERS.has(n) ? "RED" : "BLACK";
+};
+
+const isWinningForBetType = (item: RouletteResultHistoryItem, betType: BetType): boolean => {
+  if (betType === "GREEN") {
+    return item.winningNumber === 0;
+  }
+  if (betType === "BAIT") {
+    return item.winningNumber === 1 || item.winningNumber === 14;
+  }
+  if (betType === "RED") {
+    return item.winningColor === "RED";
+  }
+  return item.winningColor === "BLACK";
+};
 
 export default function RoulettePage() {
   const [round, setRound] = useState<RouletteRound | RouletteRoundEvent | null>(null);
@@ -299,7 +333,7 @@ export default function RoulettePage() {
     return () => sock.disconnect();
   }, [currency, pushHistoryItem, showSettlementSummary]);
 
-  const placeBet = async () => {
+  const placeBet = async (forcedType?: BetType) => {
     if (!round || round.status !== "OPEN") {
       setError("Betting is closed for this round. Wait for the next OPEN round.");
       return;
@@ -310,8 +344,10 @@ export default function RoulettePage() {
     setLoading(true);
     try {
       const stakeAtomic = usdToAtomicString(stakeUsd, currency);
-      const res = await placeRouletteBet(currency, betType, stakeAtomic);
+      const selectedType = forcedType ?? (betType as BetType);
+      const res = await placeRouletteBet(currency, selectedType, stakeAtomic);
       setResponse(res);
+      setBetType(selectedType);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Bet failed");
     } finally {
@@ -319,22 +355,146 @@ export default function RoulettePage() {
     }
   };
 
+  const adjustStakeUsd = (delta: number) => {
+    const current = Number(stakeUsd) || 0;
+    const next = Math.max(0, current + delta);
+    setStakeUsd(next.toFixed(2));
+  };
+
+  const scaleStakeUsd = (factor: number) => {
+    const current = Number(stakeUsd) || 0;
+    const next = Math.max(0, current * factor);
+    setStakeUsd(next.toFixed(2));
+  };
+
+  const totalBreakdownUsd = betBreakdown
+    ? atomicToUsdValue(betBreakdown.totalStakedAtomic, betBreakdown.currency)
+    : 0;
+
+  const getBetTotalUsd = (type: BetType): number => {
+    if (!betBreakdown) {
+      return 0;
+    }
+    return atomicToUsdValue(betBreakdown.totalsAtomic[type], betBreakdown.currency);
+  };
+
   const selectedRate = getUsdRate(currency);
+  const phaseProgressPercent = (() => {
+    if (!round) {
+      return 0;
+    }
+
+    const now = Date.now();
+    const clamp = (value: number) => Math.max(0, Math.min(100, value));
+    if (round.status === "OPEN") {
+      const total = new Date(round.betsCloseAt).getTime() - new Date(round.openAt).getTime();
+      const elapsed = now - new Date(round.openAt).getTime();
+      if (total <= 0) {
+        return 100;
+      }
+      return clamp((elapsed / total) * 100);
+    }
+
+    if (round.status === "CLOSED") {
+      const total = new Date(round.spinStartsAt).getTime() - new Date(round.betsCloseAt).getTime();
+      const elapsed = now - new Date(round.betsCloseAt).getTime();
+      if (total <= 0) {
+        return 100;
+      }
+      return clamp((elapsed / total) * 100);
+    }
+
+    if (round.status === "SPINNING") {
+      const total = new Date(round.settleAt).getTime() - new Date(round.spinStartsAt).getTime();
+      const elapsed = now - new Date(round.spinStartsAt).getTime();
+      if (total <= 0) {
+        return 100;
+      }
+      return clamp((elapsed / total) * 100);
+    }
+
+    return 100;
+  })();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Roulette</h1>
-        <span
-          className={`px-2 py-1 rounded text-xs font-medium ${
-            wsStatus === "connected"
-              ? "bg-green-900 text-green-300"
-              : "bg-gray-800 text-gray-400"
-          }`}
-        >
-          WS: {wsStatus}
-        </span>
+        <h1 className="text-2xl font-bold tracking-wide">Roulette Live</h1>
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300">{currency}</span>
+          <span
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              wsStatus === "connected" ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-400"
+            }`}
+          >
+            WS: {wsStatus}
+          </span>
+        </div>
       </div>
+
+      <Card className="bg-gradient-to-br from-slate-900 to-gray-900 border-gray-700">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-400 uppercase tracking-widest">Last 20</span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {history.slice(0, 20).map((item) => (
+                <span
+                  key={item.roundId}
+                  className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-semibold ${
+                    item.winningColor === "RED"
+                      ? "bg-red-700 text-white"
+                      : item.winningColor === "BLACK"
+                      ? "bg-gray-800 border border-gray-600 text-gray-200"
+                      : "bg-emerald-700 text-white"
+                  }`}
+                  title={`Round #${item.roundNumber}`}
+                >
+                  {item.winningNumber}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative rounded-lg bg-gray-950/80 border border-gray-800 px-2 py-3">
+            <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] text-yellow-300 bg-gray-900 px-2 rounded">
+              LIVE TRACK
+            </span>
+            <div className="flex items-center gap-1 overflow-x-auto py-1">
+              {WHEEL_TRACK.map((n, idx) => {
+                const color = getNumberColor(n);
+                const active = round?.winningNumber === n && round?.status === "SETTLED";
+                return (
+                  <div
+                    key={`${n}-${idx}`}
+                    className={`min-w-8 h-8 rounded flex items-center justify-center text-xs font-semibold ${
+                      color === "RED"
+                        ? "bg-red-700 text-white"
+                        : color === "BLACK"
+                        ? "bg-gray-800 text-gray-300 border border-gray-700"
+                        : "bg-emerald-700 text-white"
+                    } ${active ? "ring-2 ring-yellow-300" : ""}`}
+                  >
+                    {n}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{round ? `Round #${round.roundNumber}` : "Waiting round..."}</span>
+              <span className="text-yellow-300">{countdown}</span>
+            </div>
+            <div className="w-full h-2 rounded bg-gray-800 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-yellow-400 transition-all"
+                style={{ width: `${phaseProgressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {settlementSummary && (
         <Card title="Settlement Summary (5s)">
@@ -363,170 +523,9 @@ export default function RoulettePage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card title="Current Round">
-          {round ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Round #</span>
-                <span>{round.roundNumber}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Status</span>
-                <span
-                  className={`font-medium ${
-                    round.status === "OPEN"
-                      ? "text-green-400"
-                      : round.status === "SPINNING"
-                        ? "text-yellow-400"
-                        : round.status === "SETTLED"
-                          ? "text-indigo-400"
-                          : "text-gray-400"
-                  }`}
-                >
-                  {round.status}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Currency</span>
-                <span>{round.currency}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">FX</span>
-                <span className="font-mono text-xs">
-                  1 {round.currency} ≈ {formatUsd(getUsdRate(round.currency))}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Timer</span>
-                <span className="font-mono text-yellow-300">{countdown}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Total Staked (USD)</span>
-                <span className="font-mono">{formatAtomicAsUsd(round.totalStakedAtomic, round.currency)}</span>
-              </div>
-              {betBreakdown && (
-                <>
-                  <div className="pt-2 border-t border-gray-800 mt-2 text-xs text-gray-400">Bets this round</div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-red-400">RED</span>
-                      <span className="font-mono">
-                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.RED, betBreakdown.currency)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">BLACK</span>
-                      <span className="font-mono">
-                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.BLACK, betBreakdown.currency)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-green-400">GREEN</span>
-                      <span className="font-mono">
-                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.GREEN, betBreakdown.currency)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-indigo-300">BAIT</span>
-                      <span className="font-mono">
-                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.BAIT, betBreakdown.currency)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-              {round.winningNumber !== null && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Winning Number</span>
-                    <span className="font-bold text-lg">{round.winningNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Winning Color</span>
-                    <span
-                      className={`font-bold ${
-                        round.winningColor === "RED"
-                          ? "text-red-400"
-                          : round.winningColor === "BLACK"
-                            ? "text-gray-300"
-                            : "text-green-400"
-                      }`}
-                    >
-                      {round.winningColor}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">No active round</p>
-          )}
-        </Card>
-
-        <Card title="Last Result + History (20)">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {lastResult ? (
-              <div className="flex flex-col items-center gap-2 py-4">
-                <div
-                  className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold ${
-                    lastResult.color === "RED"
-                      ? "bg-red-700"
-                      : lastResult.color === "BLACK"
-                      ? "bg-gray-800 border border-gray-600"
-                      : "bg-emerald-700"
-                  }`}
-                >
-                  {lastResult.number}
-                </div>
-                <span
-                  className={`text-sm font-medium ${
-                    lastResult.color === "RED"
-                      ? "text-red-400"
-                      : lastResult.color === "BLACK"
-                      ? "text-gray-300"
-                      : "text-green-400"
-                  }`}
-                >
-                  {lastResult.color}
-                </span>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm text-center py-4">No results yet</p>
-            )}
-
-            <div className="max-h-56 overflow-auto space-y-1 pr-1">
-              {history.length > 0 ? (
-                history.map((item) => (
-                  <div
-                    key={item.roundId}
-                    className="text-xs rounded border border-gray-800 bg-gray-900 px-2 py-1 flex items-center justify-between"
-                  >
-                    <span className="text-gray-400">#{item.roundNumber}</span>
-                    <span
-                      className={`font-semibold ${
-                        item.winningColor === "RED"
-                          ? "text-red-400"
-                          : item.winningColor === "BLACK"
-                          ? "text-gray-300"
-                          : "text-green-400"
-                      }`}
-                    >
-                      {item.winningNumber} {item.winningColor}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-sm text-center py-4">No results yet</p>
-              )}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card title="Place Bet">
+      <Card title="Play amount">
         <div className="space-y-3">
-          <div className="flex gap-2 items-end">
+          <div className="flex flex-wrap gap-2 items-end">
             <div className="flex flex-col gap-1">
               <label className="text-sm text-gray-400">Currency</label>
               <select
@@ -541,49 +540,90 @@ export default function RoulettePage() {
                 ))}
               </select>
             </div>
-            <Input
-              label="Stake (USD)"
-              value={stakeUsd}
-              onChange={(e) => setStakeUsd(e.target.value)}
-              placeholder="10.00"
-            />
-          </div>
-
-          <p className="text-xs text-gray-400">
-            BAIT wins when the wheel lands on either number adjacent to GREEN.
-          </p>
-          <p className="text-xs text-gray-500">1 {currency} ≈ {formatUsd(selectedRate)}</p>
-
-          <div className="flex flex-wrap gap-2">
-            {BET_TYPES.map((bt) => (
-              <Button
-                key={bt}
-                variant={
-                  bt === "RED"
-                    ? "red"
-                    : bt === "BLACK"
-                      ? "black"
-                      : bt === "GREEN"
-                        ? "green"
-                        : bt === "BAIT"
-                          ? "primary"
-                        : betType === bt
-                          ? "primary"
-                          : "secondary"
-                }
-                className={betType === bt ? "ring-2 ring-indigo-400" : ""}
-                onClick={() => setBetType(bt)}
-              >
-                {bt}
+            <Input label="Stake (USD)" value={stakeUsd} onChange={(e) => setStakeUsd(e.target.value)} placeholder="10.00" />
+            <div className="flex items-center gap-1 flex-wrap">
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => adjustStakeUsd(1)}>
+                +1
               </Button>
-            ))}
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => adjustStakeUsd(10)}>
+                +10
+              </Button>
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => adjustStakeUsd(100)}>
+                +100
+              </Button>
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => scaleStakeUsd(0.5)}>
+                1/2
+              </Button>
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => scaleStakeUsd(2)}>
+                x2
+              </Button>
+            </div>
           </div>
-
-          <Button onClick={placeBet} disabled={loading || !stakeUsd || round?.status !== "OPEN"}>
-            {loading ? "Placing..." : `BET ${betType}`}
-          </Button>
+          <p className="text-xs text-gray-500">
+            1 {currency} ≈ {formatUsd(selectedRate)} · BAIT wins when number is 1 or 14.
+          </p>
         </div>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {BET_TYPES.map((type) => {
+          const config = BET_CONFIG[type];
+          const amountUsd = getBetTotalUsd(type);
+          const share = totalBreakdownUsd > 0 ? (amountUsd / totalBreakdownUsd) * 100 : 0;
+          const recentHits = history.filter((item) => isWinningForBetType(item, type)).slice(0, 3);
+          return (
+            <Card key={type} className="bg-gray-900/90 border-gray-700">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className={`font-semibold ${config.accent}`}>{config.label}</span>
+                  <span className="text-xs text-yellow-300">{config.payoutLabel}</span>
+                </div>
+                <Button
+                  variant={config.buttonVariant}
+                  className={`w-full ${betType === type ? "ring-2 ring-indigo-300" : ""}`}
+                  onClick={() => void placeBet(type)}
+                  disabled={loading || !stakeUsd || round?.status !== "OPEN"}
+                >
+                  {loading && betType === type ? "PLAYING..." : "PLAY"}
+                </Button>
+
+                <div className="text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total on {type}</span>
+                    <span className="font-mono">{formatUsd(amountUsd)}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded bg-gray-800 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500"
+                      style={{ width: `${Math.max(0, Math.min(100, share))}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Share</span>
+                    <span>{share.toFixed(1)}%</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-800">
+                  <p className="text-[11px] text-gray-500 mb-1">Recent hits</p>
+                  <div className="space-y-1">
+                    {recentHits.length > 0 ? (
+                      recentHits.map((item) => (
+                        <div key={`${type}-${item.roundId}`} className="text-xs flex justify-between">
+                          <span className="text-gray-400">Round #{item.roundNumber}</span>
+                          <span className="font-mono text-gray-200">{item.winningNumber}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-600">No recent hits</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
       {(response || error) && (
         <Card title="Bet Result">
