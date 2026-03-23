@@ -603,7 +603,13 @@ export const rotateProvablyFairServerSeed = async (userId: string) => {
       where: {
         userId,
         status: MinesGameStatus.ACTIVE,
-        serverSeedId: context.activeSeed.id
+        finishedAt: null,
+        serverSeedId: context.activeSeed.id,
+        betReservation: {
+          is: {
+            status: BetReservationStatus.HELD
+          }
+        }
       }
     });
 
@@ -876,7 +882,13 @@ export const getActiveMinesGame = async (userId: string): Promise<MinesGameState
   const game = await prisma.minesGame.findFirst({
     where: {
       userId,
-      status: MinesGameStatus.ACTIVE
+      status: MinesGameStatus.ACTIVE,
+      finishedAt: null,
+      betReservation: {
+        is: {
+          status: BetReservationStatus.HELD
+        }
+      }
     },
     orderBy: {
       createdAt: "desc"
@@ -884,13 +896,14 @@ export const getActiveMinesGame = async (userId: string): Promise<MinesGameState
     include: {
       betReservation: {
         select: {
-          walletId: true
+          walletId: true,
+          status: true
         }
       }
     }
   });
 
-  if (!game || !game.betReservation) {
+  if (!game || !game.betReservation || game.betReservation.status !== BetReservationStatus.HELD) {
     return null;
   }
 
