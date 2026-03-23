@@ -16,12 +16,27 @@ import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/s
 
 const BET_TYPES = ["RED", "BLACK", "GREEN", "BAIT"] as const;
 const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
+type RouletteCurrency = (typeof CURRENCIES)[number];
+const ATOMIC_DECIMALS = 8;
+const DEFAULT_USD_RATES: Record<RouletteCurrency, number> = {
+  USDT: 1,
+  USDC: 1,
+  BTC: 65_000,
+  ETH: 3_500
+};
+const USD_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 export default function RoulettePage() {
   const [round, setRound] = useState<RouletteRound | RouletteRoundEvent | null>(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
-  const [currency, setCurrency] = useState<string>("USDT");
-  const [stakeAtomic, setStakeAtomic] = useState("1000000");
+  const [currency, setCurrency] = useState<RouletteCurrency>("USDT");
+  const [stakeUsd, setStakeUsd] = useState("10");
+  const [usdRates, setUsdRates] = useState<Record<RouletteCurrency, number>>(DEFAULT_USD_RATES);
   const [betType, setBetType] = useState<string>("RED");
   const [response, setResponse] = useState<RouletteBetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +50,7 @@ export default function RoulettePage() {
         roundNumber: number;
         winningNumber: number;
         winningColor: string;
+      currency: string;
         outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
       }
     | null
@@ -42,6 +58,63 @@ export default function RoulettePage() {
 
   const socketRef = useRef<CasinoSocket | null>(null);
   const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const formatUsd = useCallback((value: number) => USD_FORMATTER.format(Number.isFinite(value) ? value : 0), []);
+
+  const getUsdRate = useCallback(
+    (currencyCode: string): number => usdRates[currencyCode as RouletteCurrency] ?? 1,
+    [usdRates]
+  );
+
+  const atomicToUsdValue = useCallback(
+    (atomic: string, currencyCode: string): number => {
+      const atomicValue = Number(atomic);
+      if (!Number.isFinite(atomicValue)) {
+        return 0;
+      }
+
+      const tokenAmount = atomicValue / 10 ** ATOMIC_DECIMALS;
+      return tokenAmount * getUsdRate(currencyCode);
+    },
+    [getUsdRate]
+  );
+
+  const formatAtomicAsUsd = useCallback(
+    (atomic: string, currencyCode: string): string => formatUsd(atomicToUsdValue(atomic, currencyCode)),
+    [atomicToUsdValue, formatUsd]
+  );
+
+  const formatSignedAtomicAsUsd = useCallback(
+    (atomic: string, currencyCode: string): string => {
+      const usdValue = atomicToUsdValue(atomic, currencyCode);
+      const sign = usdValue >= 0 ? "+" : "-";
+      return `${sign}${formatUsd(Math.abs(usdValue))}`;
+    },
+    [atomicToUsdValue, formatUsd]
+  );
+
+  const usdToAtomicString = useCallback(
+    (usdValueRaw: string, currencyCode: RouletteCurrency): string => {
+      const usdValue = Number(usdValueRaw);
+      if (!Number.isFinite(usdValue) || usdValue <= 0) {
+        throw new Error("Stake must be a positive USD value");
+      }
+
+      const rate = getUsdRate(currencyCode);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new Error("USD conversion rate is unavailable");
+      }
+
+      const tokenAmount = usdValue / rate;
+      const atomic = Math.round(tokenAmount * 10 ** ATOMIC_DECIMALS);
+      if (!Number.isFinite(atomic) || atomic <= 0) {
+        throw new Error("Stake is too low for current conversion rate");
+      }
+
+      return String(atomic);
+    },
+    [getUsdRate]
+  );
 
   const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
     setHistory((prev) => {
@@ -55,6 +128,7 @@ export default function RoulettePage() {
       roundNumber: number;
       winningNumber: number;
       winningColor: string;
+      currency: string;
       outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
     }) => {
       setSettlementSummary(payload);
@@ -96,6 +170,45 @@ export default function RoulettePage() {
       setCountdown(round.status);
     }
   }, [round]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadUsdRates = async () => {
+      try {
+        const response = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,usd-coin&vs_currencies=usd"
+        );
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as Record<string, { usd?: number }>;
+        const nextRates: Record<RouletteCurrency, number> = {
+          BTC: payload.bitcoin?.usd ?? DEFAULT_USD_RATES.BTC,
+          ETH: payload.ethereum?.usd ?? DEFAULT_USD_RATES.ETH,
+          USDT: payload.tether?.usd ?? DEFAULT_USD_RATES.USDT,
+          USDC: payload["usd-coin"]?.usd ?? DEFAULT_USD_RATES.USDC
+        };
+
+        if (!cancelled) {
+          setUsdRates(nextRates);
+        }
+      } catch {
+        // Keep defaults when quote provider is unavailable.
+      }
+    };
+
+    void loadUsdRates();
+    const interval = setInterval(() => {
+      void loadUsdRates();
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -175,7 +288,8 @@ export default function RoulettePage() {
             roundNumber: ev.data.roundNumber,
             winningNumber: ev.data.winningNumber,
             winningColor: ev.data.winningColor,
-            outcomes: ev.data.outcomes,
+            currency: ev.data.currency,
+            outcomes: ev.data.outcomes
           });
           break;
       }
@@ -195,11 +309,8 @@ export default function RoulettePage() {
     setResponse(null);
     setLoading(true);
     try {
-      const res = await placeRouletteBet(
-        currency,
-        betType,
-        stakeAtomic
-      );
+      const stakeAtomic = usdToAtomicString(stakeUsd, currency);
+      const res = await placeRouletteBet(currency, betType, stakeAtomic);
       setResponse(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Bet failed");
@@ -207,6 +318,8 @@ export default function RoulettePage() {
       setLoading(false);
     }
   };
+
+  const selectedRate = getUsdRate(currency);
 
   return (
     <div className="space-y-4">
@@ -240,8 +353,7 @@ export default function RoulettePage() {
                   >
                     <span className="text-gray-300">{entry.userLabel}</span>
                     <span className={positive ? "text-green-400 font-mono" : "text-red-400 font-mono"}>
-                      {positive ? "+" : ""}
-                      {entry.netAtomic}
+                      {formatSignedAtomicAsUsd(entry.netAtomic, settlementSummary.currency)}
                     </span>
                   </div>
                 );
@@ -280,12 +392,18 @@ export default function RoulettePage() {
                 <span>{round.currency}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-400">FX</span>
+                <span className="font-mono text-xs">
+                  1 {round.currency} ≈ {formatUsd(getUsdRate(round.currency))}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-400">Timer</span>
                 <span className="font-mono text-yellow-300">{countdown}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Total Staked</span>
-                <span className="font-mono">{round.totalStakedAtomic}</span>
+                <span className="text-gray-400">Total Staked (USD)</span>
+                <span className="font-mono">{formatAtomicAsUsd(round.totalStakedAtomic, round.currency)}</span>
               </div>
               {betBreakdown && (
                 <>
@@ -293,19 +411,27 @@ export default function RoulettePage() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-red-400">RED</span>
-                      <span className="font-mono">{betBreakdown.totalsAtomic.RED}</span>
+                      <span className="font-mono">
+                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.RED, betBreakdown.currency)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-300">BLACK</span>
-                      <span className="font-mono">{betBreakdown.totalsAtomic.BLACK}</span>
+                      <span className="font-mono">
+                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.BLACK, betBreakdown.currency)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-green-400">GREEN</span>
-                      <span className="font-mono">{betBreakdown.totalsAtomic.GREEN}</span>
+                      <span className="font-mono">
+                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.GREEN, betBreakdown.currency)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-indigo-300">BAIT</span>
-                      <span className="font-mono">{betBreakdown.totalsAtomic.BAIT}</span>
+                      <span className="font-mono">
+                        {formatAtomicAsUsd(betBreakdown.totalsAtomic.BAIT, betBreakdown.currency)}
+                      </span>
                     </div>
                   </div>
                 </>
@@ -405,7 +531,7 @@ export default function RoulettePage() {
               <label className="text-sm text-gray-400">Currency</label>
               <select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                onChange={(e) => setCurrency(e.target.value as RouletteCurrency)}
                 className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100"
               >
                 {CURRENCIES.map((c) => (
@@ -416,16 +542,17 @@ export default function RoulettePage() {
               </select>
             </div>
             <Input
-              label="Stake (atomic)"
-              value={stakeAtomic}
-              onChange={(e) => setStakeAtomic(e.target.value)}
-              placeholder="1000000"
+              label="Stake (USD)"
+              value={stakeUsd}
+              onChange={(e) => setStakeUsd(e.target.value)}
+              placeholder="10.00"
             />
           </div>
 
           <p className="text-xs text-gray-400">
             BAIT wins when the wheel lands on either number adjacent to GREEN.
           </p>
+          <p className="text-xs text-gray-500">1 {currency} ≈ {formatUsd(selectedRate)}</p>
 
           <div className="flex flex-wrap gap-2">
             {BET_TYPES.map((bt) => (
@@ -452,19 +579,31 @@ export default function RoulettePage() {
             ))}
           </div>
 
-          <Button onClick={placeBet} disabled={loading || !stakeAtomic || round?.status !== "OPEN"}>
+          <Button onClick={placeBet} disabled={loading || !stakeUsd || round?.status !== "OPEN"}>
             {loading ? "Placing..." : `BET ${betType}`}
           </Button>
         </div>
       </Card>
 
       {(response || error) && (
-        <Card title="API Response">
+        <Card title="Bet Result">
           {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
           {response && (
-            <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-800 p-3 rounded">
-              {JSON.stringify(response, null, 2)}
-            </pre>
+            <div className="text-sm text-gray-300 space-y-1 bg-gray-800 p-3 rounded">
+              <p>
+                Bet placed in round <span className="font-mono">#{response.round.roundNumber}</span>
+              </p>
+              <p>
+                Type: <span className="font-semibold">{response.bet.betType}</span>
+              </p>
+              <p>
+                Stake (USD):{" "}
+                <span className="font-mono">{formatAtomicAsUsd(response.bet.stakeAtomic, response.round.currency)}</span>
+              </p>
+              <p>
+                Status: <span className="font-semibold">{response.bet.status}</span>
+              </p>
+            </div>
           )}
         </Card>
       )}
