@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { ReactNode } from "react";
 import Button from "@/components/Button";
+import BalanceControl from "@/components/BalanceControl";
 import { logout } from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
 
@@ -27,8 +28,8 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-6">
+      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-4">
+        <div className="flex flex-1 items-center gap-6">
           <span className="font-bold text-red-400 text-lg mr-4">Crypto Casino</span>
           {links.map((l) => (
             <Link
@@ -44,7 +45,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center justify-center">
+          <BalanceControl />
+        </div>
+        <div className="flex flex-1 items-center justify-end gap-2">
           {authed ? (
             <Button variant="secondary" className="px-5 py-2" onClick={() => void handleLogout()}>
               Logout

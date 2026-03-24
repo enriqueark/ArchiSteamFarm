@@ -5,3 +5,26 @@
 body {
   @apply bg-gray-950 text-gray-100;
 }
+
+@keyframes balanceDeltaFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.balance-delta-notice {
+  animation: balanceDeltaFade 1.8s ease-out forwards;
+}
