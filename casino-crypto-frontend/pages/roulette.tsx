@@ -181,18 +181,18 @@ export default function RoulettePage() {
       const startContinuous = wheelIndexRef.current + normalizedStartOffsetSteps;
       const durationMs = Math.max(1, settleAtMs - spinStartsAtMs);
 
-      let totalSteps = Math.max(6, Math.floor(durationMs / 110)) * WHEEL_SEQUENCE.length;
+      let totalSteps = Math.max(6, Math.floor(durationMs / 130)) * WHEEL_SEQUENCE.length;
       let targetContinuous = startContinuous + totalSteps;
       if (typeof winningNumber === "number") {
         const targetIndex = WHEEL_SEQUENCE.indexOf(winningNumber);
         if (targetIndex >= 0) {
-          const plannedLoops = Math.max(8, Math.floor(durationMs / 650));
+          const plannedLoops = Math.max(9, Math.floor(durationMs / 700));
           const forwardDistance = modFloat(targetIndex - startContinuous, WHEEL_SEQUENCE.length);
           totalSteps = forwardDistance + plannedLoops * WHEEL_SEQUENCE.length;
           // "Dopamine" finish: keep deterministic final number, but land
           // slightly toward one edge in some rounds (same slot, no teleport).
           const shouldEdgeLand = Math.random() < 0.55;
-          const edgeOffset = shouldEdgeLand ? (Math.random() < 0.5 ? -0.42 : 0.42) : 0;
+          const edgeOffset = shouldEdgeLand ? (Math.random() < 0.5 ? -0.36 : 0.36) : 0;
           targetContinuous = startContinuous + totalSteps + edgeOffset;
         }
       }
@@ -223,12 +223,12 @@ export default function RoulettePage() {
 
         const clampedNowMs = Math.min(nowMs, plan.settleAtMs);
         const progress = Math.max(0, Math.min(1, (clampedNowMs - plan.spinStartsAtMs) / Math.max(1, plan.settleAtMs - plan.spinStartsAtMs)));
-        const easedProgress = easeOutCubic(progress);
+        const easedProgress = easeOutCubic(easeOutCubic(progress));
         let currentContinuous = plan.startContinuous + plan.totalSteps * easedProgress;
         // Add tiny late wobble without changing deterministic end target.
         if (progress > 0.8 && progress < 1) {
           const tail = (progress - 0.8) / 0.2;
-          const wobbleAmplitudeSteps = 0.18 * (1 - tail);
+          const wobbleAmplitudeSteps = 0.12 * (1 - tail) ** 1.2;
           currentContinuous += Math.sin(tail * Math.PI * 2.1) * wobbleAmplitudeSteps;
         }
         const wholeSteps = Math.floor(currentContinuous);
@@ -239,8 +239,11 @@ export default function RoulettePage() {
         if (nowMs >= plan.settleAtMs) {
           const finalWhole = Math.floor(plan.targetContinuous);
           const finalFraction = plan.targetContinuous - finalWhole;
+          // Render deterministic final frame once and finish, avoiding
+          // side-to-side micro jumps at the exact end.
           setWheelIndexSafe(finalWhole);
           setPointerOffsetSafe(finalFraction * slotPx, true);
+          spinPlanRef.current = null;
           wheelSpinRafRef.current = null;
           return;
         }
