@@ -129,6 +129,8 @@ export default function RoulettePage() {
   const lastRoundIdRef = useRef<string | null>(null);
   const finalizedRoundIdRef = useRef<string | null>(null);
   const expectedWinningNumberRef = useRef<number | null>(null);
+  const finalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
     const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
@@ -159,8 +161,17 @@ export default function RoulettePage() {
     }
   }, []);
 
+  const flushPendingHistoryForRound = useCallback((roundId: string) => {
+    const item = pendingHistoryByRoundIdRef.current.get(roundId);
+    if (!item) {
+      return;
+    }
+    pendingHistoryByRoundIdRef.current.delete(roundId);
+    setHistory((prev) => [item, ...prev.filter((existing) => existing.roundId !== item.roundId)].slice(0, 20));
+  }, []);
+
   const animateWheelToWinning = useCallback(
-    (winningNumber: number, durationMs: number, minLoops: number, maxLoops: number) => {
+    (winningNumber: number, durationMs: number, minLoops: number, maxLoops: number, onDone?: () => void) => {
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
 
@@ -174,12 +185,7 @@ export default function RoulettePage() {
       const normalizedStartOffsetSteps = modFloat(startFractionRaw, 1);
       const startContinuous = wheelIndexRef.current + normalizedStartOffsetSteps;
 
-      const shouldLandNearEdge = Math.random() < 0.6;
-      let targetContinuous = targetIndex;
-      if (shouldLandNearEdge) {
-        const edgeMagnitude = 0.42 + Math.random() * 0.06;
-        targetContinuous = targetIndex + (Math.random() < 0.5 ? -edgeMagnitude : edgeMagnitude);
-      }
+      const targetContinuous = targetIndex;
 
       const forwardDistance = modFloat(targetContinuous - startContinuous, WHEEL_SEQUENCE.length);
       const loopSpan = Math.max(minLoops, maxLoops) - Math.min(minLoops, maxLoops) + 1;
@@ -214,6 +220,7 @@ export default function RoulettePage() {
         setPointerOffsetSafe(finalFraction * slotPx, true);
         expectedWinningNumberRef.current = winningNumber;
         wheelSettleRafRef.current = null;
+        onDone?.();
       };
 
       wheelSettleRafRef.current = requestAnimationFrame(tick);
@@ -270,8 +277,8 @@ export default function RoulettePage() {
     [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation, stopWheelSpinAnimation]
   );
 
-  const pushHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
-    setHistory((prev) => [item, ...prev.filter((existing) => existing.roundId !== item.roundId)].slice(0, 20));
+  const queueHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
+    pendingHistoryByRoundIdRef.current.set(item.roundId, item);
   }, []);
 
   const showSettlementSummary = useCallback(
@@ -374,7 +381,7 @@ export default function RoulettePage() {
         case "roulette.round":
           if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
             expectedWinningNumberRef.current = ev.data.winningNumber;
-            pushHistoryItem({
+            queueHistoryItem({
               roundId: ev.data.roundId,
               roundNumber: ev.data.roundNumber,
               currency: ev.data.currency,
@@ -409,7 +416,7 @@ export default function RoulettePage() {
 
     sock.connect();
     return () => sock.disconnect();
-  }, [normalizeBreakdown, pushHistoryItem, showSettlementSummary]);
+  }, [normalizeBreakdown, queueHistoryItem, showSettlementSummary]);
 
   useEffect(() => {
     const node = wheelGridRef.current;
@@ -459,13 +466,32 @@ export default function RoulettePage() {
       if (remainingUntilSettleMs > 250) {
         // If server marks round as SETTLED early, keep a single spin animation alive until settleAt.
         startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), settleAtMs);
+        if (finalizeTimerRef.current) {
+          clearTimeout(finalizeTimerRef.current);
+        }
+        const roundId = "roundId" in round ? round.roundId : round.id;
+        finalizeTimerRef.current = setTimeout(() => {
+          if (finalizedRoundIdRef.current === roundId) {
+            return;
+          }
+          finalizedRoundIdRef.current = roundId;
+          animateWheelToWinning(round.winningNumber as number, 700, 0, 1, () => {
+            flushPendingHistoryForRound(roundId);
+          });
+        }, Math.max(0, remainingUntilSettleMs));
         return;
       }
 
       if (finalizedRoundIdRef.current !== roundKey) {
         finalizedRoundIdRef.current = roundKey;
+        if (finalizeTimerRef.current) {
+          clearTimeout(finalizeTimerRef.current);
+          finalizeTimerRef.current = null;
+        }
         if (previousStatus === "SPINNING" || previousStatus === "SETTLED") {
-          animateWheelToWinning(round.winningNumber, 700, 0, 1);
+          animateWheelToWinning(round.winningNumber, 700, 0, 1, () => {
+            flushPendingHistoryForRound(roundKey);
+          });
           return;
         }
 
@@ -476,14 +502,21 @@ export default function RoulettePage() {
         if (targetIndex >= 0) {
           setWheelIndexSafe(targetIndex);
         }
+        setPointerOffsetSafe(0, true);
+        flushPendingHistoryForRound(roundKey);
       }
       return;
     }
 
     stopWheelSpinAnimation();
     stopWheelSettleAnimation();
+    if (finalizeTimerRef.current) {
+      clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
   }, [
     animateWheelToWinning,
+    flushPendingHistoryForRound,
     round,
     setPointerOffsetSafe,
     setWheelIndexSafe,
@@ -496,6 +529,9 @@ export default function RoulettePage() {
     return () => {
       if (settlementHideTimerRef.current) {
         clearTimeout(settlementHideTimerRef.current);
+      }
+      if (finalizeTimerRef.current) {
+        clearTimeout(finalizeTimerRef.current);
       }
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
