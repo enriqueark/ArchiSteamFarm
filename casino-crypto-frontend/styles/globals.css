@@ -28,3 +28,19 @@ body {
 .balance-delta-notice {
   animation: balanceDeltaFade 1.8s ease-out forwards;
 }
+
+@keyframes profileMenuDropIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-menu-enter {
+  transform-origin: top right;
+  animation: profileMenuDropIn 180ms ease-out;
+}

@@ -27,6 +27,30 @@ const formatCoins = (value: number): string => {
   });
 };
 
+const RedTokenIcon = () => (
+  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full">
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <defs>
+        <radialGradient id="rain-token-core" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#fecaca" />
+          <stop offset="45%" stopColor="#ef4444" />
+          <stop offset="100%" stopColor="#7f1d1d" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="12" r="10" fill="url(#rain-token-core)" />
+      <circle cx="12" cy="12" r="8.2" fill="none" stroke="#450a0a" strokeWidth="1.2" opacity="0.65" />
+      <path
+        d="M9 8.7h4.25a2.2 2.2 0 0 1 0 4.4H9m0 0h4.6a2.25 2.25 0 1 1 0 4.5H9m0-8.9v8.9"
+        fill="none"
+        stroke="#fff1f2"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
+);
+
 export default function BalanceControl() {
   const { authed, openAuth } = useAuthUI();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -108,6 +132,12 @@ export default function BalanceControl() {
   }, [authed, showDeltaNotice]);
 
   useEffect(() => {
+    if (!authed) {
+      setPanelOpen(false);
+    }
+  }, [authed]);
+
+  useEffect(() => {
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -177,9 +207,7 @@ export default function BalanceControl() {
       <div className="relative">
         <div className="flex items-center overflow-hidden rounded-md border border-red-900/70 bg-gray-950/90 shadow-[0_0_14px_rgba(220,38,38,0.18)]">
           <div className="flex min-w-[130px] items-center justify-center gap-2 border-r border-red-900/70 px-3 py-1.5">
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600/20 text-[11px] text-red-300">
-              $
-            </span>
+            <RedTokenIcon />
             <span className="tabular-nums text-sm font-semibold text-gray-100">{formatCoins(displayBalance)}</span>
           </div>
           <button
