@@ -102,6 +102,19 @@ type BetBreakdownTotals = {
   BAIT: bigint;
 };
 
+type BetBreakdownUserEntry = {
+  userId: string;
+  userLabel: string;
+  stakeAtomic: bigint;
+};
+
+type BetBreakdownEntriesByType = {
+  RED: BetBreakdownUserEntry[];
+  BLACK: BetBreakdownUserEntry[];
+  GREEN: BetBreakdownUserEntry[];
+  BAIT: BetBreakdownUserEntry[];
+};
+
 export type RouletteBetBreakdownState = {
   roundId: string;
   roundNumber: number;
@@ -112,6 +125,7 @@ export type RouletteBetBreakdownState = {
     GREEN: bigint;
     BAIT: bigint;
   };
+  entriesByType: BetBreakdownEntriesByType;
   totalStakedAtomic: bigint;
 };
 
@@ -229,6 +243,28 @@ const emitBetBreakdownEvent = (state: RouletteBetBreakdownState): void => {
         GREEN: state.totalsAtomic.GREEN.toString(),
         BAIT: state.totalsAtomic.BAIT.toString()
       },
+      entriesByType: {
+        RED: state.entriesByType.RED.map((entry) => ({
+          userId: entry.userId,
+          userLabel: entry.userLabel,
+          stakeAtomic: entry.stakeAtomic.toString()
+        })),
+        BLACK: state.entriesByType.BLACK.map((entry) => ({
+          userId: entry.userId,
+          userLabel: entry.userLabel,
+          stakeAtomic: entry.stakeAtomic.toString()
+        })),
+        GREEN: state.entriesByType.GREEN.map((entry) => ({
+          userId: entry.userId,
+          userLabel: entry.userLabel,
+          stakeAtomic: entry.stakeAtomic.toString()
+        })),
+        BAIT: state.entriesByType.BAIT.map((entry) => ({
+          userId: entry.userId,
+          userLabel: entry.userLabel,
+          stakeAtomic: entry.stakeAtomic.toString()
+        }))
+      },
       totalStakedAtomic: state.totalStakedAtomic.toString()
     }
   });
@@ -264,6 +300,13 @@ const getEmptyBetBreakdownTotals = (): BetBreakdownTotals => ({
   BLACK: 0n,
   GREEN: 0n,
   BAIT: 0n
+});
+
+const getEmptyBetBreakdownEntriesByType = (): BetBreakdownEntriesByType => ({
+  RED: [],
+  BLACK: [],
+  GREEN: [],
+  BAIT: []
 });
 
 const formatUserLabel = (email: string, userId: string): string => {
@@ -341,8 +384,10 @@ const shouldWaitBeforeOpeningRound = async (currency: Currency): Promise<boolean
   return Date.now() - latestSettled.settledAt.getTime() < ROUND_RESULTS_PAUSE_MS;
 };
 
-const loadBetBreakdownTotalsByRoundId = async (roundId: string): Promise<BetBreakdownTotals> => {
-  const grouped = await prisma.rouletteBet.groupBy({
+const loadBetBreakdownByRoundId = async (
+  roundId: string
+): Promise<{ totals: BetBreakdownTotals; entriesByType: BetBreakdownEntriesByType }> => {
+  const groupedByType = await prisma.rouletteBet.groupBy({
     by: ["betType"],
     where: {
       roundId,
@@ -356,7 +401,7 @@ const loadBetBreakdownTotalsByRoundId = async (roundId: string): Promise<BetBrea
   });
 
   const totals = getEmptyBetBreakdownTotals();
-  for (const row of grouped) {
+  for (const row of groupedByType) {
     if (row.betType === RouletteBetType.RED) {
       totals.RED = row._sum.stakeAtomic ?? 0n;
     } else if (row.betType === RouletteBetType.BLACK) {
@@ -368,7 +413,74 @@ const loadBetBreakdownTotalsByRoundId = async (roundId: string): Promise<BetBrea
     }
   }
 
-  return totals;
+  const groupedByTypeAndUser = await prisma.rouletteBet.groupBy({
+    by: ["betType", "userId"],
+    where: {
+      roundId,
+      betType: {
+        in: [RouletteBetType.RED, RouletteBetType.BLACK, RouletteBetType.GREEN, RouletteBetType.BAIT]
+      }
+    },
+    _sum: {
+      stakeAtomic: true
+    }
+  });
+
+  const userIds = Array.from(new Set(groupedByTypeAndUser.map((row) => row.userId)));
+  const users = userIds.length
+    ? await prisma.user.findMany({
+        where: {
+          id: {
+            in: userIds
+          }
+        },
+        select: {
+          id: true,
+          email: true
+        }
+      })
+    : [];
+
+  const userEmailById = new Map(users.map((user) => [user.id, user.email]));
+  const entriesByType = getEmptyBetBreakdownEntriesByType();
+  for (const row of groupedByTypeAndUser) {
+    const stakeAtomic = row._sum.stakeAtomic ?? 0n;
+    if (stakeAtomic <= 0n) {
+      continue;
+    }
+
+    const email = userEmailById.get(row.userId) ?? "";
+    const entry: BetBreakdownUserEntry = {
+      userId: row.userId,
+      userLabel: formatUserLabel(email, row.userId),
+      stakeAtomic
+    };
+
+    if (row.betType === RouletteBetType.RED) {
+      entriesByType.RED.push(entry);
+    } else if (row.betType === RouletteBetType.BLACK) {
+      entriesByType.BLACK.push(entry);
+    } else if (row.betType === RouletteBetType.GREEN) {
+      entriesByType.GREEN.push(entry);
+    } else if (row.betType === RouletteBetType.BAIT) {
+      entriesByType.BAIT.push(entry);
+    }
+  }
+
+  const sortEntries = (items: BetBreakdownUserEntry[]) =>
+    items.sort((a, b) => {
+      if (a.stakeAtomic === b.stakeAtomic) {
+        return a.userId.localeCompare(b.userId);
+      }
+      return a.stakeAtomic > b.stakeAtomic ? -1 : 1;
+    });
+
+  sortEntries(entriesByType.RED);
+  sortEntries(entriesByType.BLACK);
+  sortEntries(entriesByType.GREEN);
+  sortEntries(entriesByType.BAIT);
+
+  return { totals, entriesByType };
 };
 
 const ensureOpenRoundForCurrency = async (currency: Currency): Promise<RouletteRound> => {
@@ -397,6 +509,7 @@ const ensureOpenRoundForCurrency = async (currency: Currency): Promise<RouletteR
       roundNumber: created.roundNumber,
       currency: created.currency,
       totalsAtomic: getEmptyBetBreakdownTotals(),
+      entriesByType: getEmptyBetBreakdownEntriesByType(),
       totalStakedAtomic: created.totalStakedAtomic
     });
     return created;
@@ -941,12 +1054,13 @@ export const getCurrentRouletteRound = async (currency: Currency): Promise<Roule
 
 export const getCurrentRouletteBetBreakdown = async (currency: Currency): Promise<RouletteBetBreakdownState> => {
   const round = await getCurrentRouletteRound(currency);
-  const totalsAtomic = await loadBetBreakdownTotalsByRoundId(round.id);
+  const breakdown = await loadBetBreakdownByRoundId(round.id);
   return {
     roundId: round.id,
     roundNumber: round.roundNumber,
     currency: round.currency,
-    totalsAtomic,
+    totalsAtomic: breakdown.totals,
+    entriesByType: breakdown.entriesByType,
     totalStakedAtomic: round.totalStakedAtomic
   };
 };
@@ -960,12 +1074,13 @@ export const getRouletteBetBreakdownByRoundId = async (roundId: string): Promise
     throw new AppError("Roulette round not found", 404, "ROULETTE_ROUND_NOT_FOUND");
   }
 
-  const totalsAtomic = await loadBetBreakdownTotalsByRoundId(round.id);
+  const breakdown = await loadBetBreakdownByRoundId(round.id);
   return {
     roundId: round.id,
     roundNumber: round.roundNumber,
     currency: round.currency,
-    totalsAtomic,
+    totalsAtomic: breakdown.totals,
+    entriesByType: breakdown.entriesByType,
     totalStakedAtomic: round.totalStakedAtomic
   };
 };

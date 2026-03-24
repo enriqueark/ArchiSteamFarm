@@ -31,6 +31,12 @@ export type BetBreakdownEvent = {
     GREEN: string;
     BAIT: string;
   };
+  entriesByType: {
+    RED: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+    BLACK: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+    GREEN: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+    BAIT: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+  };
   totalStakedAtomic: string;
 };
 

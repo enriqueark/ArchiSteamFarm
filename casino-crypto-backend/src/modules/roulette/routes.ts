@@ -114,6 +114,28 @@ const toBetBreakdownResponse = (state: RouletteBetBreakdownState) => ({
     GREEN: state.totalsAtomic.GREEN.toString(),
     BAIT: state.totalsAtomic.BAIT.toString()
   },
+  entriesByType: {
+    RED: state.entriesByType.RED.map((entry) => ({
+      userId: entry.userId,
+      userLabel: entry.userLabel,
+      stakeAtomic: entry.stakeAtomic.toString()
+    })),
+    BLACK: state.entriesByType.BLACK.map((entry) => ({
+      userId: entry.userId,
+      userLabel: entry.userLabel,
+      stakeAtomic: entry.stakeAtomic.toString()
+    })),
+    GREEN: state.entriesByType.GREEN.map((entry) => ({
+      userId: entry.userId,
+      userLabel: entry.userLabel,
+      stakeAtomic: entry.stakeAtomic.toString()
+    })),
+    BAIT: state.entriesByType.BAIT.map((entry) => ({
+      userId: entry.userId,
+      userLabel: entry.userLabel,
+      stakeAtomic: entry.stakeAtomic.toString()
+    }))
+  },
   totalStakedAtomic: state.totalStakedAtomic.toString()
 });
 

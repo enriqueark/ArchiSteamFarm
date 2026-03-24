@@ -11,7 +11,7 @@ import {
   type RouletteResultHistoryItem,
   type RouletteRound
 } from "@/lib/api";
-import { CasinoSocket, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
+import { CasinoSocket, type BetBreakdownEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -61,22 +61,6 @@ const getNumberColor = (n: number): "GREEN" | "RED" | "BLACK" => {
   }
 
   return RED_NUMBERS.has(n) ? "RED" : "BLACK";
-};
-
-const isWinningForBetType = (item: RouletteResultHistoryItem, betType: BetType): boolean => {
-  if (betType === "GREEN") {
-    return item.winningNumber === 0;
-  }
-
-  if (betType === "BAIT") {
-    return item.winningNumber === 1 || item.winningNumber === 14;
-  }
-
-  if (betType === "RED") {
-    return item.winningColor === "RED";
-  }
-
-  return item.winningColor === "BLACK";
 };
 
 const toCoinsNumber = (atomic: string): number => {
@@ -143,6 +127,7 @@ export default function RoulettePage() {
   const previousRoundStatusRef = useRef<string | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
   const finalizedRoundIdRef = useRef<string | null>(null);
+  const expectedWinningNumberRef = useRef<number | null>(null);
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
     const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
@@ -211,24 +196,17 @@ export default function RoulettePage() {
           return;
         }
 
-        const shouldLandNearEdge = Math.random() < 0.45;
-        const edgeMagnitude = 0.38 + Math.random() * 0.08;
-        if (!shouldLandNearEdge) {
-          setWheelIndexSafe(targetIndex);
-          setPointerOffsetSafe(0, true);
-          wheelSettleRafRef.current = null;
-          return;
-        }
+      const shouldLandNearEdge = Math.random() < 0.6;
+      if (shouldLandNearEdge) {
+        const edgeMagnitude = (Math.random() < 0.5 ? -1 : 1) * (0.42 + Math.random() * 0.08);
+        setWheelIndexSafe(targetIndex);
+        setPointerOffsetSafe(edgeMagnitude * Math.max(1, slotWidthPx), true);
+      } else {
+        setWheelIndexSafe(targetIndex);
+        setPointerOffsetSafe(0, true);
+      }
 
-        // Fixed pointer + moving strip: land close to either side of winning slot.
-        const landOnLeftEdge = Math.random() < 0.5;
-        if (landOnLeftEdge) {
-          setWheelIndexSafe(targetIndex - 1);
-          setPointerOffsetSafe((0.54 + Math.random() * 0.08) * Math.max(1, slotWidthPx), true);
-        } else {
-          setWheelIndexSafe(targetIndex);
-          setPointerOffsetSafe(edgeMagnitude * Math.max(1, slotWidthPx), true);
-        }
+      expectedWinningNumberRef.current = winningNumber;
         wheelSettleRafRef.current = null;
       };
 
@@ -349,6 +327,18 @@ export default function RoulettePage() {
     return () => clearInterval(interval);
   }, [updateCountdown]);
 
+  const normalizeBreakdown = useCallback((raw: RouletteBetBreakdown | BetBreakdownEvent): RouletteBetBreakdown => {
+    return {
+      ...raw,
+      entriesByType: raw.entriesByType ?? {
+        RED: [],
+        BLACK: [],
+        GREEN: [],
+        BAIT: []
+      }
+    };
+  }, []);
+
   useEffect(() => {
     Promise.all([
       getCurrentRound(INTERNAL_GAME_CURRENCY),
@@ -358,7 +348,7 @@ export default function RoulettePage() {
       .then(([current, recentResults, breakdown]) => {
         setRound(current);
         setHistory(recentResults);
-        setBetBreakdown(breakdown);
+        setBetBreakdown(normalizeBreakdown(breakdown));
       })
       .catch(() => {});
 
@@ -378,6 +368,7 @@ export default function RoulettePage() {
           break;
         case "roulette.round":
           if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
+            expectedWinningNumberRef.current = ev.data.winningNumber;
             pushHistoryItem({
               roundId: ev.data.roundId,
               roundNumber: ev.data.roundNumber,
@@ -398,7 +389,7 @@ export default function RoulettePage() {
           });
           break;
         case "roulette.betBreakdown":
-          setBetBreakdown(ev.data);
+          setBetBreakdown(normalizeBreakdown(ev.data));
           break;
         case "roulette.settlementSummary":
           showSettlementSummary({
@@ -413,7 +404,7 @@ export default function RoulettePage() {
 
     sock.connect();
     return () => sock.disconnect();
-  }, [pushHistoryItem, showSettlementSummary]);
+  }, [normalizeBreakdown, pushHistoryItem, showSettlementSummary]);
 
   useEffect(() => {
     const node = wheelGridRef.current;
@@ -475,7 +466,8 @@ export default function RoulettePage() {
 
         stopWheelSettleAnimation();
         stopWheelSpinAnimation();
-        const targetIndex = WHEEL_SEQUENCE.indexOf(round.winningNumber);
+        const expectedWinning = expectedWinningNumberRef.current ?? round.winningNumber;
+        const targetIndex = WHEEL_SEQUENCE.indexOf(expectedWinning);
         if (targetIndex >= 0) {
           setWheelIndexSafe(targetIndex);
         }
@@ -585,6 +577,7 @@ export default function RoulettePage() {
     WHEEL_TRACK_SIDE_BUFFER + WHEEL_CENTER_SLOT + pointerSlotShift,
     WHEEL_VISIBLE_SLOTS + WHEEL_TRACK_SIDE_BUFFER * 2
   );
+  const highlightedNumber = wheelNumbers[highlightedSlotIndex] ?? null;
 
   const totalBreakdownCoins = betBreakdown ? toCoinsNumber(betBreakdown.totalStakedAtomic) : 0;
   const getBetTotalCoins = (type: BetType): number =>
@@ -672,6 +665,11 @@ export default function RoulettePage() {
               <span>{round ? round.status : "Waiting round..."}</span>
               <span className="text-yellow-300">{countdown}</span>
             </div>
+            {round?.status === "SETTLED" && round.winningNumber !== null && highlightedNumber !== round.winningNumber && (
+              <div className="text-[11px] text-red-300">
+                Syncing result...
+              </div>
+            )}
             <div className="w-full h-2 rounded bg-gray-800 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-emerald-500 to-yellow-400 transition-all"
@@ -745,7 +743,7 @@ export default function RoulettePage() {
           const config = BET_CONFIG[type];
           const amountCoins = getBetTotalCoins(type);
           const share = totalBreakdownCoins > 0 ? (amountCoins / totalBreakdownCoins) * 100 : 0;
-          const recentHits = history.filter((item) => isWinningForBetType(item, type)).slice(0, 3);
+          const entries = (betBreakdown?.entriesByType?.[type] ?? []).slice(0, 8);
           return (
             <Card key={type} className="bg-gray-900/90 border-gray-700">
               <div className="space-y-3">
@@ -777,17 +775,19 @@ export default function RoulettePage() {
                 </div>
 
                 <div className="pt-2 border-t border-gray-800">
-                  <p className="text-[11px] text-gray-500 mb-1">Recent hits</p>
-                  <div className="space-y-1">
-                    {recentHits.length > 0 ? (
-                      recentHits.map((item) => (
-                        <div key={`${type}-${item.roundId}`} className="text-xs flex justify-between">
-                          <span className="text-gray-400">Round #{item.roundNumber}</span>
-                          <span className="font-mono text-gray-200">{item.winningNumber}</span>
+                  <div className="space-y-1.5">
+                    {entries.length > 0 ? (
+                      entries.map((entry) => (
+                        <div key={`${type}-${entry.userId}`} className="text-xs flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-gray-700 border border-gray-600 shrink-0" />
+                            <span className="text-gray-300 truncate">{entry.userLabel}</span>
+                          </div>
+                          <span className="font-mono text-yellow-300 shrink-0">{formatCoins(toCoinsNumber(entry.stakeAtomic))}</span>
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-gray-600">No recent hits</p>
+                      <p className="text-xs text-gray-600">No bets yet</p>
                     )}
                   </div>
                 </div>
