@@ -189,10 +189,14 @@ export default function RoulettePage() {
           const plannedLoops = Math.max(9, Math.floor(durationMs / 700));
           const forwardDistance = modFloat(targetIndex - startContinuous, WHEEL_SEQUENCE.length);
           totalSteps = forwardDistance + plannedLoops * WHEEL_SEQUENCE.length;
-          // "Dopamine" finish: keep deterministic final number, but land
-          // slightly toward one edge in some rounds (same slot, no teleport).
+          // Natural landing: random pointer position inside the winning slot.
+          // Most rounds can finish near center, some near edges.
+          const edgeBias = 0.44;
+          const centerBias = 0.12;
           const shouldEdgeLand = Math.random() < 0.55;
-          const edgeOffset = shouldEdgeLand ? (Math.random() < 0.5 ? -0.36 : 0.36) : 0;
+          const edgeOffset = shouldEdgeLand
+            ? (Math.random() < 0.5 ? -edgeBias : edgeBias)
+            : (Math.random() * 2 - 1) * centerBias;
           targetContinuous = startContinuous + totalSteps + edgeOffset;
         }
       }
@@ -224,13 +228,7 @@ export default function RoulettePage() {
         const clampedNowMs = Math.min(nowMs, plan.settleAtMs);
         const progress = Math.max(0, Math.min(1, (clampedNowMs - plan.spinStartsAtMs) / Math.max(1, plan.settleAtMs - plan.spinStartsAtMs)));
         const easedProgress = easeOutCubic(easeOutCubic(progress));
-        let currentContinuous = plan.startContinuous + plan.totalSteps * easedProgress;
-        // Add tiny late wobble without changing deterministic end target.
-        if (progress > 0.8 && progress < 1) {
-          const tail = (progress - 0.8) / 0.2;
-          const wobbleAmplitudeSteps = 0.12 * (1 - tail) ** 1.2;
-          currentContinuous += Math.sin(tail * Math.PI * 2.1) * wobbleAmplitudeSteps;
-        }
+        const currentContinuous = plan.startContinuous + plan.totalSteps * easedProgress;
         const wholeSteps = Math.floor(currentContinuous);
         const fractionalSteps = currentContinuous - wholeSteps;
         setWheelIndexSafe(wholeSteps);
