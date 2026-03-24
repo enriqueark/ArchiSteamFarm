@@ -885,13 +885,20 @@ const startSpinningRoundOnce = async (now: Date): Promise<RouletteRound | null> 
       return null;
     }
 
+    const winningNumber = randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
+    const winningColor = getRouletteColor(winningNumber);
+
     return tx.rouletteRound.update({
       where: {
         id: row.id
       },
       data: {
         status: RouletteRoundStatus.SPINNING,
-        spinningAt: now
+        spinningAt: now,
+        // Freeze winner at spin start so clients can follow one
+        // deterministic trajectory to the final result.
+        winningNumber,
+        winningColor
       }
     });
   });

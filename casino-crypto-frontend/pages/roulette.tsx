@@ -122,15 +122,17 @@ export default function RoulettePage() {
   const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerOffsetRef = useRef(0);
   const wheelIndexRef = useRef(0);
-  const wheelProgressRef = useRef(0);
   const wheelSpinRafRef = useRef<number | null>(null);
-  const wheelSettleRafRef = useRef<number | null>(null);
-  const finalizeAfterSpinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousRoundStatusRef = useRef<string | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
-  const finalizedRoundIdRef = useRef<string | null>(null);
-  const finalizingRoundIdRef = useRef<string | null>(null);
-  const expectedWinningNumberRef = useRef<number | null>(null);
+  const spinPlanRef = useRef<{
+    roundKey: string;
+    spinStartsAtMs: number;
+    settleAtMs: number;
+    startContinuous: number;
+    totalSteps: number;
+    targetContinuous: number;
+    winningNumber: number | null;
+  } | null>(null);
   const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
@@ -152,21 +154,7 @@ export default function RoulettePage() {
       cancelAnimationFrame(wheelSpinRafRef.current);
       wheelSpinRafRef.current = null;
     }
-    wheelProgressRef.current = 0;
-  }, []);
-
-  const stopWheelSettleAnimation = useCallback(() => {
-    if (wheelSettleRafRef.current !== null) {
-      cancelAnimationFrame(wheelSettleRafRef.current);
-      wheelSettleRafRef.current = null;
-    }
-  }, []);
-
-  const clearFinalizeAfterSpinTimer = useCallback(() => {
-    if (finalizeAfterSpinTimerRef.current) {
-      clearTimeout(finalizeAfterSpinTimerRef.current);
-      finalizeAfterSpinTimerRef.current = null;
-    }
+    spinPlanRef.current = null;
   }, []);
 
   const flushPendingHistoryForRound = useCallback((roundId: string) => {
@@ -178,107 +166,81 @@ export default function RoulettePage() {
     setHistory((prev) => [item, ...prev.filter((existing) => existing.roundId !== item.roundId)].slice(0, 20));
   }, []);
 
-  const animateWheelToWinning = useCallback(
-    (winningNumber: number, durationMs: number, minLoops: number, maxLoops: number, onDone?: () => void) => {
-      stopWheelSpinAnimation();
-      stopWheelSettleAnimation();
-
-      const targetIndex = WHEEL_SEQUENCE.indexOf(winningNumber);
-      if (targetIndex < 0) {
+  const startWheelSpinAnimation = useCallback(
+    (roundKey: string, spinStartsAtMs: number, settleAtMs: number, winningNumber: number | null) => {
+      if (wheelSpinRafRef.current !== null && spinPlanRef.current?.roundKey === roundKey) {
         return;
+      }
+      if (wheelSpinRafRef.current !== null) {
+        stopWheelSpinAnimation();
       }
 
       const slotPx = Math.max(1, slotWidthPx);
       const startFractionRaw = pointerOffsetRef.current / slotPx;
       const normalizedStartOffsetSteps = modFloat(startFractionRaw, 1);
       const startContinuous = wheelIndexRef.current + normalizedStartOffsetSteps;
+      const durationMs = Math.max(1, settleAtMs - spinStartsAtMs);
 
-      const targetContinuous = targetIndex;
-
-      const forwardDistance = modFloat(targetContinuous - startContinuous, WHEEL_SEQUENCE.length);
-      const loopSpan = Math.max(minLoops, maxLoops) - Math.min(minLoops, maxLoops) + 1;
-      const randomLoops = Math.min(minLoops, maxLoops) + Math.floor(Math.random() * loopSpan);
-      const totalSteps = forwardDistance + randomLoops * WHEEL_SEQUENCE.length;
-      // Keep resolve speed proportional to distance to avoid visual "teleport" jumps.
-      const effectiveDurationMs = Math.max(300, durationMs, totalSteps * 95);
-      const startTime = performance.now();
-      let renderedContinuous = Number.NaN;
-
-      const tick = (timestamp: number) => {
-        const progress = Math.max(0, Math.min(1, (timestamp - startTime) / effectiveDurationMs));
-        const easedProgress = easeOutCubic(progress);
-        const progressedSteps = totalSteps * easedProgress;
-        const currentContinuous = startContinuous + progressedSteps;
-
-        if (!Number.isFinite(renderedContinuous) || Math.abs(currentContinuous - renderedContinuous) > 0.0001) {
-          renderedContinuous = currentContinuous;
-          const wholeSteps = Math.floor(currentContinuous);
-          const fractionalSteps = currentContinuous - wholeSteps;
-          setWheelIndexSafe(wholeSteps);
-          setPointerOffsetSafe(fractionalSteps * slotPx);
+      let totalSteps = Math.max(6, Math.floor(durationMs / 110)) * WHEEL_SEQUENCE.length;
+      let targetContinuous = startContinuous + totalSteps;
+      if (typeof winningNumber === "number") {
+        const targetIndex = WHEEL_SEQUENCE.indexOf(winningNumber);
+        if (targetIndex >= 0) {
+          const plannedLoops = Math.max(8, Math.floor(durationMs / 650));
+          const forwardDistance = modFloat(targetIndex - startContinuous, WHEEL_SEQUENCE.length);
+          totalSteps = forwardDistance + plannedLoops * WHEEL_SEQUENCE.length;
+          targetContinuous = startContinuous + totalSteps;
         }
-
-        if (progress < 1) {
-          wheelSettleRafRef.current = requestAnimationFrame(tick);
-          return;
-        }
-
-        const finalWhole = Math.floor(targetContinuous);
-        const finalFraction = targetContinuous - finalWhole;
-        setWheelIndexSafe(finalWhole);
-        setPointerOffsetSafe(finalFraction * slotPx, true);
-        expectedWinningNumberRef.current = winningNumber;
-        wheelSettleRafRef.current = null;
-        onDone?.();
-      };
-
-      wheelSettleRafRef.current = requestAnimationFrame(tick);
-    },
-    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation, stopWheelSpinAnimation]
-  );
-
-  const startWheelSpinAnimation = useCallback(
-    (spinStartsAtMs: number, settleAtMs: number) => {
-      stopWheelSettleAnimation();
-      if (wheelSpinRafRef.current !== null) {
-        return;
       }
 
-      const totalDurationMs = Math.max(1, settleAtMs - spinStartsAtMs);
-      let lastTimestamp = performance.now();
+      spinPlanRef.current = {
+        roundKey,
+        spinStartsAtMs,
+        settleAtMs,
+        startContinuous,
+        totalSteps,
+        targetContinuous,
+        winningNumber
+      };
 
-      const tick = (timestamp: number) => {
-        const deltaSeconds = Math.max(0, (timestamp - lastTimestamp) / 1000);
-        lastTimestamp = timestamp;
+      const tick = () => {
+        const plan = spinPlanRef.current;
+        if (!plan) {
+          wheelSpinRafRef.current = null;
+          return;
+        }
         const nowMs = Date.now();
 
-        if (nowMs < spinStartsAtMs) {
+        if (nowMs < plan.spinStartsAtMs) {
           setPointerOffsetSafe(0);
           wheelSpinRafRef.current = requestAnimationFrame(tick);
           return;
         }
 
-        const remainingMs = Math.max(0, settleAtMs - Date.now());
-        const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
-        const stepsPerSecond =
-          WHEEL_SLOW_STEPS_PER_SECOND +
-          (WHEEL_FAST_STEPS_PER_SECOND - WHEEL_SLOW_STEPS_PER_SECOND) * progressToEnd ** 2.25;
+        const clampedNowMs = Math.min(nowMs, plan.settleAtMs);
+        const progress = Math.max(0, Math.min(1, (clampedNowMs - plan.spinStartsAtMs) / Math.max(1, plan.settleAtMs - plan.spinStartsAtMs)));
+        const easedProgress = easeOutCubic(progress);
+        const currentContinuous = plan.startContinuous + plan.totalSteps * easedProgress;
+        const wholeSteps = Math.floor(currentContinuous);
+        const fractionalSteps = currentContinuous - wholeSteps;
+        setWheelIndexSafe(wholeSteps);
+        setPointerOffsetSafe(fractionalSteps * slotPx);
 
-        wheelProgressRef.current += stepsPerSecond * deltaSeconds;
-
-        if (wheelProgressRef.current >= 1) {
-          const steps = Math.floor(wheelProgressRef.current);
-          wheelProgressRef.current -= steps;
-          setWheelIndexSafe(wheelIndexRef.current + steps);
+        if (nowMs >= plan.settleAtMs) {
+          const finalWhole = Math.floor(plan.targetContinuous);
+          const finalFraction = plan.targetContinuous - finalWhole;
+          setWheelIndexSafe(finalWhole);
+          setPointerOffsetSafe(finalFraction * slotPx, true);
+          wheelSpinRafRef.current = null;
+          return;
         }
-        setPointerOffsetSafe(wheelProgressRef.current * Math.max(1, slotWidthPx));
 
         wheelSpinRafRef.current = requestAnimationFrame(tick);
       };
 
       wheelSpinRafRef.current = requestAnimationFrame(tick);
     },
-    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation]
+    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSpinAnimation]
   );
 
   const queueHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
@@ -367,7 +329,6 @@ export default function RoulettePage() {
           break;
         case "roulette.round":
           if (ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
-            expectedWinningNumberRef.current = ev.data.winningNumber;
             queueHistoryItem({
               roundId: ev.data.roundId,
               roundNumber: ev.data.roundNumber,
@@ -435,82 +396,28 @@ export default function RoulettePage() {
 
     if (lastRoundIdRef.current !== roundKey) {
       lastRoundIdRef.current = roundKey;
-      finalizedRoundIdRef.current = null;
-      finalizingRoundIdRef.current = null;
-      clearFinalizeAfterSpinTimer();
     }
 
-    previousRoundStatusRef.current = round.status;
-
-    if (round.status === "SPINNING") {
-      clearFinalizeAfterSpinTimer();
-      startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), new Date(round.settleAt).getTime());
-      return;
-    }
-
-    if (round.status === "SETTLED" && round.winningNumber !== null) {
-      const settleAtMs = new Date(round.settleAt).getTime();
-      const remainingUntilSettleMs = settleAtMs - Date.now();
-
-      if (finalizedRoundIdRef.current === roundKey || finalizingRoundIdRef.current === roundKey) {
-        return;
-      }
-
-      // Keep current spin path alive while there is enough time left.
-      // Only enter final resolve window close to settleAt to avoid mid-roll teleport.
-      if (remainingUntilSettleMs > 900) {
-        startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), settleAtMs);
-        if (!finalizeAfterSpinTimerRef.current) {
-          finalizeAfterSpinTimerRef.current = setTimeout(() => {
-            if (
-              lastRoundIdRef.current !== roundKey ||
-              finalizedRoundIdRef.current === roundKey ||
-              finalizingRoundIdRef.current === roundKey
-            ) {
-              return;
-            }
-            finalizingRoundIdRef.current = roundKey;
-            const finalWinningNumber = round.winningNumber;
-            if (finalWinningNumber === null) {
-              finalizingRoundIdRef.current = null;
-              finalizeAfterSpinTimerRef.current = null;
-              return;
-            }
-            animateWheelToWinning(finalWinningNumber, 900, 0, 0, () => {
-              finalizingRoundIdRef.current = null;
-              finalizedRoundIdRef.current = roundKey;
-              flushPendingHistoryForRound(roundKey);
-            });
-            finalizeAfterSpinTimerRef.current = null;
-          }, Math.max(0, remainingUntilSettleMs - 900));
-        }
-        return;
-      }
-
-      clearFinalizeAfterSpinTimer();
-      finalizingRoundIdRef.current = roundKey;
-      const resolveDurationMs = remainingUntilSettleMs > 300 ? remainingUntilSettleMs : 220;
-      animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, 0, () => {
-        finalizingRoundIdRef.current = null;
-        finalizedRoundIdRef.current = roundKey;
+    if ((round.status === "SPINNING" || round.status === "SETTLED") && round.winningNumber !== null) {
+      startWheelSpinAnimation(
+        roundKey,
+        new Date(round.spinStartsAt).getTime(),
+        new Date(round.settleAt).getTime(),
+        round.winningNumber
+      );
+      if (round.status === "SETTLED") {
         flushPendingHistoryForRound(roundKey);
-      });
+      }
       return;
     }
 
-    clearFinalizeAfterSpinTimer();
-    finalizingRoundIdRef.current = null;
     stopWheelSpinAnimation();
-    stopWheelSettleAnimation();
+    setPointerOffsetSafe(0, true);
   }, [
-    animateWheelToWinning,
-    clearFinalizeAfterSpinTimer,
     flushPendingHistoryForRound,
     round,
     setPointerOffsetSafe,
-    setWheelIndexSafe,
     startWheelSpinAnimation,
-    stopWheelSettleAnimation,
     stopWheelSpinAnimation
   ]);
 
@@ -519,12 +426,10 @@ export default function RoulettePage() {
       if (settlementHideTimerRef.current) {
         clearTimeout(settlementHideTimerRef.current);
       }
-      clearFinalizeAfterSpinTimer();
       stopWheelSpinAnimation();
-      stopWheelSettleAnimation();
       setPointerOffsetSafe(0, true);
     };
-  }, [clearFinalizeAfterSpinTimer, setPointerOffsetSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]);
+  }, [setPointerOffsetSafe, stopWheelSpinAnimation]);
 
   const placeBet = async (forcedType?: BetType) => {
     if (!round || round.status !== "OPEN") {
