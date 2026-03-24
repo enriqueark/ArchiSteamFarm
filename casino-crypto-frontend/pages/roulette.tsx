@@ -76,12 +76,6 @@ const toCoinsNumber = (atomic: string): number => {
 
 const formatCoins = (value: number): string => `${COINS_FORMATTER.format(value)} ${VIRTUAL_CURRENCY_LABEL}`;
 
-const formatSignedAtomicAsCoins = (atomic: string): string => {
-  const coins = toCoinsNumber(atomic);
-  const sign = coins >= 0 ? "+" : "-";
-  return `${sign}${formatCoins(Math.abs(coins))}`;
-};
-
 const coinsToAtomicString = (coinsRaw: string): string => {
   const coins = Number(coinsRaw);
   if (!Number.isFinite(coins) || coins <= 0) {
@@ -110,19 +104,8 @@ export default function RoulettePage() {
   const [wheelIndex, setWheelIndex] = useState(0);
   const [pointerOffsetPx, setPointerOffsetPx] = useState(0);
   const [slotWidthPx, setSlotWidthPx] = useState(0);
-  const [settlementSummary, setSettlementSummary] = useState<
-    | {
-        roundNumber: number;
-        winningNumber: number;
-        winningColor: string;
-        outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
-      }
-    | null
-  >(null);
-
   const socketRef = useRef<CasinoSocket | null>(null);
   const wheelGridRef = useRef<HTMLDivElement | null>(null);
-  const settlementHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerOffsetRef = useRef(0);
   const wheelIndexRef = useRef(0);
   const wheelSpinRafRef = useRef<number | null>(null);
@@ -268,24 +251,6 @@ export default function RoulettePage() {
     pendingHistoryByRoundIdRef.current.set(item.roundId, item);
   }, []);
 
-  const showSettlementSummary = useCallback(
-    (payload: {
-      roundNumber: number;
-      winningNumber: number;
-      winningColor: string;
-      outcomes: Array<{ userId: string; userLabel: string; netAtomic: string }>;
-    }) => {
-      setSettlementSummary(payload);
-      if (settlementHideTimerRef.current) {
-        clearTimeout(settlementHideTimerRef.current);
-      }
-      settlementHideTimerRef.current = setTimeout(() => {
-        setSettlementSummary(null);
-      }, 5_000);
-    },
-    []
-  );
-
   const updateCountdown = useCallback(() => {
     if (!round) {
       setCountdown("");
@@ -372,20 +337,12 @@ export default function RoulettePage() {
         case "roulette.betBreakdown":
           setBetBreakdown(normalizeBreakdown(ev.data));
           break;
-        case "roulette.settlementSummary":
-          showSettlementSummary({
-            roundNumber: ev.data.roundNumber,
-            winningNumber: ev.data.winningNumber,
-            winningColor: ev.data.winningColor,
-            outcomes: ev.data.outcomes
-          });
-          break;
       }
     });
 
     sock.connect();
     return () => sock.disconnect();
-  }, [normalizeBreakdown, queueHistoryItem, showSettlementSummary]);
+  }, [normalizeBreakdown, queueHistoryItem]);
 
   useEffect(() => {
     const node = wheelGridRef.current;
@@ -443,9 +400,6 @@ export default function RoulettePage() {
 
   useEffect(() => {
     return () => {
-      if (settlementHideTimerRef.current) {
-        clearTimeout(settlementHideTimerRef.current);
-      }
       stopWheelSpinAnimation();
       setPointerOffsetSafe(0, true);
     };
@@ -633,33 +587,6 @@ export default function RoulettePage() {
           ) : null}
         </div>
       </Card>
-
-      {settlementSummary && (
-        <Card title="Settlement Summary (5s)">
-          <div className="space-y-2">
-            <p className="text-sm text-gray-300">
-              Round #{settlementSummary.roundNumber} — Winning number {settlementSummary.winningNumber} (
-              {settlementSummary.winningColor})
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {settlementSummary.outcomes.map((entry) => {
-                const positive = !entry.netAtomic.startsWith("-");
-                return (
-                  <div
-                    key={entry.userId}
-                    className="text-sm rounded bg-gray-900 border border-gray-800 px-3 py-2 flex justify-between"
-                  >
-                    <span className="text-gray-300">{entry.userLabel}</span>
-                    <span className={positive ? "text-green-400 font-mono" : "text-red-400 font-mono"}>
-                      {formatSignedAtomicAsCoins(entry.netAtomic)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Card>
-      )}
 
       <Card title="Play amount">
         <div className="space-y-3">

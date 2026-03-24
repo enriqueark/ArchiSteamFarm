@@ -8,7 +8,6 @@ import { useAuthUI } from "@/lib/auth-ui";
 
 const links = [
   { href: "/", label: "Dashboard" },
-  { href: "/wallet", label: "Wallet" },
   { href: "/roulette", label: "Roulette" },
   { href: "/mines", label: "Mines" },
 ];
