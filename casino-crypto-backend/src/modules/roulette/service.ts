@@ -752,8 +752,11 @@ const settleRoundOnce = async (
       return null;
     }
 
-    const winningNumber = randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
-    const winningColor = getRouletteColor(winningNumber);
+    const winningNumber =
+      typeof round.winningNumber === "number"
+        ? round.winningNumber
+        : randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
+    const winningColor = round.winningColor ?? getRouletteColor(winningNumber);
     let totalPayoutAtomic = 0n;
     const perUserNet = new Map<string, RouletteSettlementOutcome>();
 
@@ -882,13 +885,20 @@ const startSpinningRoundOnce = async (now: Date): Promise<RouletteRound | null> 
       return null;
     }
 
+    const winningNumber = randomInt(ROULETTE_MIN_NUMBER, ROULETTE_MAX_NUMBER + 1);
+    const winningColor = getRouletteColor(winningNumber);
+
     return tx.rouletteRound.update({
       where: {
         id: row.id
       },
       data: {
         status: RouletteRoundStatus.SPINNING,
-        spinningAt: now
+        spinningAt: now,
+        // Precompute winner at spin start so clients can animate
+        // one continuous path ending exactly at settleAt.
+        winningNumber,
+        winningColor
       }
     });
   });

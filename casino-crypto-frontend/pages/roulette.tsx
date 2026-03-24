@@ -311,30 +311,13 @@ export default function RoulettePage() {
 
     const now = Date.now();
     const betsClose = new Date(round.betsCloseAt).getTime();
-    const spinStarts = new Date(round.spinStartsAt).getTime();
-    const settle = new Date(round.settleAt).getTime();
 
-    if (round.status === "OPEN") {
+    if (round.status === "OPEN" || round.status === "CLOSED") {
       setCountdown(`Bets close in ${formatSecondsWithMilliseconds(betsClose - now)}`);
       return;
     }
 
-    if (round.status === "CLOSED") {
-      setCountdown(`Spinning in ${formatSecondsWithMilliseconds(spinStarts - now)}`);
-      return;
-    }
-
-    if (round.status === "SPINNING") {
-      setCountdown(`Rolling in ${formatSecondsWithMilliseconds(settle - now)}`);
-      return;
-    }
-
-    if (round.status === "SETTLED") {
-      setCountdown("Settled");
-      return;
-    }
-
-    setCountdown(round.status);
+    setCountdown("");
   }, [round]);
 
   useEffect(() => {
@@ -703,23 +686,20 @@ export default function RoulettePage() {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-gray-400">
-              <span>{round ? round.status : "Waiting round..."}</span>
-              <span className="text-yellow-300">{countdown}</span>
-            </div>
-            {round?.status === "SETTLED" && round.winningNumber !== null && highlightedNumber !== round.winningNumber && (
-              <div className="text-[11px] text-red-300">
-                Syncing result...
+          {countdown ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Bets close in</span>
+                <span className="text-yellow-300">{countdown.replace(/^Bets close in\s+/i, "")}</span>
               </div>
-            )}
-            <div className="w-full h-2 rounded bg-gray-800 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-yellow-400 transition-all"
-                style={{ width: `${phaseProgressPercent}%` }}
-              />
+              <div className="w-full h-2 rounded bg-gray-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-yellow-400 transition-all"
+                  style={{ width: `${phaseProgressPercent}%` }}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </Card>
 
