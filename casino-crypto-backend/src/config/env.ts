@@ -27,7 +27,12 @@ const envSchema = z.object({
   ROULETTE_ROUND_OPEN_SECONDS: z.coerce.number().int().min(5).max(120).default(20),
   ROULETTE_CLOSE_TO_SPIN_SECONDS: z.coerce.number().int().min(1).max(30).default(3),
   ROULETTE_SPIN_SECONDS: z.coerce.number().int().min(2).max(30).default(10),
-  ROULETTE_WORKER_TICK_MS: z.coerce.number().int().min(200).max(5000).default(1000)
+  ROULETTE_WORKER_TICK_MS: z.coerce.number().int().min(200).max(5000).default(1000),
+  OXAPAY_API_BASE_URL: z.string().url().default("https://api.oxapay.com/v1"),
+  OXAPAY_MERCHANT_API_KEY: z.string().min(1).optional(),
+  OXAPAY_PAYOUT_API_KEY: z.string().min(1).optional(),
+  OXAPAY_CALLBACK_BASE_URL: z.string().url().optional(),
+  OXAPAY_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000)
 });
 
 const deriveSecretFallback = (label: string): string => {
@@ -38,7 +43,10 @@ const deriveSecretFallback = (label: string): string => {
 const normalizedEnv = {
   ...process.env,
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-access"),
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-refresh")
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-refresh"),
+  OXAPAY_MERCHANT_API_KEY: process.env.OXAPAY_MERCHANT_API_KEY?.trim() || undefined,
+  OXAPAY_PAYOUT_API_KEY: process.env.OXAPAY_PAYOUT_API_KEY?.trim() || undefined,
+  OXAPAY_CALLBACK_BASE_URL: process.env.OXAPAY_CALLBACK_BASE_URL?.trim() || undefined
 };
 
 const parsed = envSchema.safeParse(normalizedEnv);
@@ -49,3 +57,4 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+

@@ -4,6 +4,7 @@ import { FastifyInstance } from "fastify";
 import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
+import { ensureUserDepositAddresses, isCashierEnabled } from "../cashier/service";
 import { createDefaultWallets } from "../wallets/service";
 
 type AuthUser = {
@@ -148,6 +149,9 @@ export const register = async (
   });
 
   await createDefaultWallets(user.id);
+  if (isCashierEnabled()) {
+    await ensureUserDepositAddresses(user.id);
+  }
   const tokens = await openSession(fastify, user, input.userAgent, input.ipAddress);
 
   return {

@@ -174,6 +174,49 @@ export async function getWallets(): Promise<Wallet[]> {
   return request<Wallet[]>("/wallets");
 }
 
+// ── Cashier (OxaPay) ───────────────────────────────────────────────────────
+
+export interface CashierDepositAddress {
+  asset: "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
+  network: "bitcoin" | "erc20" | "solana";
+  networkLabel: string;
+  address: string;
+  providerTrackId: string;
+  qrCodeUrl: string | null;
+}
+
+export interface CashierWithdrawalResponse {
+  id: string;
+  status: string;
+  amountAtomic: string;
+  asset: string;
+  network: string;
+  destinationAddress: string;
+  providerTrackId: string | null;
+}
+
+export async function getCashierDepositAddresses(): Promise<CashierDepositAddress[]> {
+  const data = await request<{ addresses: CashierDepositAddress[] }>("/cashier/deposit-addresses", {}, true);
+  return data.addresses;
+}
+
+export async function requestCashierWithdrawal(input: {
+  asset: "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
+  network: "bitcoin" | "erc20" | "solana";
+  amountCoins: string;
+  destinationAddress: string;
+}): Promise<CashierWithdrawalResponse> {
+  return request<CashierWithdrawalResponse>(
+    "/cashier/withdrawals",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
 // ── Roulette ────────────────────────────────────────────────────────────
 
 export interface RouletteRound {

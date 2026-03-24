@@ -22,6 +22,7 @@ enum Currency {
   ETH
   USDT
   USDC
+  SOL
 }
 
 enum LedgerDirection {
@@ -138,6 +139,7 @@ model User {
   rouletteBets        RouletteBet[]
   rouletteRounds      RouletteRound[]
   casinoBets          CasinoBet[]
+  paymentAddresses    PaymentAddress[]
 
   @@map("users")
 }
@@ -426,10 +428,13 @@ model Deposit {
   userId                String
   walletId              String
   currency              Currency
+  asset                 String?
   network               String        @default("mainnet")
   amountAtomic          BigInt
   txHash                String?
   txVout                Int?
+  sourceAddress         String?
+  providerTrackId       String?
   status                DepositStatus @default(PENDING)
   confirmations         Int           @default(0)
   requiredConfirmations Int           @default(1)
@@ -449,6 +454,7 @@ model Deposit {
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([walletId, status, createdAt(sort: Desc)])
   @@index([network, txHash])
+  @@index([providerTrackId])
   @@map("deposits")
 }
 
@@ -457,12 +463,14 @@ model Withdrawal {
   userId             String
   walletId           String
   currency           Currency
+  asset              String?
   network            String           @default("mainnet")
   destinationAddress String
   amountAtomic       BigInt
   feeAtomic          BigInt           @default(0)
   status             WithdrawalStatus @default(PENDING)
   idempotencyKey     String?
+  providerTrackId    String?          @unique
   txHash             String?
   debitTransactionId String?          @unique
   feeTransactionId   String?          @unique
@@ -484,6 +492,26 @@ model Withdrawal {
   @@index([walletId, status, createdAt(sort: Desc)])
   @@index([network, txHash])
   @@map("withdrawals")
+}
+
+model PaymentAddress {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String   @default("OXAPAY")
+  asset           String
+  network         String
+  networkLabel    String
+  address         String
+  providerTrackId String   @unique
+  callbackUrl     String?
+  qrCodeUrl       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, asset, network])
+  @@index([userId])
+  @@map("payment_addresses")
 }
 
 model OutboxEvent {

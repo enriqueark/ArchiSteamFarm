@@ -21,6 +21,7 @@ import { ledgerRoutes } from "./modules/ledger/routes";
 import { minesRoutes } from "./modules/mines/routes";
 import { pricingRoutes } from "./modules/pricing/routes";
 import { rouletteRoutes } from "./modules/roulette/routes";
+import { cashierRoutes } from "./modules/cashier/routes";
 import { userRoutes } from "./modules/users/routes";
 import { walletRoutes } from "./modules/wallets/routes";
 
@@ -37,6 +38,7 @@ export const buildApp = (): FastifyInstance => {
   // Accept empty JSON bodies (e.g. POST cashout with Content-Type: application/json and no payload).
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
     const bodyText = typeof body === "string" ? body : body.toString("utf8");
+    (_request as typeof _request & { rawBody?: string }).rawBody = bodyText;
 
     if (bodyText.length === 0) {
       done(null, {});
@@ -95,7 +97,8 @@ export const buildApp = (): FastifyInstance => {
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "mines", description: "Mines game with provably fair backend generation" },
         { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
-        { name: "users", description: "User profile" }
+        { name: "users", description: "User profile" },
+        { name: "cashier", description: "Crypto deposit and withdraw via OxaPay" }
       ]
     }
   });
@@ -114,6 +117,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });
   app.register(minesRoutes, { prefix: "/api/v1/mines" });
   app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });
+  app.register(cashierRoutes, { prefix: "/api/v1/cashier" });
 
   app.setErrorHandler((error, request, reply) => {
     const jwtErrorCode =

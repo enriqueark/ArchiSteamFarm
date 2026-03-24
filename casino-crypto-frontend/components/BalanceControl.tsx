@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getWallets } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getCashierDepositAddresses,
+  getWallets,
+  requestCashierWithdrawal,
+  type CashierDepositAddress,
+  type CashierWithdrawalResponse
+} from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
 
 const COIN_DECIMALS = 8;
-const CURRENCIES = ["BTC", "ETH", "USDT", "USDC"] as const;
+const CURRENCIES = ["BTC", "ETH", "USDT", "USDC", "SOL"] as const;
 type WalletMode = "deposit" | "withdraw";
 
 type DeltaNotice = {
@@ -59,6 +65,8 @@ export default function BalanceControl() {
   const [amount, setAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
   const [hint, setHint] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [depositAddresses, setDepositAddresses] = useState<CashierDepositAddress[]>([]);
   const [targetBalance, setTargetBalance] = useState(0);
   const [displayBalance, setDisplayBalance] = useState(0);
   const [deltaNotices, setDeltaNotices] = useState<DeltaNotice[]>([]);
@@ -68,15 +76,10 @@ export default function BalanceControl() {
   const animationFrameRef = useRef<number | null>(null);
   const deltaNoticeIdRef = useRef(0);
 
-  const depositAddressByCurrency = useMemo(
-    () => ({
-      BTC: "bc1q-casino-btc-demo-address",
-      ETH: "0xCasinoEthDemoAddress00000001",
-      USDT: "TQCasinoUsdtDemoAddress00000001",
-      USDC: "0xCasinoUsdcDemoAddress00000001"
-    }),
-    []
-  );
+  const getSelectedDepositAddress = useCallback((): CashierDepositAddress | null => {
+    const address = depositAddresses.find((entry) => entry.asset === selectedCurrency);
+    return address ?? null;
+  }, [depositAddresses, selectedCurrency]);
 
   const showDeltaNotice = useCallback((delta: number) => {
     if (Math.abs(delta) < 0.0000001) {
@@ -98,6 +101,7 @@ export default function BalanceControl() {
     if (!authed) {
       previousBalanceRef.current = null;
       setTargetBalance(0);
+      setDepositAddresses([]);
       return;
     }
 
@@ -130,6 +134,29 @@ export default function BalanceControl() {
       clearInterval(timer);
     };
   }, [authed, showDeltaNotice]);
+
+  useEffect(() => {
+    if (!authed) {
+      return;
+    }
+    let cancelled = false;
+    const loadAddresses = async () => {
+      try {
+        const rows = await getCashierDepositAddresses();
+        if (!cancelled) {
+          setDepositAddresses(rows);
+        }
+      } catch {
+        if (!cancelled) {
+          setDepositAddresses([]);
+        }
+      }
+    };
+    void loadAddresses();
+    return () => {
+      cancelled = true;
+    };
+  }, [authed, panelOpen]);
 
   useEffect(() => {
     if (!authed) {
@@ -182,11 +209,22 @@ export default function BalanceControl() {
     setPanelOpen(true);
   };
 
-  const handleAction = () => {
+  const getNetworkForAsset = (asset: (typeof CURRENCIES)[number]): "bitcoin" | "erc20" | "solana" => {
+    if (asset === "BTC") {
+      return "bitcoin";
+    }
+    if (asset === "SOL") {
+      return "solana";
+    }
+    return "erc20";
+  };
+
+  const handleAction = async () => {
     if (!authed) {
       openAuth("register");
       return;
     }
+    setHint(null);
     if (!amount || Number(amount) <= 0) {
       setHint("Enter a valid amount first.");
       return;
@@ -195,11 +233,35 @@ export default function BalanceControl() {
       setHint("Enter a valid destination wallet address.");
       return;
     }
-    setHint(
-      mode === "deposit"
-        ? "Deposit gateway UI ready. Blockchain processing will be connected next."
-        : "Withdraw UI ready. Blockchain processing will be connected next."
-    );
+    try {
+      setRequesting(true);
+      if (mode === "deposit") {
+        const selected = getSelectedDepositAddress();
+        if (!selected) {
+          setHint("Deposit address not ready yet. Try again in a few seconds.");
+          return;
+        }
+        setHint(`Send ${selectedCurrency} on ${selected.networkLabel} to the address below.`);
+        return;
+      }
+
+      const network = getNetworkForAsset(selectedCurrency);
+      const result: CashierWithdrawalResponse = await requestCashierWithdrawal({
+        asset: selectedCurrency,
+        network,
+        amountCoins: amount,
+        destinationAddress: withdrawAddress.trim()
+      });
+      setHint(
+        `Withdrawal created (${result.status}) · Track: ${result.providerTrackId ?? result.id}`
+      );
+      setAmount("");
+      setWithdrawAddress("");
+    } catch (error) {
+      setHint(error instanceof Error ? error.message : "Unable to process request.");
+    } finally {
+      setRequesting(false);
+    }
   };
 
   return (
@@ -294,8 +356,11 @@ export default function BalanceControl() {
                       Deposit address ({selectedCurrency})
                     </label>
                     <div className="rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-300">
-                      {depositAddressByCurrency[selectedCurrency]}
+                      {getSelectedDepositAddress()?.address ?? "Loading address..."}
                     </div>
+                    <p className="text-xs text-gray-500">
+                      Network: {getSelectedDepositAddress()?.networkLabel ?? getNetworkForAsset(selectedCurrency)}
+                    </p>
                   </>
                 ) : (
                   <>
@@ -308,6 +373,9 @@ export default function BalanceControl() {
                       className="w-full rounded border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-red-600"
                       placeholder="Paste destination wallet address"
                     />
+                    <p className="text-xs text-gray-500">
+                      Network: {getNetworkForAsset(selectedCurrency).toUpperCase()}
+                    </p>
                   </>
                 )}
 
@@ -326,10 +394,15 @@ export default function BalanceControl() {
 
                 <button
                   type="button"
-                  onClick={handleAction}
-                  className="w-full rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500"
+                  onClick={() => void handleAction()}
+                  disabled={requesting}
+                  className="w-full rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {mode === "deposit" ? `Continue deposit (${selectedCurrency})` : `Continue withdraw (${selectedCurrency})`}
+                  {requesting
+                    ? "Processing..."
+                    : mode === "deposit"
+                    ? `Continue deposit (${selectedCurrency})`
+                    : `Continue withdraw (${selectedCurrency})`}
                 </button>
 
                 {hint && <p className="text-xs text-gray-400">{hint}</p>}
