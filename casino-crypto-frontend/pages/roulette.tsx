@@ -129,7 +129,6 @@ export default function RoulettePage() {
   const lastRoundIdRef = useRef<string | null>(null);
   const finalizedRoundIdRef = useRef<string | null>(null);
   const expectedWinningNumberRef = useRef<number | null>(null);
-  const finalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
@@ -463,33 +462,15 @@ export default function RoulettePage() {
       const settleAtMs = new Date(round.settleAt).getTime();
       const remainingUntilSettleMs = settleAtMs - Date.now();
 
-      if (remainingUntilSettleMs > 250) {
-        // If server marks round as SETTLED early, keep a single spin animation alive until settleAt.
-        startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), settleAtMs);
-        if (finalizeTimerRef.current) {
-          clearTimeout(finalizeTimerRef.current);
-        }
-        const roundId = "roundId" in round ? round.roundId : round.id;
-        finalizeTimerRef.current = setTimeout(() => {
-          if (finalizedRoundIdRef.current === roundId) {
-            return;
-          }
-          finalizedRoundIdRef.current = roundId;
-          animateWheelToWinning(round.winningNumber as number, 700, 0, 1, () => {
-            flushPendingHistoryForRound(roundId);
-          });
-        }, Math.max(0, remainingUntilSettleMs));
-        return;
-      }
-
       if (finalizedRoundIdRef.current !== roundKey) {
         finalizedRoundIdRef.current = roundKey;
-        if (finalizeTimerRef.current) {
-          clearTimeout(finalizeTimerRef.current);
-          finalizeTimerRef.current = null;
-        }
         if (previousStatus === "SPINNING" || previousStatus === "SETTLED") {
-          animateWheelToWinning(round.winningNumber, 700, 0, 1, () => {
+          // Single-path resolve: one animation ending exactly on the winner.
+          const resolveDurationMs =
+            remainingUntilSettleMs > 180
+              ? remainingUntilSettleMs
+              : 480;
+          animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, remainingUntilSettleMs > 1400 ? 1 : 0, () => {
             flushPendingHistoryForRound(roundKey);
           });
           return;
@@ -510,10 +491,6 @@ export default function RoulettePage() {
 
     stopWheelSpinAnimation();
     stopWheelSettleAnimation();
-    if (finalizeTimerRef.current) {
-      clearTimeout(finalizeTimerRef.current);
-      finalizeTimerRef.current = null;
-    }
   }, [
     animateWheelToWinning,
     flushPendingHistoryForRound,
@@ -529,9 +506,6 @@ export default function RoulettePage() {
     return () => {
       if (settlementHideTimerRef.current) {
         clearTimeout(settlementHideTimerRef.current);
-      }
-      if (finalizeTimerRef.current) {
-        clearTimeout(finalizeTimerRef.current);
       }
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
