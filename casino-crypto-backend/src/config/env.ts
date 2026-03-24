@@ -40,13 +40,47 @@ const deriveSecretFallback = (label: string): string => {
   return createHash("sha256").update(`${label}:${source}`).digest("hex");
 };
 
+const normalizeBaseUrl = (value: string | undefined): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+};
+
+const deriveOxaPayCallbackBaseUrl = (): string | undefined => {
+  const explicit = normalizeBaseUrl(process.env.OXAPAY_CALLBACK_BASE_URL);
+  if (explicit) {
+    return explicit;
+  }
+
+  // Railway exposes service public domain as host only (no scheme).
+  const railwayPublicDomain = normalizeBaseUrl(process.env.RAILWAY_PUBLIC_DOMAIN);
+  if (railwayPublicDomain) {
+    return railwayPublicDomain;
+  }
+
+  // Fallback for setups that expose a full static URL.
+  return normalizeBaseUrl(process.env.RAILWAY_STATIC_URL);
+};
+
 const normalizedEnv = {
   ...process.env,
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-access"),
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? deriveSecretFallback("jwt-refresh"),
   OXAPAY_MERCHANT_API_KEY: process.env.OXAPAY_MERCHANT_API_KEY?.trim() || undefined,
   OXAPAY_PAYOUT_API_KEY: process.env.OXAPAY_PAYOUT_API_KEY?.trim() || undefined,
-  OXAPAY_CALLBACK_BASE_URL: process.env.OXAPAY_CALLBACK_BASE_URL?.trim() || undefined
+  OXAPAY_CALLBACK_BASE_URL: deriveOxaPayCallbackBaseUrl()
 };
 
 const parsed = envSchema.safeParse(normalizedEnv);
@@ -57,4 +91,6 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+export const oxapayCallbackBaseUrl = env.OXAPAY_CALLBACK_BASE_URL;
 
