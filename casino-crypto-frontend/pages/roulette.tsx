@@ -232,7 +232,10 @@ export default function RoulettePage() {
         const clampedNowMs = Math.min(nowMs, plan.settleAtMs);
         const progress = Math.max(0, Math.min(1, (clampedNowMs - plan.spinStartsAtMs) / Math.max(1, plan.settleAtMs - plan.spinStartsAtMs)));
         const easedProgress = easeOutCubic(easeOutCubic(progress));
-        const currentContinuous = plan.startContinuous + plan.totalSteps * easedProgress;
+        // Follow one single trajectory to the exact final target (including
+        // optional edge landing) to avoid any end-of-spin teleport.
+        const pathSteps = plan.targetContinuous - plan.startContinuous;
+        const currentContinuous = plan.startContinuous + pathSteps * easedProgress;
         const wholeSteps = Math.floor(currentContinuous);
         const fractionalSteps = currentContinuous - wholeSteps;
         setWheelIndexSafe(wholeSteps);
