@@ -132,7 +132,6 @@ export default function RoulettePage() {
   const finalizingRoundIdRef = useRef<string | null>(null);
   const expectedWinningNumberRef = useRef<number | null>(null);
   const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
-  const settleFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
     const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
@@ -200,7 +199,8 @@ export default function RoulettePage() {
       const loopSpan = Math.max(minLoops, maxLoops) - Math.min(minLoops, maxLoops) + 1;
       const randomLoops = Math.min(minLoops, maxLoops) + Math.floor(Math.random() * loopSpan);
       const totalSteps = forwardDistance + randomLoops * WHEEL_SEQUENCE.length;
-      const effectiveDurationMs = Math.max(250, durationMs);
+      // Keep resolve speed proportional to distance to avoid visual "teleport" jumps.
+      const effectiveDurationMs = Math.max(300, durationMs, totalSteps * 95);
       const startTime = performance.now();
       let renderedContinuous = Number.NaN;
 
@@ -258,11 +258,6 @@ export default function RoulettePage() {
           return;
         }
 
-        if (nowMs >= settleAtMs) {
-          stopWheelSpinAnimation();
-          return;
-        }
-
         const remainingMs = Math.max(0, settleAtMs - Date.now());
         const progressToEnd = Math.max(0, Math.min(1, remainingMs / totalDurationMs));
         const stepsPerSecond =
@@ -283,7 +278,7 @@ export default function RoulettePage() {
 
       wheelSpinRafRef.current = requestAnimationFrame(tick);
     },
-    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation, stopWheelSpinAnimation]
+    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx, stopWheelSettleAnimation]
   );
 
   const queueHistoryItem = useCallback((item: RouletteResultHistoryItem) => {
@@ -511,7 +506,7 @@ export default function RoulettePage() {
 
       clearFinalizeAfterSpinTimer();
       finalizingRoundIdRef.current = roundKey;
-      const resolveDurationMs = remainingUntilSettleMs > 180 ? remainingUntilSettleMs : 480;
+      const resolveDurationMs = remainingUntilSettleMs > 300 ? remainingUntilSettleMs : 900;
       animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, 0, () => {
         finalizingRoundIdRef.current = null;
         finalizedRoundIdRef.current = roundKey;
