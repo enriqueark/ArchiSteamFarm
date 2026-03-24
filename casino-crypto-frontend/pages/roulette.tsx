@@ -45,6 +45,7 @@ const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
 });
 
 const mod = (value: number, length: number): number => ((value % length) + length) % length;
+const modFloat = (value: number, length: number): number => ((value % length) + length) % length;
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 const formatSecondsWithMilliseconds = (remainingMs: number): string => {
   const safeMs = Math.max(0, remainingMs);
@@ -168,27 +169,38 @@ export default function RoulettePage() {
         return;
       }
 
-      const startIndex = wheelIndexRef.current;
-      const forwardDistance = mod(targetIndex - startIndex, WHEEL_SEQUENCE.length);
+      const slotPx = Math.max(1, slotWidthPx);
+      const startFractionRaw = pointerOffsetRef.current / slotPx;
+      const normalizedStartOffsetSteps = modFloat(startFractionRaw, 1);
+      const startContinuous = wheelIndexRef.current + normalizedStartOffsetSteps;
+
+      const shouldLandNearEdge = Math.random() < 0.6;
+      let targetContinuous = targetIndex;
+      if (shouldLandNearEdge) {
+        const edgeMagnitude = 0.42 + Math.random() * 0.06;
+        targetContinuous = targetIndex + (Math.random() < 0.5 ? -edgeMagnitude : edgeMagnitude);
+      }
+
+      const forwardDistance = modFloat(targetContinuous - startContinuous, WHEEL_SEQUENCE.length);
       const loopSpan = Math.max(minLoops, maxLoops) - Math.min(minLoops, maxLoops) + 1;
       const randomLoops = Math.min(minLoops, maxLoops) + Math.floor(Math.random() * loopSpan);
       const totalSteps = forwardDistance + randomLoops * WHEEL_SEQUENCE.length;
       const effectiveDurationMs = Math.max(250, durationMs);
       const startTime = performance.now();
-      let renderedSteps = -1;
+      let renderedContinuous = Number.NaN;
 
       const tick = (timestamp: number) => {
         const progress = Math.max(0, Math.min(1, (timestamp - startTime) / effectiveDurationMs));
         const easedProgress = easeOutCubic(progress);
         const progressedSteps = totalSteps * easedProgress;
-        const nextSteps = Math.floor(progressedSteps);
-        const fractional = progressedSteps - nextSteps;
-        const slotPx = Math.max(1, slotWidthPx);
-        setPointerOffsetSafe(fractional * slotPx);
+        const currentContinuous = startContinuous + progressedSteps;
 
-        if (nextSteps !== renderedSteps) {
-          renderedSteps = nextSteps;
-          setWheelIndexSafe(startIndex + nextSteps);
+        if (!Number.isFinite(renderedContinuous) || Math.abs(currentContinuous - renderedContinuous) > 0.0001) {
+          renderedContinuous = currentContinuous;
+          const wholeSteps = Math.floor(currentContinuous);
+          const fractionalSteps = currentContinuous - wholeSteps;
+          setWheelIndexSafe(wholeSteps);
+          setPointerOffsetSafe(fractionalSteps * slotPx);
         }
 
         if (progress < 1) {
@@ -196,17 +208,11 @@ export default function RoulettePage() {
           return;
         }
 
-      const shouldLandNearEdge = Math.random() < 0.6;
-      if (shouldLandNearEdge) {
-        const edgeMagnitude = (Math.random() < 0.5 ? -1 : 1) * (0.42 + Math.random() * 0.08);
-        setWheelIndexSafe(targetIndex);
-        setPointerOffsetSafe(edgeMagnitude * Math.max(1, slotWidthPx), true);
-      } else {
-        setWheelIndexSafe(targetIndex);
-        setPointerOffsetSafe(0, true);
-      }
-
-      expectedWinningNumberRef.current = winningNumber;
+        const finalWhole = Math.floor(targetContinuous);
+        const finalFraction = targetContinuous - finalWhole;
+        setWheelIndexSafe(finalWhole);
+        setPointerOffsetSafe(finalFraction * slotPx, true);
+        expectedWinningNumberRef.current = winningNumber;
         wheelSettleRafRef.current = null;
       };
 
@@ -237,7 +243,6 @@ export default function RoulettePage() {
         }
 
         if (nowMs >= settleAtMs) {
-          setPointerOffsetSafe(0, true);
           stopWheelSpinAnimation();
           return;
         }
@@ -471,14 +476,12 @@ export default function RoulettePage() {
         if (targetIndex >= 0) {
           setWheelIndexSafe(targetIndex);
         }
-        setPointerOffsetSafe(0, true);
       }
       return;
     }
 
     stopWheelSpinAnimation();
     stopWheelSettleAnimation();
-    setPointerOffsetSafe(0, true);
   }, [
     animateWheelToWinning,
     round,
