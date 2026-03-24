@@ -125,11 +125,13 @@ export default function RoulettePage() {
   const wheelProgressRef = useRef(0);
   const wheelSpinRafRef = useRef<number | null>(null);
   const wheelSettleRafRef = useRef<number | null>(null);
+  const finalizeAfterSpinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousRoundStatusRef = useRef<string | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
   const finalizedRoundIdRef = useRef<string | null>(null);
   const expectedWinningNumberRef = useRef<number | null>(null);
   const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
+  const settleFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setWheelIndexSafe = useCallback((nextValue: number) => {
     const normalized = mod(nextValue, WHEEL_SEQUENCE.length);
