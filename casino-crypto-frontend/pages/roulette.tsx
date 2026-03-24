@@ -40,6 +40,7 @@ const WHEEL_TRACK_SIDE_BUFFER = 3;
 const WHEEL_FAST_STEPS_PER_SECOND = 18;
 const WHEEL_SLOW_STEPS_PER_SECOND = 0.35;
 const COUNTDOWN_TICK_MS = 50;
+const ROULETTE_WHEEL_STORAGE_KEY = "roulette:wheel-position:v1";
 
 const COINS_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -76,6 +77,39 @@ const toCoinsNumber = (atomic: string): number => {
 
 const formatCoins = (value: number): string => `${COINS_FORMATTER.format(value)} ${VIRTUAL_CURRENCY_LABEL}`;
 
+const loadPersistedContinuousPosition = (): number | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(ROULETTE_WHEEL_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as { continuous?: unknown };
+    return typeof parsed.continuous === "number" && Number.isFinite(parsed.continuous) ? parsed.continuous : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistContinuousPosition = (continuous: number): void => {
+  if (typeof window === "undefined" || !Number.isFinite(continuous)) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      ROULETTE_WHEEL_STORAGE_KEY,
+      JSON.stringify({
+        continuous,
+        updatedAt: Date.now()
+      })
+    );
+  } catch {
+    // Ignore localStorage failures (private mode/quota).
+  }
+};
+
 const coinsToAtomicString = (coinsRaw: string): string => {
   const coins = Number(coinsRaw);
   if (!Number.isFinite(coins) || coins <= 0) {
@@ -111,6 +145,7 @@ export default function RoulettePage() {
   const wheelSpinRafRef = useRef<number | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
   const completedRoundIdRef = useRef<string | null>(null);
+  const hasHydratedWheelRef = useRef(false);
   const spinPlanRef = useRef<{
     roundKey: string;
     spinStartsAtMs: number;
@@ -152,6 +187,17 @@ export default function RoulettePage() {
     pendingHistoryByRoundIdRef.current.delete(roundId);
     setHistory((prev) => [item, ...prev.filter((existing) => existing.roundId !== item.roundId)].slice(0, 20));
   }, []);
+
+  const setContinuousWheelPosition = useCallback(
+    (continuous: number, force = false) => {
+      const normalizedContinuous = modFloat(continuous, WHEEL_SEQUENCE.length);
+      const whole = Math.floor(normalizedContinuous);
+      const fraction = normalizedContinuous - whole;
+      setWheelIndexSafe(whole);
+      setPointerOffsetSafe(fraction * Math.max(1, slotWidthPx), force);
+    },
+    [setPointerOffsetSafe, setWheelIndexSafe, slotWidthPx]
+  );
 
   const startWheelSpinAnimation = useCallback(
     (roundKey: string, spinStartsAtMs: number, settleAtMs: number, winningNumber: number | null) => {
@@ -233,6 +279,7 @@ export default function RoulettePage() {
           // side-to-side micro jumps at the exact end.
           setWheelIndexSafe(finalWhole);
           setPointerOffsetSafe(finalFraction * slotPx, true);
+          persistContinuousPosition(modFloat(plan.targetContinuous, WHEEL_SEQUENCE.length));
           completedRoundIdRef.current = plan.roundKey;
           spinPlanRef.current = null;
           wheelSpinRafRef.current = null;
@@ -364,6 +411,30 @@ export default function RoulettePage() {
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (hasHydratedWheelRef.current || slotWidthPx <= 0) {
+      return;
+    }
+    const persisted = loadPersistedContinuousPosition();
+    if (persisted !== null) {
+      setContinuousWheelPosition(persisted, true);
+      hasHydratedWheelRef.current = true;
+      return;
+    }
+
+    // Fallback: center on last settled number when there is no persisted
+    // pointer edge offset yet.
+    const lastResult = history[0];
+    if (lastResult) {
+      const index = WHEEL_SEQUENCE.indexOf(lastResult.winningNumber);
+      if (index >= 0) {
+        setContinuousWheelPosition(index, true);
+        persistContinuousPosition(index);
+      }
+    }
+    hasHydratedWheelRef.current = true;
+  }, [history, setContinuousWheelPosition, slotWidthPx]);
 
   useEffect(() => {
     if (!round) {
