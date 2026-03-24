@@ -224,7 +224,6 @@ export default function RoulettePage() {
         const nowMs = Date.now();
 
         if (nowMs < plan.spinStartsAtMs) {
-          setPointerOffsetSafe(0);
           wheelSpinRafRef.current = requestAnimationFrame(tick);
           return;
         }
@@ -432,11 +431,9 @@ export default function RoulettePage() {
     }
 
     stopWheelSpinAnimation();
-    setPointerOffsetSafe(0, true);
   }, [
     flushPendingHistoryForRound,
     round,
-    setPointerOffsetSafe,
     startWheelSpinAnimation,
     stopWheelSpinAnimation
   ]);
