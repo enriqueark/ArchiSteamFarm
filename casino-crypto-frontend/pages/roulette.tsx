@@ -489,7 +489,7 @@ export default function RoulettePage() {
 
       clearFinalizeAfterSpinTimer();
       finalizingRoundIdRef.current = roundKey;
-      const resolveDurationMs = remainingUntilSettleMs > 300 ? remainingUntilSettleMs : 900;
+      const resolveDurationMs = remainingUntilSettleMs > 300 ? remainingUntilSettleMs : 220;
       animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, 0, () => {
         finalizingRoundIdRef.current = null;
         finalizedRoundIdRef.current = roundKey;
