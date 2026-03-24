@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../core/errors";
+import { redis } from "../../infrastructure/cache/redis";
 import { prisma } from "../../infrastructure/db/prisma";
 
 export type ChatMessageState = {
@@ -20,6 +21,7 @@ type PostChatMessageInput = {
 
 export const MAX_CHAT_MESSAGE_LENGTH = 300;
 const CHAT_MESSAGE_COOLDOWN_MS = 3_000;
+const CHAT_COOLDOWN_KEY_PREFIX = "chat:cooldown";
 
 const formatUsername = (email: string, userId: string): string => {
   const local = email.split("@")[0]?.trim();
@@ -83,22 +85,17 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
     );
   }
 
-  const latestByUser = await prisma.chatMessage.findFirst({
-    where: { userId: input.userId },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true }
-  });
-  if (latestByUser) {
-    const elapsedMs = Date.now() - latestByUser.createdAt.getTime();
-    if (elapsedMs < CHAT_MESSAGE_COOLDOWN_MS) {
-      const retryAfterMs = CHAT_MESSAGE_COOLDOWN_MS - elapsedMs;
-      throw new AppError(
-        `Wait ${Math.ceil(retryAfterMs / 1000)}s before sending another message`,
-        429,
-        "CHAT_RATE_LIMITED",
-        { retryAfterMs }
-      );
-    }
+  const cooldownKey = `${CHAT_COOLDOWN_KEY_PREFIX}:${input.userId}`;
+  const lockResult = await redis.set(cooldownKey, "1", "PX", CHAT_MESSAGE_COOLDOWN_MS, "NX");
+  if (lockResult !== "OK") {
+    const ttlMs = await redis.pttl(cooldownKey).catch(() => CHAT_MESSAGE_COOLDOWN_MS);
+    const retryAfterMs = ttlMs > 0 ? ttlMs : CHAT_MESSAGE_COOLDOWN_MS;
+    throw new AppError(
+      `Wait ${Math.ceil(retryAfterMs / 1000)}s before sending another message`,
+      429,
+      "CHAT_RATE_LIMITED",
+      { retryAfterMs }
+    );
   }
 
   try {
