@@ -129,6 +129,7 @@ export default function RoulettePage() {
   const previousRoundStatusRef = useRef<string | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
   const finalizedRoundIdRef = useRef<string | null>(null);
+  const finalizingRoundIdRef = useRef<string | null>(null);
   const expectedWinningNumberRef = useRef<number | null>(null);
   const pendingHistoryByRoundIdRef = useRef<Map<string, RouletteResultHistoryItem>>(new Map());
   const settleFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,6 +160,13 @@ export default function RoulettePage() {
     if (wheelSettleRafRef.current !== null) {
       cancelAnimationFrame(wheelSettleRafRef.current);
       wheelSettleRafRef.current = null;
+    }
+  }, []);
+
+  const clearFinalizeAfterSpinTimer = useCallback(() => {
+    if (finalizeAfterSpinTimerRef.current) {
+      clearTimeout(finalizeAfterSpinTimerRef.current);
+      finalizeAfterSpinTimerRef.current = null;
     }
   }, []);
 
@@ -450,12 +458,14 @@ export default function RoulettePage() {
     if (lastRoundIdRef.current !== roundKey) {
       lastRoundIdRef.current = roundKey;
       finalizedRoundIdRef.current = null;
+      finalizingRoundIdRef.current = null;
+      clearFinalizeAfterSpinTimer();
     }
 
-    const previousStatus = previousRoundStatusRef.current;
     previousRoundStatusRef.current = round.status;
 
     if (round.status === "SPINNING") {
+      clearFinalizeAfterSpinTimer();
       startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), new Date(round.settleAt).getTime());
       return;
     }
@@ -464,37 +474,59 @@ export default function RoulettePage() {
       const settleAtMs = new Date(round.settleAt).getTime();
       const remainingUntilSettleMs = settleAtMs - Date.now();
 
-      if (finalizedRoundIdRef.current !== roundKey) {
-        finalizedRoundIdRef.current = roundKey;
-        if (previousStatus === "SPINNING" || previousStatus === "SETTLED") {
-          // Single-path resolve: one animation ending exactly on the winner.
-          const resolveDurationMs =
-            remainingUntilSettleMs > 180
-              ? remainingUntilSettleMs
-              : 480;
-          animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, remainingUntilSettleMs > 1400 ? 1 : 0, () => {
-            flushPendingHistoryForRound(roundKey);
-          });
-          return;
-        }
-
-        stopWheelSettleAnimation();
-        stopWheelSpinAnimation();
-        const expectedWinning = expectedWinningNumberRef.current ?? round.winningNumber;
-        const targetIndex = WHEEL_SEQUENCE.indexOf(expectedWinning);
-        if (targetIndex >= 0) {
-          setWheelIndexSafe(targetIndex);
-        }
-        setPointerOffsetSafe(0, true);
-        flushPendingHistoryForRound(roundKey);
+      if (finalizedRoundIdRef.current === roundKey || finalizingRoundIdRef.current === roundKey) {
+        return;
       }
+
+      // Keep current spin path alive while there is enough time left.
+      // Only enter final resolve window close to settleAt to avoid mid-roll teleport.
+      if (remainingUntilSettleMs > 900) {
+        startWheelSpinAnimation(new Date(round.spinStartsAt).getTime(), settleAtMs);
+        if (!finalizeAfterSpinTimerRef.current) {
+          finalizeAfterSpinTimerRef.current = setTimeout(() => {
+            if (
+              lastRoundIdRef.current !== roundKey ||
+              finalizedRoundIdRef.current === roundKey ||
+              finalizingRoundIdRef.current === roundKey
+            ) {
+              return;
+            }
+            finalizingRoundIdRef.current = roundKey;
+            const finalWinningNumber = round.winningNumber;
+            if (finalWinningNumber === null) {
+              finalizingRoundIdRef.current = null;
+              finalizeAfterSpinTimerRef.current = null;
+              return;
+            }
+            animateWheelToWinning(finalWinningNumber, 900, 0, 0, () => {
+              finalizingRoundIdRef.current = null;
+              finalizedRoundIdRef.current = roundKey;
+              flushPendingHistoryForRound(roundKey);
+            });
+            finalizeAfterSpinTimerRef.current = null;
+          }, Math.max(0, remainingUntilSettleMs - 900));
+        }
+        return;
+      }
+
+      clearFinalizeAfterSpinTimer();
+      finalizingRoundIdRef.current = roundKey;
+      const resolveDurationMs = remainingUntilSettleMs > 180 ? remainingUntilSettleMs : 480;
+      animateWheelToWinning(round.winningNumber, resolveDurationMs, 0, 0, () => {
+        finalizingRoundIdRef.current = null;
+        finalizedRoundIdRef.current = roundKey;
+        flushPendingHistoryForRound(roundKey);
+      });
       return;
     }
 
+    clearFinalizeAfterSpinTimer();
+    finalizingRoundIdRef.current = null;
     stopWheelSpinAnimation();
     stopWheelSettleAnimation();
   }, [
     animateWheelToWinning,
+    clearFinalizeAfterSpinTimer,
     flushPendingHistoryForRound,
     round,
     setPointerOffsetSafe,
@@ -509,11 +541,12 @@ export default function RoulettePage() {
       if (settlementHideTimerRef.current) {
         clearTimeout(settlementHideTimerRef.current);
       }
+      clearFinalizeAfterSpinTimer();
       stopWheelSpinAnimation();
       stopWheelSettleAnimation();
       setPointerOffsetSafe(0, true);
     };
-  }, [setPointerOffsetSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]);
+  }, [clearFinalizeAfterSpinTimer, setPointerOffsetSafe, stopWheelSettleAnimation, stopWheelSpinAnimation]);
 
   const placeBet = async (forcedType?: BetType) => {
     if (!round || round.status !== "OPEN") {
