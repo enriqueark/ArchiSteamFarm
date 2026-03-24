@@ -1,40 +1,76 @@
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import AuthGate from "@/components/AuthGate";
 import { getAccessToken, validateSession } from "@/lib/api";
+import { AuthUIProvider, type AuthModalMode } from "@/lib/auth-ui";
 
 export default function App({ Component, pageProps }: AppProps) {
   const [authed, setAuthed] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthModalMode>("login");
 
   useEffect(() => {
+    let cancelled = false;
     if (!getAccessToken()) {
-      setChecking(false);
+      setAuthed(false);
       return;
     }
     validateSession().then((valid) => {
+      if (cancelled) {
+        return;
+      }
       setAuthed(valid);
-      setChecking(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400">
-        Verifying session...
-      </div>
-    );
-  }
+  const openAuth = (mode: AuthModalMode = "login") => {
+    setAuthMode(mode);
+    setAuthOpen(true);
+  };
 
-  if (!authed) {
-    return <AuthGate onAuth={() => setAuthed(true)} />;
-  }
+  const closeAuth = () => {
+    setAuthOpen(false);
+  };
 
   return (
-    <Layout>
-      <Component {...pageProps} />
-    </Layout>
+    <AuthUIProvider
+      value={{
+        authed,
+        openAuth,
+        closeAuth,
+        setAuthed
+      }}
+    >
+      <Layout>
+        <Component {...pageProps} />
+      </Layout>
+      {authOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <button
+            aria-label="Close auth modal"
+            className="absolute inset-0"
+            onClick={closeAuth}
+            type="button"
+          />
+          <div className="relative z-10 w-full flex items-center justify-center">
+            <AuthGate
+              key={authMode}
+              onAuth={() => {
+                setAuthed(true);
+                closeAuth();
+              }}
+              mode={authMode}
+              onClose={closeAuth}
+              embedded
+            />
+          </div>
+        </div>
+      )}
+    </AuthUIProvider>
   );
 }

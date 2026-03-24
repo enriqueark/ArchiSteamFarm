@@ -6,12 +6,14 @@ import {
   getCurrentRouletteBetBreakdown,
   getCurrentRound,
   getRouletteRecentResults,
+  getAccessToken,
   placeRouletteBet,
   type RouletteBetBreakdown,
   type RouletteResultHistoryItem,
   type RouletteRound
 } from "@/lib/api";
 import { CasinoSocket, type BetBreakdownEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
+import { useAuthUI } from "@/lib/auth-ui";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -95,6 +97,7 @@ const coinsToAtomicString = (coinsRaw: string): string => {
 };
 
 export default function RoulettePage() {
+  const { authed, openAuth } = useAuthUI();
   const [round, setRound] = useState<RouletteRound | RouletteRoundEvent | null>(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [stakeCoins, setStakeCoins] = useState("10.00");
@@ -449,6 +452,12 @@ export default function RoulettePage() {
   }, [setPointerOffsetSafe, stopWheelSpinAnimation]);
 
   const placeBet = async (forcedType?: BetType) => {
+    if (!authed || !getAccessToken()) {
+      openAuth("register");
+      setError("Create an account to place bets.");
+      return;
+    }
+
     if (!round || round.status !== "OPEN") {
       setError("Betting is closed for this round. Wait for the next OPEN round.");
       return;

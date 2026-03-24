@@ -10,6 +10,7 @@ import {
   type MinesGame,
   type MinesRevealResponse,
 } from "@/lib/api";
+import { useAuthUI } from "@/lib/auth-ui";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -19,6 +20,7 @@ const BOARD_SIZE = 25;
 type CellState = "hidden" | "safe" | "mine";
 
 export default function MinesPage() {
+  const { authed, openAuth } = useAuthUI();
   const [betCoins, setBetCoins] = useState("10.00");
   const [mineCount, setMineCount] = useState("3");
   const [game, setGame] = useState<MinesGame | null>(null);
@@ -58,6 +60,10 @@ export default function MinesPage() {
   };
 
   useEffect(() => {
+    if (!authed) {
+      return;
+    }
+
     let cancelled = false;
 
     const loadActiveGame = async () => {
@@ -81,9 +87,14 @@ export default function MinesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authed]);
 
   const handleStart = async () => {
+    if (!authed) {
+      setError("You need an account to place bets.");
+      openAuth("register");
+      return;
+    }
     setError(null);
     setResponse("");
     setLoading(true);
@@ -101,6 +112,11 @@ export default function MinesPage() {
   };
 
   const handleReveal = async (cellIndex: number) => {
+    if (!authed) {
+      setError("You need an account to place bets.");
+      openAuth("register");
+      return;
+    }
     if (!game || cells[cellIndex] !== "hidden") return;
     if (game.status !== "ACTIVE") return;
     setError(null);
@@ -127,6 +143,11 @@ export default function MinesPage() {
   };
 
   const handleCashout = async () => {
+    if (!authed) {
+      setError("You need an account to place bets.");
+      openAuth("register");
+      return;
+    }
     if (!game) return;
     setError(null);
     setLoading(true);
