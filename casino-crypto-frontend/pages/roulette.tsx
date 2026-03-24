@@ -124,6 +124,7 @@ export default function RoulettePage() {
   const wheelIndexRef = useRef(0);
   const wheelSpinRafRef = useRef<number | null>(null);
   const lastRoundIdRef = useRef<string | null>(null);
+  const completedRoundIdRef = useRef<string | null>(null);
   const spinPlanRef = useRef<{
     roundKey: string;
     spinStartsAtMs: number;
@@ -168,6 +169,9 @@ export default function RoulettePage() {
 
   const startWheelSpinAnimation = useCallback(
     (roundKey: string, spinStartsAtMs: number, settleAtMs: number, winningNumber: number | null) => {
+      if (completedRoundIdRef.current === roundKey) {
+        return;
+      }
       if (wheelSpinRafRef.current !== null && spinPlanRef.current?.roundKey === roundKey) {
         return;
       }
@@ -241,6 +245,7 @@ export default function RoulettePage() {
           // side-to-side micro jumps at the exact end.
           setWheelIndexSafe(finalWhole);
           setPointerOffsetSafe(finalFraction * slotPx, true);
+          completedRoundIdRef.current = plan.roundKey;
           spinPlanRef.current = null;
           wheelSpinRafRef.current = null;
           return;
@@ -407,6 +412,7 @@ export default function RoulettePage() {
 
     if (lastRoundIdRef.current !== roundKey) {
       lastRoundIdRef.current = roundKey;
+      completedRoundIdRef.current = null;
     }
 
     if ((round.status === "SPINNING" || round.status === "SETTLED") && round.winningNumber !== null) {
