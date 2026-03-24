@@ -64,6 +64,18 @@ type RouletteRealtimeEvent =
           netAtomic: string;
         }>;
       };
+    }
+  | {
+      type: "chat.message";
+      data: {
+        id: string;
+        userId: string;
+        userLabel: string;
+        level: number;
+        avatarUrl: string | null;
+        message: string;
+        createdAt: string;
+      };
     };
 
 type ClientConnection = {
@@ -162,7 +174,7 @@ export class RouletteWebsocketHub {
 
   public broadcast(event: RouletteRealtimeEvent): void {
     const payload = JSON.stringify(event);
-    const currency = event.data.currency;
+    const currency = "currency" in event.data ? event.data.currency : undefined;
 
     this.clients.forEach((client) => {
       if (client.currency && client.currency !== currency) {

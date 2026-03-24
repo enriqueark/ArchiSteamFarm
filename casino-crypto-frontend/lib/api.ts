@@ -174,6 +174,58 @@ export async function getWallets(): Promise<Wallet[]> {
   return request<Wallet[]>("/wallets");
 }
 
+// ── Chat ─────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  userLabel: string;
+  userLevel: number;
+  avatarUrl: string | null;
+  message: string;
+  createdAt: string;
+}
+
+type ChatMessageApiPayload = {
+  id: string;
+  userId: string;
+  username?: string;
+  userLabel?: string;
+  level?: number;
+  userLevel?: number;
+  avatarUrl: string | null;
+  message: string;
+  createdAt: string;
+};
+
+const normalizeChatMessage = (message: ChatMessageApiPayload): ChatMessage => ({
+  id: message.id,
+  userId: message.userId,
+  userLabel: message.userLabel ?? message.username ?? `user_${message.userId.slice(0, 8)}`,
+  userLevel: message.userLevel ?? message.level ?? 1,
+  avatarUrl: message.avatarUrl ?? null,
+  message: message.message,
+  createdAt: message.createdAt
+});
+
+export async function getChatMessages(limit = 60): Promise<ChatMessage[]> {
+  const data = await request<ChatMessageApiPayload[]>(`/chat/messages?limit=${limit}`, {}, false);
+  return data.map(normalizeChatMessage);
+}
+
+export async function postChatMessage(message: string): Promise<ChatMessage> {
+  const data = await request<ChatMessageApiPayload>(
+    "/chat/messages",
+    {
+      method: "POST",
+      body: JSON.stringify({ message })
+    },
+    true,
+    true
+  );
+  return normalizeChatMessage(data);
+}
+
 // ── Cashier (OxaPay) ───────────────────────────────────────────────────────
 
 export interface CashierDepositAddress {

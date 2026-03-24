@@ -138,6 +138,7 @@ model User {
   minesGames          MinesGame[]
   rouletteBets        RouletteBet[]
   rouletteRounds      RouletteRound[]
+  chatMessages        ChatMessage[]
   casinoBets          CasinoBet[]
   paymentAddresses    PaymentAddress[]
 
@@ -512,6 +513,19 @@ model PaymentAddress {
   @@unique([userId, asset, network])
   @@index([userId])
   @@map("payment_addresses")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  channel    String   @default("GLOBAL")
+  message    String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channel, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("chat_messages")
 }
 
 model OutboxEvent {

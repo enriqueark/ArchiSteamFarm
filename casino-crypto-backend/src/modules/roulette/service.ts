@@ -1001,6 +1001,8 @@ export const setRouletteBroadcaster = (next: RouletteBroadcaster | null): void =
   broadcaster = next;
 };
 
+export const getRouletteBroadcaster = (): RouletteBroadcaster | null => broadcaster;
+
 export const startRouletteRoundWorker = async (logger: FastifyBaseLogger): Promise<void> => {
   if (workerTimer) {
     return;

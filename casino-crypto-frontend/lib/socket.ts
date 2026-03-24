@@ -53,11 +53,22 @@ export type RouletteSettlementSummaryEvent = {
   }>;
 };
 
+export type ChatMessageEvent = {
+  id: string;
+  userId: string;
+  username: string;
+  level: number;
+  avatarUrl: string | null;
+  message: string;
+  createdAt: string;
+};
+
 export type SocketEvent =
   | { type: "roulette.round"; data: RouletteRoundEvent }
   | { type: "roulette.betTotals"; data: BetTotalsEvent }
   | { type: "roulette.betBreakdown"; data: BetBreakdownEvent }
   | { type: "roulette.settlementSummary"; data: RouletteSettlementSummaryEvent }
+  | { type: "chat.message"; data: ChatMessageEvent }
   | { type: "pong"; data: { type: "pong"; ts: string } }
   | { type: "open" }
   | { type: "close" }
@@ -116,6 +127,8 @@ export class CasinoSocket {
           this.emit({ type: "roulette.betBreakdown", data: parsed.data || parsed });
         } else if (eventType === "roulette.settlementSummary") {
           this.emit({ type: "roulette.settlementSummary", data: parsed.data || parsed });
+        } else if (eventType === "chat.message") {
+          this.emit({ type: "chat.message", data: parsed.data || parsed });
         } else if (eventType === "pong") {
           this.emit({ type: "pong", data: parsed });
         }
