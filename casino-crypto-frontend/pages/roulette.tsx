@@ -3,19 +3,16 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import Input from "@/components/Input";
 import {
-  getChatMessages,
   getCurrentRouletteBetBreakdown,
   getCurrentRound,
   getRouletteRecentResults,
   getAccessToken,
-  postChatMessage,
   placeRouletteBet,
-  type ChatMessage,
   type RouletteBetBreakdown,
   type RouletteResultHistoryItem,
   type RouletteRound
 } from "@/lib/api";
-import { CasinoSocket, type BetBreakdownEvent, type ChatMessageEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
+import { CasinoSocket, type BetBreakdownEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
 import { useAuthUI } from "@/lib/auth-ui";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
@@ -138,10 +135,6 @@ export default function RoulettePage() {
   const [countdown, setCountdown] = useState<string>("");
   const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
   const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
   const [wheelIndex, setWheelIndex] = useState(0);
   const [pointerOffsetPx, setPointerOffsetPx] = useState(0);
   const [slotWidthPx, setSlotWidthPx] = useState(0);
@@ -305,26 +298,6 @@ export default function RoulettePage() {
     pendingHistoryByRoundIdRef.current.set(item.roundId, item);
   }, []);
 
-  const mergeChatMessage = useCallback((incoming: ChatMessage | ChatMessageEvent) => {
-    setChatMessages((prev) => {
-      const next = [
-        {
-          id: incoming.id,
-          userId: incoming.userId,
-          userLabel: "username" in incoming ? incoming.username : incoming.userLabel,
-          userLevel: "level" in incoming ? incoming.level : incoming.userLevel,
-          avatarUrl: incoming.avatarUrl ?? null,
-          message: incoming.message,
-          createdAt: incoming.createdAt
-        },
-        ...prev.filter((entry) => entry.id !== incoming.id)
-      ];
-      return next
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 80);
-    });
-  }, []);
-
   const updateCountdown = useCallback(() => {
     if (!round) {
       setCountdown("");
@@ -364,14 +337,12 @@ export default function RoulettePage() {
     Promise.all([
       getCurrentRound(INTERNAL_GAME_CURRENCY),
       getRouletteRecentResults(INTERNAL_GAME_CURRENCY, 20),
-      getCurrentRouletteBetBreakdown(INTERNAL_GAME_CURRENCY),
-      getChatMessages(50)
+      getCurrentRouletteBetBreakdown(INTERNAL_GAME_CURRENCY)
     ])
-      .then(([current, recentResults, breakdown, messages]) => {
+      .then(([current, recentResults, breakdown]) => {
         setRound(current);
         setHistory(recentResults);
         setBetBreakdown(normalizeBreakdown(breakdown));
-        setChatMessages(messages);
       })
       .catch(() => {});
 
@@ -413,15 +384,12 @@ export default function RoulettePage() {
         case "roulette.betBreakdown":
           setBetBreakdown(normalizeBreakdown(ev.data));
           break;
-        case "chat.message":
-          mergeChatMessage(ev.data);
-          break;
       }
     });
 
     sock.connect();
     return () => sock.disconnect();
-  }, [mergeChatMessage, normalizeBreakdown, queueHistoryItem]);
+  }, [normalizeBreakdown, queueHistoryItem]);
 
   useEffect(() => {
     const node = wheelGridRef.current;
@@ -532,29 +500,6 @@ export default function RoulettePage() {
       setError(e instanceof Error ? e.message : "Bet failed");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const sendChatMessage = async () => {
-    if (!authed || !getAccessToken()) {
-      openAuth("register");
-      setChatError("Create an account to chat.");
-      return;
-    }
-    const message = chatInput.trim();
-    if (message.length === 0) {
-      return;
-    }
-    setChatError(null);
-    setChatLoading(true);
-    try {
-      const created = await postChatMessage(message);
-      mergeChatMessage(created);
-      setChatInput("");
-    } catch (e: unknown) {
-      setChatError(e instanceof Error ? e.message : "Failed to send message");
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -745,8 +690,7 @@ export default function RoulettePage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         {BET_TYPES.map((type) => {
           const config = BET_CONFIG[type];
           const amountCoins = getBetTotalCoins(type);
@@ -803,62 +747,6 @@ export default function RoulettePage() {
             </Card>
           );
         })}
-        </div>
-
-        <Card className="bg-gray-900/95 border-cyan-500/40 shadow-[0_0_0_1px_rgba(34,211,238,0.2)] h-fit lg:sticky lg:top-4">
-          <div className="space-y-3 lg:h-[70vh] lg:min-h-[560px] lg:flex lg:flex-col">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-100 uppercase tracking-wide">Live Chat</h3>
-              <span className="text-[11px] text-gray-500">{chatMessages.length} msgs</span>
-            </div>
-
-            <div className="max-h-[520px] overflow-y-auto space-y-2 pr-1 lg:max-h-none lg:flex-1">
-              {chatMessages.map((entry) => (
-                <div key={entry.id} className="rounded-md border border-gray-800 bg-gray-950/70 px-2 py-1.5">
-                  <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-gray-200">
-                      {entry.avatarUrl ? (
-                        <img src={entry.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
-                      ) : (
-                        entry.userLabel.slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span className="font-semibold text-gray-200 truncate max-w-[120px]">{entry.userLabel}</span>
-                    <span className="rounded bg-indigo-900/60 px-1.5 py-0.5 text-[10px] text-indigo-200">
-                      LVL {entry.userLevel}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-200 break-words">{entry.message}</p>
-                </div>
-              ))}
-              {chatMessages.length === 0 ? (
-                <p className="text-xs text-gray-500">No messages yet.</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Input
-                label="Message"
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                placeholder="Write something..."
-                maxLength={300}
-              />
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
-                <span>Max 300 chars</span>
-                <span>{chatInput.length}/300</span>
-              </div>
-              <Button
-                className="w-full"
-                onClick={() => void sendChatMessage()}
-                disabled={chatLoading || chatInput.trim().length === 0}
-              >
-                {chatLoading ? "Sending..." : "Send"}
-              </Button>
-              {chatError ? <p className="text-xs text-red-400">{chatError}</p> : null}
-            </div>
-          </div>
-        </Card>
       </div>
 
       {error && (

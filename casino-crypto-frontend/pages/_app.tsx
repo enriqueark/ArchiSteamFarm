@@ -1,6 +1,7 @@
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { useEffect, useState } from "react";
+import GlobalChatDrawer from "@/components/GlobalChatDrawer";
 import Layout from "@/components/Layout";
 import AuthGate from "@/components/AuthGate";
 import { getAccessToken, validateSession } from "@/lib/api";
@@ -49,6 +50,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <Layout>
         <Component {...pageProps} />
       </Layout>
+      <GlobalChatDrawer />
       {authOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <button
