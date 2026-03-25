@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { CasinoSocket, type BetBreakdownEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
 import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -126,11 +127,11 @@ const coinsToAtomicString = (coinsRaw: string): string => {
 
 export default function RoulettePage() {
   const { authed, openAuth } = useAuthUI();
+  const { showError } = useToast();
   const [round, setRound] = useState<RouletteRound | RouletteRoundEvent | null>(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [stakeCoins, setStakeCoins] = useState("10.00");
   const [betType, setBetType] = useState<BetType>("RED");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
   const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
@@ -479,16 +480,15 @@ export default function RoulettePage() {
   const placeBet = async (forcedType?: BetType) => {
     if (!authed || !getAccessToken()) {
       openAuth("register");
-      setError("Create an account to place bets.");
+      showError("Create an account to place bets.");
       return;
     }
 
     if (!round || round.status !== "OPEN") {
-      setError("Betting is closed for this round. Wait for the next OPEN round.");
+      showError("Betting is closed for this round. Wait for the next OPEN round.");
       return;
     }
 
-    setError(null);
     setLoading(true);
 
     try {
@@ -497,7 +497,7 @@ export default function RoulettePage() {
       await placeRouletteBet(INTERNAL_GAME_CURRENCY, selectedType, stakeAtomic);
       setBetType(selectedType);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Bet failed");
+      showError(e instanceof Error ? e.message : "Bet failed");
     } finally {
       setLoading(false);
     }
@@ -749,11 +749,6 @@ export default function RoulettePage() {
         })}
       </div>
 
-      {error && (
-        <Card>
-          <p className="text-red-400 text-sm">{error}</p>
-        </Card>
-      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   type CashierWithdrawalResponse
 } from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const COIN_DECIMALS = 8;
 const CURRENCIES = ["BTC", "ETH", "USDT", "USDC", "SOL"] as const;
@@ -59,12 +60,12 @@ const RedTokenIcon = () => (
 
 export default function BalanceControl() {
   const { authed, openAuth } = useAuthUI();
+  const { showError, showSuccess } = useToast();
   const [panelOpen, setPanelOpen] = useState(false);
   const [mode, setMode] = useState<WalletMode>("deposit");
   const [selectedCurrency, setSelectedCurrency] = useState<(typeof CURRENCIES)[number]>("USDT");
   const [amount, setAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
-  const [hint, setHint] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [depositAddresses, setDepositAddresses] = useState<CashierDepositAddress[]>([]);
   const [targetBalance, setTargetBalance] = useState(0);
@@ -205,7 +206,6 @@ export default function BalanceControl() {
       openAuth("register");
       return;
     }
-    setHint(null);
     setPanelOpen(true);
   };
 
@@ -224,13 +224,12 @@ export default function BalanceControl() {
       openAuth("register");
       return;
     }
-    setHint(null);
     if (!amount || Number(amount) <= 0) {
-      setHint("Enter a valid amount first.");
+      showError("Enter a valid amount first.");
       return;
     }
     if (mode === "withdraw" && withdrawAddress.trim().length < 10) {
-      setHint("Enter a valid destination wallet address.");
+      showError("Enter a valid destination wallet address.");
       return;
     }
     try {
@@ -238,10 +237,10 @@ export default function BalanceControl() {
       if (mode === "deposit") {
         const selected = getSelectedDepositAddress();
         if (!selected) {
-          setHint("Deposit address not ready yet. Try again in a few seconds.");
+          showError("Deposit address not ready yet. Try again in a few seconds.");
           return;
         }
-        setHint(`Send ${selectedCurrency} on ${selected.networkLabel} to the address below.`);
+        showSuccess(`You selected ${selectedCurrency}. Send funds to your deposit address.`);
         return;
       }
 
@@ -252,13 +251,11 @@ export default function BalanceControl() {
         amountCoins: amount,
         destinationAddress: withdrawAddress.trim()
       });
-      setHint(
-        `Withdrawal created (${result.status}) · Track: ${result.providerTrackId ?? result.id}`
-      );
+      showSuccess("Your withdrawal was successful.");
       setAmount("");
       setWithdrawAddress("");
     } catch (error) {
-      setHint(error instanceof Error ? error.message : "Unable to process request.");
+      showError(error instanceof Error ? error.message : "Unable to process request.");
     } finally {
       setRequesting(false);
     }
@@ -405,7 +402,6 @@ export default function BalanceControl() {
                     : `Continue withdraw (${selectedCurrency})`}
                 </button>
 
-                {hint && <p className="text-xs text-gray-400">{hint}</p>}
               </div>
             </div>
           </div>

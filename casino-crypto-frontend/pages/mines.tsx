@@ -11,6 +11,7 @@ import {
   type MinesRevealResponse,
 } from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -21,12 +22,12 @@ type CellState = "hidden" | "safe" | "mine";
 
 export default function MinesPage() {
   const { authed, openAuth } = useAuthUI();
+  const { showError, showSuccess } = useToast();
   const [betCoins, setBetCoins] = useState("10.00");
   const [mineCount, setMineCount] = useState("3");
   const [game, setGame] = useState<MinesGame | null>(null);
   const [cells, setCells] = useState<CellState[]>(Array(BOARD_SIZE).fill("hidden"));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [lastReveal, setLastReveal] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [response, setResponse] = useState<string>("");
 
@@ -91,11 +92,10 @@ export default function MinesPage() {
 
   const handleStart = async () => {
     if (!authed) {
-      setError("You need an account to place bets.");
+      showError("You need an account to place bets.");
       openAuth("register");
       return;
     }
-    setError(null);
     setResponse("");
     setLoading(true);
     resetBoard();
@@ -105,7 +105,7 @@ export default function MinesPage() {
       setResponse(JSON.stringify(g, null, 2));
       hydrateBoardFromGame(g);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to start game");
+      showError(e instanceof Error ? e.message : "Failed to start game");
     } finally {
       setLoading(false);
     }
@@ -113,13 +113,12 @@ export default function MinesPage() {
 
   const handleReveal = async (cellIndex: number) => {
     if (!authed) {
-      setError("You need an account to place bets.");
+      showError("You need an account to place bets.");
       openAuth("register");
       return;
     }
     if (!game || cells[cellIndex] !== "hidden") return;
     if (game.status !== "ACTIVE") return;
-    setError(null);
     setLoading(true);
     try {
       const res = await revealMine(game.gameId, cellIndex);
@@ -136,7 +135,7 @@ export default function MinesPage() {
       }
       setCells(next);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Reveal failed");
+      showError(e instanceof Error ? e.message : "Reveal failed");
     } finally {
       setLoading(false);
     }
@@ -144,19 +143,19 @@ export default function MinesPage() {
 
   const handleCashout = async () => {
     if (!authed) {
-      setError("You need an account to place bets.");
+      showError("You need an account to place bets.");
       openAuth("register");
       return;
     }
     if (!game) return;
-    setError(null);
     setLoading(true);
     try {
       const res = await cashoutMines(game.gameId);
       setGame(res);
       setResponse(JSON.stringify(res, null, 2));
+      showSuccess("Cashout successful");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Cashout failed");
+      showError(e instanceof Error ? e.message : "Cashout failed");
     } finally {
       setLoading(false);
     }
@@ -291,12 +290,6 @@ export default function MinesPage() {
           </div>
         </Card>
       </div>
-
-      {error && (
-        <Card>
-          <p className="text-red-400">{error}</p>
-        </Card>
-      )}
 
       {response && (
         <Card title="API Response">

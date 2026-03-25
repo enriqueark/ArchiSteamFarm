@@ -13,14 +13,15 @@ import {
   type User,
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
+import { useToast } from "@/lib/toast";
 
 export default function Dashboard() {
+  const { showError } = useToast();
   const [live, setLive] = useState<HealthLive | null>(null);
   const [ready, setReady] = useState<HealthReady | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [events, setEvents] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<CasinoSocket | null>(null);
 
   const addEvent = (msg: string) => {
@@ -33,17 +34,17 @@ export default function Dashboard() {
       setLive(l);
       addEvent(`Health live: ${l.status}`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Health check failed");
+      showError(e instanceof Error ? e.message : "Health check failed");
     }
     try {
       const r = await getHealthReady();
       setReady(r);
       addEvent(`Health ready: ${r.status} (pg=${r.checks.postgres}, redis=${r.checks.redis})`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Ready check failed");
+      showError(e instanceof Error ? e.message : "Ready check failed");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     checkHealth();
@@ -158,7 +159,6 @@ export default function Dashboard() {
                 </div>
               </>
             )}
-            {error && <p className="text-red-400 text-xs">{error}</p>}
             <Button variant="secondary" className="w-full mt-2" onClick={checkHealth}>
               Refresh
             </Button>

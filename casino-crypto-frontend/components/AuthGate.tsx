@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { login, register } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 import Button from "./Button";
 import Input from "./Input";
 import Card from "./Card";
@@ -22,10 +23,10 @@ export default function AuthGate({
   onModeChange,
   onClose
 }: Props) {
+  const { showError } = useToast();
   const [modeState, setModeState] = useState<"login" | "register">(mode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,7 +34,6 @@ export default function AuthGate({
   }, [mode]);
 
   const submit = async () => {
-    setError(null);
     setLoading(true);
     try {
       if (modeState === "register") {
@@ -44,7 +44,7 @@ export default function AuthGate({
       onAuth();
       onClose?.();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Auth failed");
+      showError(e instanceof Error ? e.message : "Auth failed");
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,6 @@ export default function AuthGate({
           onChange={(e) => setPassword(e.target.value)}
           placeholder="min 8 characters"
         />
-        {error && <p className="text-red-400 text-sm">{error}</p>}
         <Button
           variant={modeState === "register" ? "danger" : "primary"}
           onClick={submit}

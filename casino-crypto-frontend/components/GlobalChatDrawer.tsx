@@ -5,6 +5,7 @@ import Input from "@/components/Input";
 import { getAccessToken, getChatMessages, postChatMessage, type ChatMessage } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const CHAT_MAX_LENGTH = 300;
 const INTERNAL_GAME_CURRENCY = "USDT";
@@ -33,11 +34,11 @@ const toChatMessage = (raw: IncomingSocketChat): ChatMessage => ({
 
 export default function GlobalChatDrawer() {
   const { authed, openAuth } = useAuthUI();
+  const { showError } = useToast();
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
 
   const mergeMessage = useCallback((incoming: ChatMessage) => {
     setMessages((prev) => {
@@ -73,7 +74,7 @@ export default function GlobalChatDrawer() {
   const sendChatMessage = async () => {
     if (!authed || !getAccessToken()) {
       openAuth("register");
-      setChatError("Create an account to chat.");
+      showError("Create an account to chat.");
       return;
     }
 
@@ -82,14 +83,13 @@ export default function GlobalChatDrawer() {
       return;
     }
 
-    setChatError(null);
     setChatLoading(true);
     try {
       const created = await postChatMessage(message);
       mergeMessage(created);
       setChatInput("");
     } catch (error: unknown) {
-      setChatError(error instanceof Error ? error.message : "Failed to send message");
+      showError(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setChatLoading(false);
     }
@@ -173,7 +173,6 @@ export default function GlobalChatDrawer() {
               >
                 {chatLoading ? "Sending..." : "Send"}
               </Button>
-              {chatError ? <p className="text-xs text-red-400">{chatError}</p> : null}
             </div>
           </div>
         </div>

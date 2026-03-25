@@ -6,6 +6,7 @@ import Layout from "@/components/Layout";
 import AuthGate from "@/components/AuthGate";
 import { getAccessToken, validateSession } from "@/lib/api";
 import { AuthUIProvider, type AuthModalMode } from "@/lib/auth-ui";
+import { ToastProvider } from "@/lib/toast";
 
 export default function App({ Component, pageProps }: AppProps) {
   const [authed, setAuthed] = useState(false);
@@ -47,32 +48,34 @@ export default function App({ Component, pageProps }: AppProps) {
         setAuthed
       }}
     >
-      <Layout>
-        <Component {...pageProps} />
-      </Layout>
-      <GlobalChatDrawer />
-      {authOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <button
-            aria-label="Close auth modal"
-            className="absolute inset-0"
-            onClick={closeAuth}
-            type="button"
-          />
-          <div className="relative z-10 w-full flex items-center justify-center">
-            <AuthGate
-              key={authMode}
-              onAuth={() => {
-                setAuthed(true);
-                closeAuth();
-              }}
-              mode={authMode}
-              onClose={closeAuth}
-              embedded
+      <ToastProvider>
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+        <GlobalChatDrawer />
+        {authOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <button
+              aria-label="Close auth modal"
+              className="absolute inset-0"
+              onClick={closeAuth}
+              type="button"
             />
+            <div className="relative z-10 w-full flex items-center justify-center">
+              <AuthGate
+                key={authMode}
+                onAuth={() => {
+                  setAuthed(true);
+                  closeAuth();
+                }}
+                mode={authMode}
+                onClose={closeAuth}
+                embedded
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </ToastProvider>
     </AuthUIProvider>
   );
 }
