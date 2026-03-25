@@ -20,10 +20,68 @@ export type AppToastEventDetail = {
   variant: ToastVariant;
 };
 
+const DOM_TOAST_CONTAINER_ID = "app-dom-toast-container";
+
+const ensureDomToastContainer = (): HTMLElement | null => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  let container = document.getElementById(DOM_TOAST_CONTAINER_ID);
+  if (!container) {
+    container = document.createElement("div");
+    container.id = DOM_TOAST_CONTAINER_ID;
+    container.style.position = "fixed";
+    container.style.top = "80px";
+    container.style.left = "50%";
+    container.style.transform = "translateX(-50%)";
+    container.style.width = "min(640px, calc(100vw - 32px))";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "8px";
+    container.style.zIndex = "99999";
+    container.style.pointerEvents = "none";
+    document.body.appendChild(container);
+  }
+  return container;
+};
+
+const showDomToast = (detail: AppToastEventDetail): void => {
+  const container = ensureDomToastContainer();
+  if (!container || !detail.message.trim()) {
+    return;
+  }
+
+  const item = document.createElement("div");
+  item.textContent = detail.message;
+  item.style.border = detail.variant === "error" ? "1px solid rgba(127,29,29,0.95)" : "1px solid rgba(20,83,45,0.95)";
+  item.style.background = detail.variant === "error" ? "rgba(220,38,38,0.95)" : "rgba(22,163,74,0.95)";
+  item.style.color = "#ffffff";
+  item.style.padding = "12px 16px";
+  item.style.borderRadius = "8px";
+  item.style.fontWeight = "700";
+  item.style.fontSize = "14px";
+  item.style.boxShadow = "0 10px 24px rgba(0,0,0,0.35)";
+  item.style.opacity = "0";
+  item.style.transition = "opacity 180ms ease";
+
+  container.appendChild(item);
+  requestAnimationFrame(() => {
+    item.style.opacity = "1";
+  });
+
+  setTimeout(() => {
+    item.style.opacity = "0";
+    setTimeout(() => {
+      item.remove();
+    }, 220);
+  }, 5_000);
+};
+
 export const emitAppToast = (detail: AppToastEventDetail): void => {
   if (typeof window === "undefined") {
     return;
   }
+  showDomToast(detail);
   window.dispatchEvent(new CustomEvent<AppToastEventDetail>(APP_TOAST_EVENT, { detail }));
 };
 
