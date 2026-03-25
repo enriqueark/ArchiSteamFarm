@@ -16,6 +16,7 @@ function getApi(): string {
 }
 
 let accessToken: string | null = null;
+let suppressNextApiErrorToast = false;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -40,6 +41,10 @@ export function clearSession() {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
   }
+}
+
+export function suppressNextErrorToastOnce() {
+  suppressNextApiErrorToast = true;
 }
 
 export async function validateSession(): Promise<boolean> {
@@ -89,7 +94,19 @@ async function request<T>(
       clearSession();
     }
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || body.error || `HTTP ${res.status}`);
+    const message = body.message || body.error || `HTTP ${res.status}`;
+    if (typeof window !== "undefined" && !suppressNextApiErrorToast) {
+      window.dispatchEvent(
+        new CustomEvent("app:toast", {
+          detail: {
+            variant: "error",
+            message
+          }
+        })
+      );
+    }
+    suppressNextApiErrorToast = false;
+    throw new Error(message);
   }
 
   if (res.status === 204) return {} as T;

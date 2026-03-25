@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 type ToastVariant = "error" | "success";
 
@@ -11,6 +11,20 @@ type ToastItem = {
 type ToastContextValue = {
   showError: (message: string) => void;
   showSuccess: (message: string) => void;
+};
+
+export const APP_TOAST_EVENT = "app:toast";
+
+export type AppToastEventDetail = {
+  message: string;
+  variant: ToastVariant;
+};
+
+export const emitAppToast = (detail: AppToastEventDetail): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent<AppToastEventDetail>(APP_TOAST_EVENT, { detail }));
 };
 
 const TOAST_DURATION_MS = 5_000;
@@ -43,6 +57,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }),
     [push]
   );
+
+  useEffect(() => {
+    const onToast = (event: Event) => {
+      const detail = (event as CustomEvent<AppToastEventDetail>).detail;
+      if (!detail?.message || (detail.variant !== "error" && detail.variant !== "success")) {
+        return;
+      }
+      push(detail.message, detail.variant);
+    };
+    window.addEventListener(APP_TOAST_EVENT, onToast);
+    return () => {
+      window.removeEventListener(APP_TOAST_EVENT, onToast);
+    };
+  }, [push]);
 
   return (
     <ToastContext.Provider value={value}>
