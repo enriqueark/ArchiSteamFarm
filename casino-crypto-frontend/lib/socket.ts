@@ -63,12 +63,19 @@ export type ChatMessageEvent = {
   createdAt: string;
 };
 
+export type ChatClearedEvent = {
+  clearedByUserId?: string;
+  reason: "ADMIN_COMMAND" | "HOURLY_RESET";
+  clearedAt: string;
+};
+
 export type SocketEvent =
   | { type: "roulette.round"; data: RouletteRoundEvent }
   | { type: "roulette.betTotals"; data: BetTotalsEvent }
   | { type: "roulette.betBreakdown"; data: BetBreakdownEvent }
   | { type: "roulette.settlementSummary"; data: RouletteSettlementSummaryEvent }
   | { type: "chat.message"; data: ChatMessageEvent }
+  | { type: "chat.cleared"; data: ChatClearedEvent }
   | { type: "pong"; data: { type: "pong"; ts: string } }
   | { type: "open" }
   | { type: "close" }
@@ -129,6 +136,8 @@ export class CasinoSocket {
           this.emit({ type: "roulette.settlementSummary", data: parsed.data || parsed });
         } else if (eventType === "chat.message") {
           this.emit({ type: "chat.message", data: parsed.data || parsed });
+        } else if (eventType === "chat.cleared") {
+          this.emit({ type: "chat.cleared", data: parsed.data || parsed });
         } else if (eventType === "pong") {
           this.emit({ type: "pong", data: parsed });
         }

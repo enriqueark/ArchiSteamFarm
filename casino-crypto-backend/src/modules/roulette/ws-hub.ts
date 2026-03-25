@@ -76,6 +76,14 @@ type RouletteRealtimeEvent =
         message: string;
         createdAt: string;
       };
+    }
+  | {
+      type: "chat.cleared";
+      data: {
+        clearedByUserId?: string;
+        reason: "ADMIN_COMMAND" | "HOURLY_RESET";
+        clearedAt: string;
+      };
     };
 
 type ClientConnection = {
@@ -174,10 +182,12 @@ export class RouletteWebsocketHub {
 
   public broadcast(event: RouletteRealtimeEvent): void {
     const payload = JSON.stringify(event);
-    const currency = "currency" in event.data ? event.data.currency : undefined;
+    const dataWithCurrency = event.data as { currency?: Currency };
+    const hasCurrency = typeof dataWithCurrency.currency !== "undefined";
+    const currency = dataWithCurrency.currency;
 
     this.clients.forEach((client) => {
-      if (client.currency && client.currency !== currency) {
+      if (hasCurrency && client.currency && client.currency !== currency) {
         return;
       }
 

@@ -72,6 +72,11 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
   return rows.reverse().map(toState);
 };
 
+export const clearAllChatMessages = async (): Promise<number> => {
+  const result = await prisma.chatMessage.deleteMany({});
+  return result.count;
+};
+
 export const postChatMessage = async (input: PostChatMessageInput): Promise<ChatMessageState> => {
   const message = normalizeMessage(input.message);
   if (message.length < 1) {

@@ -181,7 +181,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
       </nav>
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full lg:pr-[420px]">{children}</main>
+      <main className="flex-1 p-6 max-w-6xl mx-auto w-full">{children}</main>
     </div>
   );
 }

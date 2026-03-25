@@ -33,7 +33,7 @@ const toChatMessage = (raw: IncomingSocketChat): ChatMessage => ({
 
 export default function GlobalChatDrawer() {
   const { authed, openAuth } = useAuthUI();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -54,10 +54,13 @@ export default function GlobalChatDrawer() {
 
     const socket = new CasinoSocket(INTERNAL_GAME_CURRENCY);
     const unsubscribe = socket.subscribe((event: SocketEvent) => {
-      if (event.type !== "chat.message") {
+      if (event.type === "chat.message") {
+        mergeMessage(toChatMessage(event.data as IncomingSocketChat));
         return;
       }
-      mergeMessage(toChatMessage(event.data as IncomingSocketChat));
+      if (event.type === "chat.cleared") {
+        setMessages([]);
+      }
     });
     socket.connect();
 
@@ -146,6 +149,16 @@ export default function GlobalChatDrawer() {
                 label="Message"
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") {
+                    return;
+                  }
+                  event.preventDefault();
+                  if (chatLoading || chatInput.trim().length === 0) {
+                    return;
+                  }
+                  void sendChatMessage();
+                }}
                 placeholder="Write message..."
                 maxLength={CHAT_MAX_LENGTH}
               />
