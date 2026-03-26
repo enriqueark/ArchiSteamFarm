@@ -14,6 +14,11 @@ CREATE TABLE "blackjack_games" (
   "outcome" TEXT,
   "betReference" TEXT NOT NULL,
   "betReservationId" TEXT NOT NULL,
+  "serverSeedId" TEXT,
+  "serverSeedHash" TEXT,
+  "clientSeed" TEXT,
+  "nonce" INTEGER,
+  "paytable" JSONB,
   "playerHands" JSONB NOT NULL,
   "dealerCards" JSONB NOT NULL,
   "deck" JSONB NOT NULL,
@@ -34,6 +39,7 @@ CREATE TABLE "blackjack_games" (
 
 CREATE UNIQUE INDEX "blackjack_games_betReference_key" ON "blackjack_games"("betReference");
 CREATE UNIQUE INDEX "blackjack_games_betReservationId_key" ON "blackjack_games"("betReservationId");
+CREATE INDEX "blackjack_games_serverSeedId_idx" ON "blackjack_games"("serverSeedId");
 CREATE INDEX "blackjack_games_userId_status_createdAt_idx"
   ON "blackjack_games"("userId", "status", "createdAt" DESC);
 CREATE INDEX "blackjack_games_userId_createdAt_idx"
@@ -46,3 +52,7 @@ ALTER TABLE "blackjack_games"
 ALTER TABLE "blackjack_games"
   ADD CONSTRAINT "blackjack_games_betReservationId_fkey"
   FOREIGN KEY ("betReservationId") REFERENCES "bet_reservations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "blackjack_games"
+  ADD CONSTRAINT "blackjack_games_serverSeedId_fkey"
+  FOREIGN KEY ("serverSeedId") REFERENCES "provably_fair_seeds"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -391,11 +391,11 @@ model BlackjackGame {
   outcome               String?
   betReference          String             @unique
   betReservationId      String             @unique
-  serverSeedId          String?
-  serverSeedHash        String?
-  clientSeed            String?
-  nonce                 Int?
-  paytable              Json?
+  serverSeedId          String
+  serverSeedHash        String
+  clientSeed            String
+  nonce                 Int
+  paytable              Json
   playerHands           Json
   dealerCards           Json
   deck                  Json
@@ -411,7 +411,7 @@ model BlackjackGame {
   updatedAt             DateTime           @updatedAt
   finishedAt            DateTime?
   user                  User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  serverSeed            ProvablyFairSeed?  @relation(fields: [serverSeedId], references: [id], onDelete: SetNull)
+  serverSeed            ProvablyFairSeed   @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
   betReservation        BetReservation     @relation("BetReservationBlackjackGame", fields: [betReservationId], references: [id], onDelete: Restrict)
 
   @@index([serverSeedId])

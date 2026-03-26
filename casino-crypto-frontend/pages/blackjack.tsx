@@ -69,7 +69,7 @@ const suitColorClass = (suit: "S" | "H" | "D" | "C"): string =>
 
 const Chip = ({ label, value, color }: { label: string; value: string; color: string }) => (
   <div
-    className={`blackjack-chip blackjack-deal-pop rounded-full px-3 py-2 text-xs font-semibold shadow-lg ${color}`}
+    className={`blackjack-chip blackjack-chip-bounce rounded-full px-3 py-2 text-xs font-semibold shadow-lg ${color}`}
     title={`${label}: ${value} COINS`}
   >
     <div className="text-[10px] uppercase tracking-wide opacity-80">{label}</div>
@@ -89,7 +89,7 @@ const PlayingCard = ({
   if (hidden) {
     return (
       <div
-        className="blackjack-card blackjack-deal-pop h-28 w-20 rounded-lg border border-red-700/70 bg-gradient-to-br from-red-900 to-red-600 p-2 shadow-lg"
+        className="blackjack-card blackjack-card-deal h-28 w-20 rounded-lg border border-red-700/70 bg-gradient-to-br from-red-900 to-red-600 p-2 shadow-lg"
         style={{ animationDelay: `${delayMs}ms` }}
       >
         <div className="h-full w-full rounded border border-white/20 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.2),transparent_45%)]" />
@@ -108,7 +108,7 @@ const PlayingCard = ({
   const suit = cardSuit(card);
   return (
     <div
-      className="blackjack-card blackjack-deal-pop h-28 w-20 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
+      className="blackjack-card blackjack-card-deal h-28 w-20 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <div className={`text-sm font-bold ${suitColorClass(suit)}`}>{cardRank(card)}</div>
@@ -127,6 +127,7 @@ export default function BlackjackPage() {
   const [loading, setLoading] = useState(false);
   const [game, setGame] = useState<BlackjackGame | null>(null);
   const [dealSeed, setDealSeed] = useState(0);
+  const [winPulse, setWinPulse] = useState(false);
 
   useEffect(() => {
     if (!authed) {
@@ -179,6 +180,8 @@ export default function BlackjackPage() {
       if (next.status !== "ACTIVE") {
         const payoutAtomic = next.payoutAtomic ? Number(next.payoutAtomic) : 0;
         if (Number.isFinite(payoutAtomic) && payoutAtomic > 0) {
+          setWinPulse(true);
+          setTimeout(() => setWinPulse(false), 900);
           showSuccess(`You received ${fromAtomic(next.payoutAtomic)} COINS`);
         } else {
           showError("Hand finished with no payout.");
@@ -226,7 +229,7 @@ export default function BlackjackPage() {
 
       {game ? (
         <div className="grid grid-cols-1 gap-4">
-          <Card title="Blackjack table" className="blackjack-table overflow-hidden">
+          <Card title="Blackjack table" className={`blackjack-table overflow-hidden ${winPulse ? "blackjack-win-pulse" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <Chip label="Main" value={fromAtomic(game.mainBetAtomic)} color="border border-amber-300/30 bg-amber-500/20 text-amber-100" />
@@ -332,6 +335,10 @@ export default function BlackjackPage() {
 
       {game && game.status !== "ACTIVE" ? (
         <Card title="Hand result">
+          <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 blackjack-win-pulse" />
+            <span>Round settled</span>
+          </div>
           <p className="text-sm">
             Status: <span className="font-semibold">{game.status}</span>
           </p>
