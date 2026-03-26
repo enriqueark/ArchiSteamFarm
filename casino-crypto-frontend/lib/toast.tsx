@@ -81,6 +81,9 @@ export const emitAppToast = (detail: AppToastEventDetail): void => {
   if (typeof window === "undefined") {
     return;
   }
+  if (!detail?.message || !detail.message.trim()) {
+    return;
+  }
   showDomToast(detail);
   window.dispatchEvent(new CustomEvent<AppToastEventDetail>(APP_TOAST_EVENT, { detail }));
 };

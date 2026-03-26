@@ -328,6 +328,7 @@ model ProvablyFairSeed {
   user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
   activeForProfiles ProvablyFairProfile[] @relation("ActiveProvablyFairSeed")
   minesGames    MinesGame[]
+  blackjackGames BlackjackGame[]
 
   @@index([userId, status, createdAt(sort: Desc)])
   @@map("provably_fair_seeds")
@@ -390,6 +391,11 @@ model BlackjackGame {
   outcome               String?
   betReference          String             @unique
   betReservationId      String             @unique
+  serverSeedId          String?
+  serverSeedHash        String?
+  clientSeed            String?
+  nonce                 Int?
+  paytable              Json?
   playerHands           Json
   dealerCards           Json
   deck                  Json
@@ -405,11 +411,23 @@ model BlackjackGame {
   updatedAt             DateTime           @updatedAt
   finishedAt            DateTime?
   user                  User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serverSeed            ProvablyFairSeed?  @relation(fields: [serverSeedId], references: [id], onDelete: SetNull)
   betReservation        BetReservation     @relation("BetReservationBlackjackGame", fields: [betReservationId], references: [id], onDelete: Restrict)
 
+  @@index([serverSeedId])
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("blackjack_games")
+}
+
+model PlatformConfig {
+  key             String   @id
+  value           Json
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("platform_configs")
 }
 
 model RouletteRound {

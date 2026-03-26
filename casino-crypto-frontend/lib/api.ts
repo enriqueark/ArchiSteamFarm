@@ -18,6 +18,21 @@ function getApi(): string {
 let accessToken: string | null = null;
 let suppressNextApiErrorToast = false;
 
+type AppToastVariant = "error" | "success";
+type AppToastEventDetail = {
+  message: string;
+  variant: AppToastVariant;
+};
+
+const APP_TOAST_EVENT = "app:toast";
+
+const emitToast = (detail: AppToastEventDetail): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent<AppToastEventDetail>(APP_TOAST_EVENT, { detail }));
+};
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (token) {
@@ -87,7 +102,13 @@ async function request<T>(
     headers["Idempotency-Key"] = idempotencyKey();
   }
 
-  const res = await fetch(`${getApi()}${path}`, { ...options, headers });
+  const res = await fetch(`${getApi()}${path}`, { ...options, headers }).catch((error) => {
+    emitToast({
+      variant: "error",
+      message: `Network error: ${error instanceof Error ? error.message : "Request failed"}`
+    });
+    throw error;
+  });
 
   if (!res.ok) {
     if (res.status === 401 && needsAuth) {
@@ -96,14 +117,10 @@ async function request<T>(
     const body = await res.json().catch(() => ({}));
     const message = body.message || body.error || `HTTP ${res.status}`;
     if (typeof window !== "undefined" && !suppressNextApiErrorToast) {
-      window.dispatchEvent(
-        new CustomEvent("app:toast", {
-          detail: {
-            variant: "error",
-            message
-          }
-        })
-      );
+      emitToast({
+        variant: "error",
+        message
+      });
     }
     suppressNextApiErrorToast = false;
     throw new Error(message);
@@ -407,6 +424,15 @@ export interface BlackjackGame {
   playerHands: BlackjackHandState[];
   dealerCards: string[];
   dealerVisibleCards: string[];
+  paytable: {
+    pairsMultiplier: number;
+    plus3Multiplier: number;
+  };
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
   payoutAtomic: string | null;
   createdAt: string;
   finishedAt: string | null;

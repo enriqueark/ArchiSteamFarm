@@ -5,7 +5,7 @@ import {
   LedgerReason,
   Prisma
 } from "@prisma/client";
-import { randomInt, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
@@ -16,12 +16,11 @@ import {
   MAX_GAME_BET_ATOMIC,
   debitBalanceInTx
 } from "../wallets/service";
+import { getBlackjackPayoutConfig } from "./config";
 
 const SUITS = ["S", "H", "D", "C"] as const;
 const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
-const SIDE_PAIRS_PAYOUT = 11n;
-const SIDE_21_PLUS_3_PAYOUT = 9n;
 const INSURANCE_PAYOUT = 2n;
 const STANDARD_PAYOUT = 2n;
 type CardRank = (typeof RANKS)[number];
@@ -46,6 +45,11 @@ type StoredGameState = {
   playerHands: StoredHand[];
   dealerCards: CardCode[];
   deck: StoredDeckState;
+};
+
+type SidePayoutConfigNumeric = {
+  pairsMultiplier: number;
+  plus3Multiplier: number;
 };
 
 type WalletSnapshot = {
@@ -78,6 +82,15 @@ export type BlackjackGameState = {
   }>;
   dealerCards: CardCode[];
   dealerVisibleCards: CardCode[];
+  paytable: {
+    pairsMultiplier: number;
+    plus3Multiplier: number;
+  };
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
   payoutAtomic: bigint | null;
   createdAt: Date;
   finishedAt: Date | null;
@@ -102,6 +115,32 @@ type PlayerActionInput = {
 
 type StartResult = {
   state: BlackjackGameState;
+};
+
+type GameToStateInput = {
+  id: string;
+  status: string;
+  currency: Currency;
+  initialBetAtomic: bigint;
+  mainBetAtomic: bigint;
+  sideBetPairsAtomic: bigint;
+  sideBet21Plus3Atomic: bigint;
+  insuranceBetAtomic: bigint | null;
+  canSplit: boolean;
+  canInsurance: boolean;
+  activeHandIndex: number;
+  dealerRevealed: boolean;
+  playerHands: Prisma.JsonValue;
+  dealerCards: Prisma.JsonValue;
+  deck: Prisma.JsonValue;
+  paytable: Prisma.JsonValue | null;
+  serverSeedHash: string | null;
+  clientSeed: string | null;
+  nonce: number | null;
+  payoutAtomic: bigint | null;
+  createdAt: Date;
+  finishedAt: Date | null;
+  betReservation: { walletId: string };
 };
 
 const parseCard = (card: CardCode): { rank: CardRank; suit: CardSuit } => {
@@ -147,7 +186,7 @@ const ensureBetWithinLimit = (betAtomic: bigint): void => {
   }
 };
 
-const shuffledDeck = (): CardCode[] => {
+const shuffledDeck = (serverSeed: string, clientSeed: string, nonce: number): CardCode[] => {
   const deck: CardCode[] = [];
   for (const suit of SUITS) {
     for (const rank of RANKS) {
@@ -155,9 +194,12 @@ const shuffledDeck = (): CardCode[] => {
     }
   }
 
+  let round = 0;
   for (let i = deck.length - 1; i > 0; i -= 1) {
-    const j = randomInt(0, i + 1);
+    const rand = deterministicRandom(serverSeed, clientSeed, nonce, round);
+    const j = Math.floor(rand * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
+    round += 1;
   }
   return deck;
 };
@@ -186,6 +228,107 @@ const parseStoredState = (
   return { playerHands, dealerCards, deck };
 };
 
+const toNumericSidePayoutConfig = (
+  config: Awaited<ReturnType<typeof getBlackjackPayoutConfig>>
+): SidePayoutConfigNumeric => ({
+  pairsMultiplier: Number(config.pairsMultiplier.toString()),
+  plus3Multiplier: Number(config.plus3Multiplier.toString())
+});
+
+type ProvablyFairContext = {
+  profile: {
+    userId: string;
+    clientSeed: string;
+    nonce: number;
+    activeSeedId: string;
+  };
+  activeSeed: {
+    id: string;
+    serverSeed: string;
+    serverSeedHash: string;
+    status: "ACTIVE" | "REVEALED";
+  };
+};
+
+const RNG_BYTES = 6;
+const RNG_MAX = 2 ** (RNG_BYTES * 8);
+
+const generateServerSeed = (): string => randomBytes(32).toString("hex");
+
+const hashServerSeed = (serverSeed: string): string =>
+  createHash("sha256").update(serverSeed).digest("hex");
+
+const generateClientSeed = (): string => randomUUID();
+
+const deterministicRandom = (serverSeed: string, clientSeed: string, nonce: number, round: number): number => {
+  const digest = createHmac("sha256", serverSeed).update(`${clientSeed}:${nonce}:${round}`).digest();
+  const int = digest.readUIntBE(0, RNG_BYTES);
+  return int / RNG_MAX;
+};
+
+const ensureProvablyFairContext = async (
+  tx: Prisma.TransactionClient,
+  userId: string
+): Promise<ProvablyFairContext> => {
+  const existing = await tx.provablyFairProfile.findUnique({
+    where: { userId },
+    include: { activeSeed: true }
+  });
+
+  if (!existing) {
+    const serverSeed = generateServerSeed();
+    const activeSeed = await tx.provablyFairSeed.create({
+      data: {
+        userId,
+        serverSeed,
+        serverSeedHash: hashServerSeed(serverSeed)
+      }
+    });
+
+    const profile = await tx.provablyFairProfile.create({
+      data: {
+        userId,
+        clientSeed: generateClientSeed(),
+        nonce: 0,
+        activeSeedId: activeSeed.id
+      }
+    });
+
+    return {
+      profile,
+      activeSeed
+    };
+  }
+
+  if (existing.activeSeed.status === "ACTIVE") {
+    return {
+      profile: existing,
+      activeSeed: existing.activeSeed
+    };
+  }
+
+  const serverSeed = generateServerSeed();
+  const newSeed = await tx.provablyFairSeed.create({
+    data: {
+      userId,
+      serverSeed,
+      serverSeedHash: hashServerSeed(serverSeed)
+    }
+  });
+  const profile = await tx.provablyFairProfile.update({
+    where: { userId },
+    data: {
+      activeSeedId: newSeed.id,
+      nonce: 0
+    }
+  });
+
+  return {
+    profile,
+    activeSeed: newSeed
+  };
+};
+
 const toWalletSnapshot = (id: string, balanceAtomic: bigint, lockedAtomic: bigint): WalletSnapshot => ({
   walletId: id,
   balanceAtomic,
@@ -203,27 +346,7 @@ const getWalletSnapshotById = async (walletId: string): Promise<WalletSnapshot> 
   return toWalletSnapshot(wallet.id, wallet.balanceAtomic, wallet.lockedAtomic);
 };
 
-const toGameState = async (game: {
-  id: string;
-  status: string;
-  currency: Currency;
-  initialBetAtomic: bigint;
-  mainBetAtomic: bigint;
-  sideBetPairsAtomic: bigint;
-  sideBet21Plus3Atomic: bigint;
-  insuranceBetAtomic: bigint | null;
-  canSplit: boolean;
-  canInsurance: boolean;
-  activeHandIndex: number;
-  dealerRevealed: boolean;
-  playerHands: Prisma.JsonValue;
-  dealerCards: Prisma.JsonValue;
-  deck: Prisma.JsonValue;
-  payoutAtomic: bigint | null;
-  createdAt: Date;
-  finishedAt: Date | null;
-  betReservation: { walletId: string };
-}): Promise<BlackjackGameState> => {
+const toGameState = async (game: GameToStateInput): Promise<BlackjackGameState> => {
   const wallet = await getWalletSnapshotById(game.betReservation.walletId);
   const parsed = parseStoredState(game.playerHands, game.dealerCards, game.deck ?? {});
 
@@ -254,6 +377,21 @@ const toGameState = async (game: {
     }),
     dealerCards: parsed.dealerCards,
     dealerVisibleCards: game.dealerRevealed ? parsed.dealerCards : parsed.dealerCards.slice(0, 1),
+    paytable:
+      game.paytable && typeof game.paytable === "object" && !Array.isArray(game.paytable)
+        ? ({
+            pairsMultiplier: Number((game.paytable as Record<string, unknown>).pairsMultiplier ?? 11),
+            plus3Multiplier: Number((game.paytable as Record<string, unknown>).plus3Multiplier ?? 9)
+          } as BlackjackGameState["paytable"])
+        : {
+            pairsMultiplier: 11,
+            plus3Multiplier: 9
+          },
+    provablyFair: {
+      serverSeedHash: game.serverSeedHash ?? "",
+      clientSeed: game.clientSeed ?? "",
+      nonce: game.nonce ?? 0
+    },
     payoutAtomic: game.payoutAtomic,
     createdAt: game.createdAt,
     finishedAt: game.finishedAt,
@@ -372,7 +510,13 @@ const payoutForMainHand = (hand: StoredHand, dealerValue: number, dealerBlackjac
   return 0n;
 };
 
-const resolveCurrentGame = (state: StoredGameState, insuranceBetAtomic: bigint | null, sideBetPairsAtomic: bigint, sideBet21Plus3Atomic: bigint) => {
+const resolveCurrentGame = (
+  state: StoredGameState,
+  insuranceBetAtomic: bigint | null,
+  sideBetPairsAtomic: bigint,
+  sideBet21Plus3Atomic: bigint,
+  sidePayoutConfig: SidePayoutConfigNumeric
+) => {
   const dealerCards = settleDealer(state.dealerCards, state.deck);
   const dealerValue = handValue(dealerCards);
   const dealerBlackjack = isNaturalBlackjack(dealerCards);
@@ -390,10 +534,10 @@ const resolveCurrentGame = (state: StoredGameState, insuranceBetAtomic: bigint |
   let sidePayout = 0n;
   const firstHand = state.playerHands[0];
   if (sideBetPairsAtomic > 0n && firstHand && isPair(firstHand.cards)) {
-    sidePayout += sideBetPairsAtomic * SIDE_PAIRS_PAYOUT;
+    sidePayout += sideBetPairsAtomic * BigInt(sidePayoutConfig.pairsMultiplier);
   }
   if (sideBet21Plus3Atomic > 0n && firstHand && evaluate21Plus3(firstHand.cards, dealerCards[0])) {
-    sidePayout += sideBet21Plus3Atomic * SIDE_21_PLUS_3_PAYOUT;
+    sidePayout += sideBet21Plus3Atomic * BigInt(sidePayoutConfig.plus3Multiplier);
   }
 
   const payoutAtomic = mainPayout + insurancePayout + sidePayout;
@@ -485,12 +629,14 @@ const finalizeGameInTx = async (
   game: Awaited<ReturnType<typeof lockGameForUser>>,
   effectiveInitialBetAtomic?: bigint
 ) => {
+  const sidePayoutConfig = toNumericSidePayoutConfig(await getBlackjackPayoutConfig());
   const state = parseStoredState(game.playerHands, game.dealerCards, game.deck);
   const resolved = resolveCurrentGame(
     state,
     game.insuranceBetAtomic ?? null,
     game.sideBetPairsAtomic,
-    game.sideBet21Plus3Atomic
+    game.sideBet21Plus3Atomic,
+    sidePayoutConfig
   );
 
   const walletSnapshot = await creditWalletPayout(
@@ -554,6 +700,26 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
   ensureBetWithinLimit(totalInitial);
 
   const result = await prisma.$transaction(async (tx) => {
+    await ensureProvablyFairContext(tx, input.userId);
+    const nonceRows = await tx.$queryRaw<Array<{ nonce: number; activeSeedId: string; clientSeed: string }>>`
+      UPDATE "provably_fair_profiles"
+      SET nonce = nonce + 1,
+          "updatedAt" = NOW()
+      WHERE "userId" = ${input.userId}
+      RETURNING nonce - 1 AS nonce, "activeSeedId", "clientSeed"
+    `;
+    const nonceState = nonceRows[0];
+    if (!nonceState) {
+      throw new AppError("Unable to allocate provably fair nonce", 500, "BLACKJACK_NONCE_ALLOCATION_FAILED");
+    }
+
+    const seed = await tx.provablyFairSeed.findUnique({
+      where: { id: nonceState.activeSeedId }
+    });
+    if (!seed || seed.status !== "ACTIVE") {
+      throw new AppError("Active server seed not found", 500, "ACTIVE_SERVER_SEED_NOT_FOUND");
+    }
+
     const wallet = await debitBalanceInTx(tx, {
       userId: input.userId,
       currency: input.currency,
@@ -595,8 +761,13 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
       }
     });
 
+  const sidePayoutConfigRaw = await getBlackjackPayoutConfig();
+  const sidePayoutConfig = {
+    pairsMultiplier: Number(sidePayoutConfigRaw.pairsMultiplier.toString()),
+    plus3Multiplier: Number(sidePayoutConfigRaw.plus3Multiplier.toString())
+  };
     const deckState: StoredDeckState = {
-      cards: shuffledDeck(),
+      cards: shuffledDeck(seed.serverSeed, nonceState.clientSeed, nonceState.nonce),
       cursor: 0
     };
     const playerCards: CardCode[] = [drawCard(deckState), drawCard(deckState)];
@@ -624,6 +795,14 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
         status: "ACTIVE",
         betReference,
         betReservationId: reservation.id,
+        serverSeedId: seed.id,
+        serverSeedHash: seed.serverSeedHash,
+        clientSeed: nonceState.clientSeed,
+        nonce: nonceState.nonce,
+        paytable: {
+          pairsMultiplier: Number(sidePayoutConfig.pairsMultiplier.toString()),
+          plus3Multiplier: Number(sidePayoutConfig.plus3Multiplier.toString())
+        } as Prisma.InputJsonValue,
         playerHands: [initialHand] as unknown as Prisma.InputJsonValue,
         dealerCards: dealerCards as unknown as Prisma.InputJsonValue,
         deck: deckState as unknown as Prisma.InputJsonValue,

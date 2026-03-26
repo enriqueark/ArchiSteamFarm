@@ -5,7 +5,12 @@ import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
-import { actOnBlackjackGame, getActiveBlackjackGame, getBlackjackGameById, startBlackjackGame } from "./service";
+import {
+  actOnBlackjackGame,
+  getActiveBlackjackGame,
+  getBlackjackGameById,
+  getOrCreateActiveBlackjackGame
+} from "./service";
 
 const startGameSchema = z.object({
   currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
@@ -65,6 +70,8 @@ const toGameResponse = (state: Awaited<ReturnType<typeof getBlackjackGameById>>)
   })),
   dealerCards: state.dealerCards,
   dealerVisibleCards: state.dealerVisibleCards,
+  paytable: state.paytable,
+  provablyFair: state.provablyFair,
   payoutAtomic: state.payoutAtomic?.toString() ?? null,
   createdAt: state.createdAt,
   finishedAt: state.finishedAt,
@@ -84,7 +91,7 @@ export const blackjackRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const body = startGameSchema.parse(request.body);
-      const created = await startBlackjackGame({
+      const created = await getOrCreateActiveBlackjackGame({
         userId: request.user.sub,
         currency: body.currency,
         betAtomic: body.betAtomic,

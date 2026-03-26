@@ -1,12 +1,14 @@
 import { Currency, LedgerReason } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 import { requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
 import { adjustWalletBalance } from "../ledger/service";
+import { getBlackjackPayoutConfig, setBlackjackPayoutConfig } from "../blackjack/config";
 
 const userSearchQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -293,6 +295,33 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 </html>`;
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/blackjack/payout-config", { preHandler: requireRoles(["ADMIN"]) }, async (_request, reply) => {
+    const cfg = await getBlackjackPayoutConfig();
+    return reply.send(cfg);
+  });
+
+  fastify.put(
+    "/blackjack/payout-config",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = z
+        .object({
+          pairsMultiplier: z.coerce.number().int().min(2).max(50),
+          plus3Multiplier: z.coerce.number().int().min(2).max(50)
+        })
+        .parse(request.body);
+
+      const updated = await setBlackjackPayoutConfig({
+        pairsMultiplier: new Prisma.Decimal(body.pairsMultiplier),
+        plus3Multiplier: new Prisma.Decimal(body.plus3Multiplier)
+      });
+
+      return reply.send(updated);
+    }
+  );
+
   fastify.get("/panel", async (_request, reply) => {
     reply.header(
       "Content-Security-Policy",

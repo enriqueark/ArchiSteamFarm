@@ -32,6 +32,92 @@ const fromAtomic = (atomic: string | null | undefined): string => {
   return (value / 10 ** COIN_DECIMALS).toFixed(2);
 };
 
+const toOptionalAtomicString = (coinsRaw: string): string | undefined => {
+  const cleaned = coinsRaw.trim();
+  if (!cleaned) {
+    return undefined;
+  }
+  const value = Number(cleaned);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("Side bet must be 0 or more");
+  }
+  if (value === 0) {
+    return undefined;
+  }
+  if (value > MAX_BET_COINS) {
+    throw new Error(`Maximum side bet is ${MAX_BET_COINS} COINS`);
+  }
+  return String(Math.round(value * 10 ** COIN_DECIMALS));
+};
+
+const cardSuit = (card: string): "S" | "H" | "D" | "C" => {
+  const suit = card.slice(-1);
+  return suit === "H" || suit === "D" || suit === "C" ? suit : "S";
+};
+
+const cardRank = (card: string): string => card.slice(0, -1);
+
+const suitGlyph = (suit: "S" | "H" | "D" | "C"): string => {
+  if (suit === "H") return "♥";
+  if (suit === "D") return "♦";
+  if (suit === "C") return "♣";
+  return "♠";
+};
+
+const suitColorClass = (suit: "S" | "H" | "D" | "C"): string =>
+  suit === "H" || suit === "D" ? "text-red-500" : "text-gray-100";
+
+const Chip = ({ label, value, color }: { label: string; value: string; color: string }) => (
+  <div
+    className={`blackjack-chip blackjack-deal-pop rounded-full px-3 py-2 text-xs font-semibold shadow-lg ${color}`}
+    title={`${label}: ${value} COINS`}
+  >
+    <div className="text-[10px] uppercase tracking-wide opacity-80">{label}</div>
+    <div>{value}</div>
+  </div>
+);
+
+const PlayingCard = ({
+  card,
+  hidden,
+  delayMs = 0
+}: {
+  card?: string;
+  hidden?: boolean;
+  delayMs?: number;
+}) => {
+  if (hidden) {
+    return (
+      <div
+        className="blackjack-card blackjack-deal-pop h-28 w-20 rounded-lg border border-red-700/70 bg-gradient-to-br from-red-900 to-red-600 p-2 shadow-lg"
+        style={{ animationDelay: `${delayMs}ms` }}
+      >
+        <div className="h-full w-full rounded border border-white/20 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.2),transparent_45%)]" />
+      </div>
+    );
+  }
+
+  if (!card) {
+    return (
+      <div className="h-28 w-20 rounded-lg border border-gray-700 bg-gray-900/40 p-2 text-xs text-gray-500 flex items-center justify-center">
+        --
+      </div>
+    );
+  }
+
+  const suit = cardSuit(card);
+  return (
+    <div
+      className="blackjack-card blackjack-deal-pop h-28 w-20 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <div className={`text-sm font-bold ${suitColorClass(suit)}`}>{cardRank(card)}</div>
+      <div className={`mt-4 text-center text-2xl ${suitColorClass(suit)}`}>{suitGlyph(suit)}</div>
+      <div className={`text-right text-sm font-bold ${suitColorClass(suit)}`}>{cardRank(card)}</div>
+    </div>
+  );
+};
+
 export default function BlackjackPage() {
   const { authed, openAuth } = useAuthUI();
   const { showError, showSuccess } = useToast();
@@ -40,6 +126,7 @@ export default function BlackjackPage() {
   const [plus3BetCoins, setPlus3BetCoins] = useState("0");
   const [loading, setLoading] = useState(false);
   const [game, setGame] = useState<BlackjackGame | null>(null);
+  const [dealSeed, setDealSeed] = useState(0);
 
   useEffect(() => {
     if (!authed) {
@@ -62,14 +149,15 @@ export default function BlackjackPage() {
     setLoading(true);
     try {
       const betAtomic = toAtomicString(betCoins);
-      const pairsAtomic = toAtomicString(String(Math.max(0, Number(pairsBetCoins) || 0)));
-      const plus3Atomic = toAtomicString(String(Math.max(0, Number(plus3BetCoins) || 0)));
+      const pairsAtomic = toOptionalAtomicString(pairsBetCoins);
+      const plus3Atomic = toOptionalAtomicString(plus3BetCoins);
       const created = await startBlackjackGame({
         currency: INTERNAL_GAME_CURRENCY,
         betAtomic,
-        sideBetPairsAtomic: pairsAtomic === "0" ? undefined : pairsAtomic,
-        sideBet21Plus3Atomic: plus3Atomic === "0" ? undefined : plus3Atomic
+        sideBetPairsAtomic: pairsAtomic,
+        sideBet21Plus3Atomic: plus3Atomic
       });
+      setDealSeed(Date.now());
       setGame(created);
       showSuccess("Blackjack game started.");
     } catch (error) {
@@ -86,6 +174,7 @@ export default function BlackjackPage() {
     setLoading(true);
     try {
       const next = await actBlackjack(game.gameId, action);
+      setDealSeed(Date.now());
       setGame(next);
       if (next.status !== "ACTIVE") {
         const payoutAtomic = next.payoutAtomic ? Number(next.payoutAtomic) : 0;
@@ -113,53 +202,107 @@ export default function BlackjackPage() {
         <Card title="Start new hand">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Input label="Main bet (COINS)" value={betCoins} onChange={(e) => setBetCoins(e.target.value)} />
-            <Input label="Pairs side bet (COINS)" value={pairsBetCoins} onChange={(e) => setPairsBetCoins(e.target.value)} />
-            <Input label="21+3 side bet (COINS)" value={plus3BetCoins} onChange={(e) => setPlus3BetCoins(e.target.value)} />
+            <Input
+              label="Pairs side bet (optional)"
+              value={pairsBetCoins}
+              onChange={(e) => setPairsBetCoins(e.target.value)}
+              placeholder="0"
+            />
+            <Input
+              label="21+3 side bet (optional)"
+              value={plus3BetCoins}
+              onChange={(e) => setPlus3BetCoins(e.target.value)}
+              placeholder="0"
+            />
           </div>
-          <div className="mt-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button onClick={() => void startGame()} disabled={loading}>
               {loading ? "Starting..." : "Deal"}
             </Button>
+            <span className="text-xs text-gray-400">Side bets are optional. You can play with only the main bet.</span>
           </div>
         </Card>
       ) : null}
 
       {game ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card title="Dealer">
-            <div className="flex gap-2 flex-wrap">
-              {dealerCardsDisplay.map((card, idx) => (
-                <span key={`${card}-${idx}`} className="rounded bg-gray-800 px-2 py-1 text-sm font-mono">
-                  {card}
-                </span>
-              ))}
-              {!game.dealerRevealed ? (
-                <span className="rounded bg-gray-900 border border-gray-700 px-2 py-1 text-sm font-mono">??</span>
-              ) : null}
+        <div className="grid grid-cols-1 gap-4">
+          <Card title="Blackjack table" className="blackjack-table overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <Chip label="Main" value={fromAtomic(game.mainBetAtomic)} color="border border-amber-300/30 bg-amber-500/20 text-amber-100" />
+                <Chip
+                  label="Pairs"
+                  value={fromAtomic(game.sideBetPairsAtomic)}
+                  color="border border-sky-300/30 bg-sky-500/20 text-sky-100"
+                />
+                <Chip
+                  label="21+3"
+                  value={fromAtomic(game.sideBet21Plus3Atomic)}
+                  color="border border-fuchsia-300/30 bg-fuchsia-500/20 text-fuchsia-100"
+                />
+                <Chip
+                  label="Insurance"
+                  value={fromAtomic(game.insuranceBetAtomic)}
+                  color="border border-emerald-300/30 bg-emerald-500/20 text-emerald-100"
+                />
+              </div>
+              <div className="text-xs text-gray-300">
+                Status: <span className="font-semibold text-white">{game.status}</span>
+              </div>
             </div>
-          </Card>
 
-          <Card title={`Player hands · Active #${game.activeHandIndex + 1}`}>
-            <div className="space-y-2">
+            <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">Dealer</div>
+              <div className="flex gap-3 flex-wrap">
+                {dealerCardsDisplay.map((card, idx) => (
+                  <PlayingCard key={`${dealSeed}-dealer-${card}-${idx}`} card={card} delayMs={idx * 120} />
+                ))}
+                {!game.dealerRevealed ? (
+                  <PlayingCard hidden delayMs={dealerCardsDisplay.length * 120} />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
               {game.playerHands.map((hand, handIndex) => (
                 <div
                   key={`hand-${handIndex}`}
-                  className={`rounded border px-3 py-2 ${
-                    handIndex === game.activeHandIndex ? "border-red-500 bg-red-950/20" : "border-gray-800 bg-gray-900/50"
+                  className={`rounded-xl border p-3 ${
+                    handIndex === game.activeHandIndex ? "border-red-400/70 bg-red-900/20" : "border-white/10 bg-black/20"
                   }`}
                 >
-                  <div className="text-xs text-gray-400 mb-1">
+                  <div className="mb-2 text-xs text-gray-300">
                     Hand {handIndex + 1} · Stake {fromAtomic(hand.stakeAtomic)} · Value {hand.value}
+                    {hand.blackjack ? " · BLACKJACK" : ""}
+                    {hand.busted ? " · BUST" : ""}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-3 flex-wrap">
                     {hand.cards.map((card, idx) => (
-                      <span key={`${card}-${idx}`} className="rounded bg-gray-800 px-2 py-1 text-sm font-mono">
-                        {card}
-                      </span>
+                      <PlayingCard key={`${dealSeed}-player-${handIndex}-${card}-${idx}`} card={card} delayMs={idx * 120} />
                     ))}
                   </div>
                 </div>
               ))}
+            </div>
+          </Card>
+
+          <Card title="Provably Fair">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              <div className="rounded border border-gray-800 bg-gray-900/60 p-2">
+                <div className="text-gray-400">Server Seed Hash</div>
+                <div className="font-mono break-all">{game.provablyFair?.serverSeedHash ?? "-"}</div>
+              </div>
+              <div className="rounded border border-gray-800 bg-gray-900/60 p-2">
+                <div className="text-gray-400">Client Seed</div>
+                <div className="font-mono break-all">{game.provablyFair?.clientSeed ?? "-"}</div>
+              </div>
+              <div className="rounded border border-gray-800 bg-gray-900/60 p-2">
+                <div className="text-gray-400">Nonce</div>
+                <div className="font-mono">{game.provablyFair?.nonce ?? 0}</div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-400">
+              Side-bet paytable: Pairs x{game.paytable?.pairsMultiplier ?? 11}, 21+3 x{game.paytable?.plus3Multiplier ?? 9}
             </div>
           </Card>
         </div>
