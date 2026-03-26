@@ -77,6 +77,17 @@ const Chip = ({ label, value, color }: { label: string; value: string; color: st
   </div>
 );
 
+const pickChipSound = (amount: string): string => {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "•";
+  }
+  if (numeric >= 500) return "🔴";
+  if (numeric >= 100) return "🟠";
+  if (numeric >= 25) return "🟡";
+  return "🟢";
+};
+
 const PlayingCard = ({
   card,
   hidden,
@@ -232,19 +243,23 @@ export default function BlackjackPage() {
           <Card title="Blackjack table" className={`blackjack-table overflow-hidden ${winPulse ? "blackjack-win-pulse" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <Chip label="Main" value={fromAtomic(game.mainBetAtomic)} color="border border-amber-300/30 bg-amber-500/20 text-amber-100" />
                 <Chip
-                  label="Pairs"
+                  label={`Main ${pickChipSound(fromAtomic(game.mainBetAtomic))}`}
+                  value={fromAtomic(game.mainBetAtomic)}
+                  color="border border-amber-300/30 bg-amber-500/20 text-amber-100"
+                />
+                <Chip
+                  label={`Pairs ${pickChipSound(fromAtomic(game.sideBetPairsAtomic))}`}
                   value={fromAtomic(game.sideBetPairsAtomic)}
                   color="border border-sky-300/30 bg-sky-500/20 text-sky-100"
                 />
                 <Chip
-                  label="21+3"
+                  label={`21+3 ${pickChipSound(fromAtomic(game.sideBet21Plus3Atomic))}`}
                   value={fromAtomic(game.sideBet21Plus3Atomic)}
                   color="border border-fuchsia-300/30 bg-fuchsia-500/20 text-fuchsia-100"
                 />
                 <Chip
-                  label="Insurance"
+                  label={`Insurance ${pickChipSound(fromAtomic(game.insuranceBetAtomic))}`}
                   value={fromAtomic(game.insuranceBetAtomic)}
                   color="border border-emerald-300/30 bg-emerald-500/20 text-emerald-100"
                 />
