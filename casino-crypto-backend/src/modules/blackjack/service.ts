@@ -650,6 +650,8 @@ const finalizeGameInTx = async (
   const updated = await tx.blackjackGame.update({
     where: { id: game.id },
     data: {
+      playerHands: game.playerHands as Prisma.InputJsonValue,
+      deck: game.deck as Prisma.InputJsonValue,
       status:
         resolved.payoutAtomic > (effectiveInitialBetAtomic ?? game.initialBetAtomic)
           ? "WON"

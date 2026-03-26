@@ -376,9 +376,6 @@ export default function BlackjackPage() {
       {canAct && activeHand ? (
         <Card title="Actions">
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void doAction("HIT")} disabled={loading || activeHand.doubled}>
-              HIT
-            </Button>
             <Button
               onClick={() => void doAction("HIT")}
               disabled={loading || activeHand.doubled || activeHand.value >= 21 || activeHand.busted || activeHand.stood}
