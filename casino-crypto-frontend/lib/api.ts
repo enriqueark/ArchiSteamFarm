@@ -9,9 +9,28 @@ function getBaseUrl(): string {
   const configured = runtimeValue || envValue;
 
   if (configured) {
+    // Safety guard: production clients must never target localhost/127.0.0.1.
+    // If env/runtime was misconfigured, fallback to same-origin API host.
+    if (
+      typeof window !== "undefined" &&
+      /(^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/i.test(configured)
+    ) {
+      return window.location.origin;
+    }
+
     if (configured.startsWith("/") && typeof window !== "undefined") {
       return `${window.location.origin}${configured.replace(/\/$/, "")}`;
     }
+
+    // Avoid mixed-content issues (https page trying to call http API).
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      configured.startsWith("http://")
+    ) {
+      return window.location.origin;
+    }
+
     return configured.replace(/\/$/, "");
   }
 
