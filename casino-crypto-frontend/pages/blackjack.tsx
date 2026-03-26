@@ -141,6 +141,7 @@ export default function BlackjackPage() {
   const [dealSeed, setDealSeed] = useState(0);
   const [winPulse, setWinPulse] = useState(false);
   const [dealerRevealStep, setDealerRevealStep] = useState(1);
+  const [pendingSettleToast, setPendingSettleToast] = useState<null | { payoutAtomic: number; payoutRaw: string | null }>(null);
 
   useEffect(() => {
     if (!game) {
@@ -198,6 +199,24 @@ export default function BlackjackPage() {
   }, [game, dealerRevealStep]);
   const activeHand = game ? game.playerHands[game.activeHandIndex] : null;
   const canAct = !!game && game.status === "ACTIVE";
+  const dealerRevealComplete = !!game && game.dealerRevealed && dealerRevealStep >= game.dealerCards.length;
+  const canShowResult = !!game && game.status !== "ACTIVE" && dealerRevealComplete;
+  const canStartNewDeal = !game || canShowResult;
+
+  useEffect(() => {
+    if (!pendingSettleToast || !canShowResult) {
+      return;
+    }
+
+    if (Number.isFinite(pendingSettleToast.payoutAtomic) && pendingSettleToast.payoutAtomic > 0) {
+      setWinPulse(true);
+      setTimeout(() => setWinPulse(false), 900);
+      showSuccess(`You received ${fromAtomic(pendingSettleToast.payoutRaw)} COINS`);
+    } else {
+      showError("Hand finished with no payout.");
+    }
+    setPendingSettleToast(null);
+  }, [pendingSettleToast, canShowResult, showError, showSuccess]);
 
   const startGame = async () => {
     if (!authed) {
@@ -236,14 +255,10 @@ export default function BlackjackPage() {
       setDealSeed(Date.now());
       setGame(next);
       if (next.status !== "ACTIVE") {
-        const payoutAtomic = next.payoutAtomic ? Number(next.payoutAtomic) : 0;
-        if (Number.isFinite(payoutAtomic) && payoutAtomic > 0) {
-          setWinPulse(true);
-          setTimeout(() => setWinPulse(false), 900);
-          showSuccess(`You received ${fromAtomic(next.payoutAtomic)} COINS`);
-        } else {
-          showError("Hand finished with no payout.");
-        }
+        setPendingSettleToast({
+          payoutAtomic: next.payoutAtomic ? Number(next.payoutAtomic) : 0,
+          payoutRaw: next.payoutAtomic ?? null
+        });
       }
     } catch (error) {
       showError(error instanceof Error ? error.message : "Blackjack action failed");
@@ -259,7 +274,7 @@ export default function BlackjackPage() {
         Dealer stands on 17+, hits on 16 or less. Max bet per hand: {MAX_BET_COINS} COINS.
       </p>
 
-      {!game || game.status !== "ACTIVE" ? (
+      {canStartNewDeal ? (
         <Card title="Start new hand">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Input label="Main bet (COINS)" value={betCoins} onChange={(e) => setBetCoins(e.target.value)} />
@@ -277,7 +292,7 @@ export default function BlackjackPage() {
             />
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button onClick={() => void startGame()} disabled={loading}>
+            <Button onClick={() => void startGame()} disabled={loading || !canStartNewDeal}>
               {loading ? "Starting..." : "Deal"}
             </Button>
             <span className="text-xs text-gray-400">Side bets are optional. You can play with only the main bet.</span>
@@ -398,7 +413,7 @@ export default function BlackjackPage() {
         </Card>
       ) : null}
 
-      {game && game.status !== "ACTIVE" ? (
+      {canShowResult ? (
         <Card title="Hand result">
           <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-2">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 blackjack-win-pulse" />
