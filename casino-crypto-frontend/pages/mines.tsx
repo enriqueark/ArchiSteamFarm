@@ -17,6 +17,7 @@ const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
 const COIN_DECIMALS = 8;
 const BOARD_SIZE = 25;
+const MAX_BET_COINS = 5000;
 
 type CellState = "hidden" | "safe" | "mine";
 
@@ -48,6 +49,9 @@ export default function MinesPage() {
     const value = Number(coinsRaw);
     if (!Number.isFinite(value) || value <= 0) {
       throw new Error("Bet must be a positive COINS value");
+    }
+    if (value > MAX_BET_COINS) {
+      throw new Error(`Maximum bet is ${MAX_BET_COINS} COINS`);
     }
     return String(Math.round(value * 10 ** COIN_DECIMALS));
   };

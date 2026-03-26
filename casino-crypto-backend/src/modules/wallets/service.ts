@@ -6,6 +6,8 @@ import { prisma } from "../../infrastructure/db/prisma";
 export const PLATFORM_INTERNAL_CURRENCY: Currency = Currency.USDT;
 export const PLATFORM_VIRTUAL_COIN_SYMBOL = "COINS";
 export const PLATFORM_VIRTUAL_COIN_DECIMALS = 8;
+export const MAX_GAME_BET_COINS = 5_000n;
+export const MAX_GAME_BET_ATOMIC = MAX_GAME_BET_COINS * 10n ** BigInt(PLATFORM_VIRTUAL_COIN_DECIMALS);
 export const SUPPORTED_CURRENCIES: Currency[] = [PLATFORM_INTERNAL_CURRENCY];
 
 export const createDefaultWallets = async (userId: string): Promise<void> => {

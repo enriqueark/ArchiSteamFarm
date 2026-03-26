@@ -79,6 +79,14 @@ enum MinesGameStatus {
   CASHED_OUT
 }
 
+enum BlackjackGameStatus {
+  ACTIVE
+  WON
+  LOST
+  PUSH
+  CANCELLED
+}
+
 enum RouletteRoundStatus {
   OPEN
   CLOSED
@@ -136,6 +144,7 @@ model User {
   provablyFairProfile ProvablyFairProfile?
   provablyFairSeeds   ProvablyFairSeed[]
   minesGames          MinesGame[]
+  blackjackGames      BlackjackGame[]
   rouletteBets        RouletteBet[]
   rouletteRounds      RouletteRound[]
   chatMessages        ChatMessage[]
@@ -297,6 +306,7 @@ model BetReservation {
   releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
   captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
   minesGame           MinesGame?           @relation("BetReservationMinesGame")
+  blackjackGame       BlackjackGame?       @relation("BetReservationBlackjackGame")
   rouletteBet         RouletteBet?         @relation("BetReservationRouletteBet")
 
   @@unique([walletId, betReference])
@@ -365,6 +375,41 @@ model MinesGame {
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("mines_games")
+}
+
+model BlackjackGame {
+  id                    String             @id @default(cuid())
+  userId                String
+  currency              Currency
+  initialBetAtomic      BigInt
+  mainBetAtomic         BigInt
+  sideBetPairsAtomic    BigInt             @default(0)
+  sideBet21Plus3Atomic  BigInt             @default(0)
+  insuranceBetAtomic    BigInt?
+  status                BlackjackGameStatus @default(ACTIVE)
+  outcome               String?
+  betReference          String             @unique
+  betReservationId      String             @unique
+  playerHands           Json
+  dealerCards           Json
+  deck                  Json
+  activeHandIndex       Int                @default(0)
+  dealerRevealed        Boolean            @default(false)
+  canSplit              Boolean            @default(false)
+  canInsurance          Boolean            @default(false)
+  mainPayoutAtomic      BigInt?
+  sidePayoutAtomic      BigInt?
+  insurancePayoutAtomic BigInt?
+  payoutAtomic          BigInt?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  finishedAt            DateTime?
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  betReservation        BetReservation     @relation("BetReservationBlackjackGame", fields: [betReservationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("blackjack_games")
 }
 
 model RouletteRound {

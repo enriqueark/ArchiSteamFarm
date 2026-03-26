@@ -16,6 +16,7 @@ import { redis } from "./infrastructure/cache/redis";
 import { adminRoutes } from "./modules/admin/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { betsRoutes } from "./modules/bets/routes";
+import { blackjackRoutes } from "./modules/blackjack/routes";
 import { chatRoutes } from "./modules/chat/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { ledgerRoutes } from "./modules/ledger/routes";
@@ -93,6 +94,7 @@ export const buildApp = (): FastifyInstance => {
         { name: "auth", description: "Authentication and sessions" },
         { name: "admin", description: "Administrative operations and panel" },
         { name: "bets", description: "Transactional generic bet placement and settlement" },
+        { name: "blackjack", description: "Blackjack 21 game" },
         { name: "chat", description: "Realtime public chat messages" },
         { name: "wallets", description: "Wallet management and bet reservations" },
         { name: "pricing", description: "Market FX rates and COINS conversion quotes" },
@@ -113,6 +115,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(authRoutes, { prefix: "/api/v1/auth" });
   app.register(adminRoutes, { prefix: "/api/v1/admin" });
   app.register(betsRoutes, { prefix: "/api/v1/bets" });
+  app.register(blackjackRoutes, { prefix: "/api/v1/blackjack" });
   app.register(chatRoutes, { prefix: "/api/v1/chat" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });

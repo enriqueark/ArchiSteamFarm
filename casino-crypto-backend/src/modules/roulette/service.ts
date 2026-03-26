@@ -16,7 +16,13 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { PLATFORM_INTERNAL_CURRENCY, SUPPORTED_CURRENCIES, debitBalanceInTx } from "../wallets/service";
+import {
+  MAX_GAME_BET_COINS,
+  PLATFORM_INTERNAL_CURRENCY,
+  PLATFORM_VIRTUAL_COIN_DECIMALS,
+  SUPPORTED_CURRENCIES,
+  debitBalanceInTx
+} from "../wallets/service";
 import {
   ROULETTE_MAX_NUMBER,
   ROULETTE_MIN_NUMBER,
@@ -162,6 +168,7 @@ const ROUND_CLOSE_TO_SPIN_MS = 0;
 const ROUND_SPIN_MS = env.ROULETTE_SPIN_SECONDS * 1000;
 const WORKER_TICK_MS = env.ROULETTE_WORKER_TICK_MS;
 const ROUND_RESULTS_PAUSE_MS = 5_000;
+const MAX_ROULETTE_BET_ATOMIC = MAX_GAME_BET_COINS * 10n ** BigInt(PLATFORM_VIRTUAL_COIN_DECIMALS);
 
 let broadcaster: RouletteBroadcaster | null = null;
 let workerTimer: NodeJS.Timeout | null = null;
@@ -1174,6 +1181,9 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
 
   if (input.stakeAtomic <= 0n) {
     throw new AppError("stakeAtomic must be greater than 0", 400, "INVALID_STAKE");
+  }
+  if (input.stakeAtomic > MAX_ROULETTE_BET_ATOMIC) {
+    throw new AppError(`Maximum roulette bet is ${MAX_GAME_BET_COINS.toString()} COINS`, 400, "ROULETTE_MAX_BET_EXCEEDED");
   }
 
   try {

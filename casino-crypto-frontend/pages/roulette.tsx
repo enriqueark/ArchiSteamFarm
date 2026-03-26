@@ -19,6 +19,7 @@ import { useToast } from "@/lib/toast";
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
 const COIN_DECIMALS = 8;
+const MAX_BET_COINS = 5000;
 
 const BET_TYPES = ["RED", "BLACK", "GREEN", "BAIT"] as const;
 type BetType = (typeof BET_TYPES)[number];
@@ -115,6 +116,9 @@ const coinsToAtomicString = (coinsRaw: string): string => {
   const coins = Number(coinsRaw);
   if (!Number.isFinite(coins) || coins <= 0) {
     throw new Error("Stake must be a positive COINS value");
+  }
+  if (coins > MAX_BET_COINS) {
+    throw new Error(`Maximum bet is ${MAX_BET_COINS} COINS`);
   }
 
   const atomic = Math.round(coins * 10 ** COIN_DECIMALS);

@@ -377,6 +377,84 @@ export async function getMyRouletteBets(limit = 50) {
   return request<unknown[]>(`/roulette/bets/me?limit=${limit}`);
 }
 
+// ── Blackjack ─────────────────────────────────────────────────────────────
+
+export type BlackjackAction = "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE";
+
+export interface BlackjackHandState {
+  cards: string[];
+  stakeAtomic: string;
+  doubled: boolean;
+  stood: boolean;
+  busted: boolean;
+  blackjack: boolean;
+  value: number;
+}
+
+export interface BlackjackGame {
+  gameId: string;
+  status: "ACTIVE" | "WON" | "LOST" | "PUSH" | "CANCELLED";
+  currency: string;
+  initialBetAtomic: string;
+  mainBetAtomic: string;
+  sideBetPairsAtomic: string;
+  sideBet21Plus3Atomic: string;
+  insuranceBetAtomic: string | null;
+  canSplit: boolean;
+  canInsurance: boolean;
+  activeHandIndex: number;
+  dealerRevealed: boolean;
+  playerHands: BlackjackHandState[];
+  dealerCards: string[];
+  dealerVisibleCards: string[];
+  payoutAtomic: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  wallet: {
+    walletId: string;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+  };
+}
+
+export async function startBlackjackGame(input: {
+  currency: string;
+  betAtomic: string;
+  sideBetPairsAtomic?: string;
+  sideBet21Plus3Atomic?: string;
+}): Promise<BlackjackGame> {
+  return request<BlackjackGame>(
+    "/blackjack/games",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function getActiveBlackjackGame(currency = "USDT"): Promise<BlackjackGame | null> {
+  return request<BlackjackGame | null>(`/blackjack/games/active?currency=${currency}`, {}, true);
+}
+
+export async function getBlackjackGame(gameId: string): Promise<BlackjackGame> {
+  return request<BlackjackGame>(`/blackjack/games/${gameId}`, {}, true);
+}
+
+export async function actBlackjack(gameId: string, action: BlackjackAction): Promise<BlackjackGame> {
+  return request<BlackjackGame>(
+    `/blackjack/games/${gameId}/action`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action })
+    },
+    true,
+    true
+  );
+}
+
 // ── Mines ───────────────────────────────────────────────────────────────
 
 export interface MinesGame {

@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
+import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
 import {
   BOARD_SIZE,
   MAX_MINES,
@@ -686,6 +686,9 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
 
   if (input.betAtomic <= 0n) {
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET_AMOUNT");
+  }
+  if (input.betAtomic > MAX_GAME_BET_ATOMIC) {
+    throw new AppError("betAtomic exceeds max allowed bet of 5000 COINS", 400, "BET_LIMIT_EXCEEDED");
   }
 
   const active = await getActiveMinesGame(input.userId);
