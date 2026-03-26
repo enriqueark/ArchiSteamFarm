@@ -117,14 +117,15 @@ const PlayingCard = ({
   }
 
   const suit = cardSuit(card);
+  const isRed = suit === "H" || suit === "D";
   return (
     <div
       className="blackjack-card blackjack-card-deal h-28 w-20 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className={`text-sm font-bold ${suitColorClass(suit)}`}>{cardRank(card)}</div>
-      <div className={`mt-4 text-center text-2xl ${suitColorClass(suit)}`}>{suitGlyph(suit)}</div>
-      <div className={`text-right text-sm font-bold ${suitColorClass(suit)}`}>{cardRank(card)}</div>
+      <div className={`text-sm font-bold ${isRed ? "text-red-500" : "text-gray-900"}`}>{cardRank(card)}</div>
+      <div className={`mt-4 text-center text-2xl ${isRed ? "text-red-500" : "text-gray-900"}`}>{suitGlyph(suit)}</div>
+      <div className={`text-right text-sm font-bold ${isRed ? "text-red-500" : "text-gray-900"}`}>{cardRank(card)}</div>
     </div>
   );
 };
@@ -139,6 +140,44 @@ export default function BlackjackPage() {
   const [game, setGame] = useState<BlackjackGame | null>(null);
   const [dealSeed, setDealSeed] = useState(0);
   const [winPulse, setWinPulse] = useState(false);
+  const [dealerRevealStep, setDealerRevealStep] = useState(1);
+
+  useEffect(() => {
+    if (!game) {
+      setDealerRevealStep(1);
+      return;
+    }
+
+    if (!game.dealerRevealed) {
+      setDealerRevealStep(1);
+      return;
+    }
+
+    const totalCards = game.dealerCards.length;
+    setDealerRevealStep(1);
+    if (totalCards <= 1) {
+      setDealerRevealStep(totalCards);
+      return;
+    }
+
+    let disposed = false;
+    let step = 1;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    while (step < totalCards) {
+      step += 1;
+      const timeout = setTimeout(() => {
+        if (!disposed) {
+          setDealerRevealStep(step);
+        }
+      }, step * 1000);
+      timers.push(timeout);
+    }
+
+    return () => {
+      disposed = true;
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, [game, dealSeed]);
 
   useEffect(() => {
     if (!authed) {
@@ -148,7 +187,15 @@ export default function BlackjackPage() {
     getActiveBlackjackGame().then((active) => setGame(active)).catch(() => {});
   }, [authed]);
 
-  const dealerCardsDisplay = useMemo(() => game?.dealerVisibleCards ?? [], [game?.dealerVisibleCards]);
+  const dealerCardsDisplay = useMemo(() => {
+    if (!game) {
+      return [];
+    }
+    if (!game.dealerRevealed) {
+      return game.dealerVisibleCards ?? [];
+    }
+    return game.dealerCards.slice(0, Math.max(1, dealerRevealStep));
+  }, [game, dealerRevealStep]);
   const activeHand = game ? game.playerHands[game.activeHandIndex] : null;
   const canAct = !!game && game.status === "ACTIVE";
 
@@ -273,10 +320,10 @@ export default function BlackjackPage() {
               <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">Dealer</div>
               <div className="flex gap-3 flex-wrap">
                 {dealerCardsDisplay.map((card, idx) => (
-                  <PlayingCard key={`${dealSeed}-dealer-${card}-${idx}`} card={card} delayMs={idx * 120} />
+                  <PlayingCard key={`${dealSeed}-dealer-${card}-${idx}`} card={card} delayMs={idx * 900} />
                 ))}
                 {!game.dealerRevealed ? (
-                  <PlayingCard hidden delayMs={dealerCardsDisplay.length * 120} />
+                  <PlayingCard hidden delayMs={dealerCardsDisplay.length * 900} />
                 ) : null}
               </div>
             </div>
@@ -296,7 +343,7 @@ export default function BlackjackPage() {
                   </div>
                   <div className="flex gap-3 flex-wrap">
                     {hand.cards.map((card, idx) => (
-                      <PlayingCard key={`${dealSeed}-player-${handIndex}-${card}-${idx}`} card={card} delayMs={idx * 120} />
+                        <PlayingCard key={`${dealSeed}-player-${handIndex}-${card}-${idx}`} card={card} delayMs={idx * 500} />
                     ))}
                   </div>
                 </div>
@@ -330,6 +377,12 @@ export default function BlackjackPage() {
         <Card title="Actions">
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void doAction("HIT")} disabled={loading || activeHand.doubled}>
+              HIT
+            </Button>
+            <Button
+              onClick={() => void doAction("HIT")}
+              disabled={loading || activeHand.doubled || activeHand.value >= 21 || activeHand.busted || activeHand.stood}
+            >
               HIT
             </Button>
             <Button onClick={() => void doAction("STAND")} disabled={loading}>

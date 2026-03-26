@@ -939,8 +939,8 @@ export const getOrCreateActiveBlackjackGame = async (
   return startBlackjackGame(input);
 };
 
-const advanceActiveHand = (state: StoredGameState, currentIndex: number): number => {
-  let idx = currentIndex + 1;
+const findNextUnresolvedHand = (state: StoredGameState, startIndex: number): number => {
+  let idx = startIndex;
   while (idx < state.playerHands.length) {
     const hand = state.playerHands[idx];
     if (!hand.stood && !hand.busted && hand.cards.length > 0) {
@@ -1147,8 +1147,23 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
     }
 
     const currentIndex = game.activeHandIndex;
-    const nextIndex = advanceActiveHand(state, currentIndex);
+    const currentHandAfterAction = state.playerHands[currentIndex];
+    const currentHandResolved = Boolean(currentHandAfterAction?.stood || currentHandAfterAction?.busted);
 
+    if (!currentHandResolved) {
+      const updated = await tx.blackjackGame.update({
+        where: { id: game.id },
+        data: {
+          playerHands: state.playerHands as unknown as Prisma.InputJsonValue,
+          deck: state.deck as unknown as Prisma.InputJsonValue,
+          activeHandIndex: currentIndex
+        },
+        include: { betReservation: { select: { walletId: true } } }
+      });
+      return toGameState(updated);
+    }
+
+    const nextIndex = findNextUnresolvedHand(state, currentIndex + 1);
     if (nextIndex >= 0) {
       const updated = await tx.blackjackGame.update({
         where: { id: game.id },
