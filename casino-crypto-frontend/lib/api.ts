@@ -164,7 +164,13 @@ async function request<T>(
 // ── Auth ────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
-  user: { id: string; email: string; role: string };
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    level: number;
+    levelXpAtomic: string;
+  };
   tokens: { accessToken: string; refreshToken: string; sessionId: string };
 }
 
@@ -593,6 +599,10 @@ export interface User {
   email: string;
   role: string;
   status: string;
+  progression: {
+    level: number;
+    xpAtomic: string;
+  };
   createdAt: string;
 }
 

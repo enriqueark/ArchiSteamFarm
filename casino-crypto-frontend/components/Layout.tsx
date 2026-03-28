@@ -106,7 +106,12 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#d9dbf6] text-xs font-bold text-gray-700">
                   {displayName.slice(0, 1).toUpperCase()}
                 </span>
-                <span className="flex-1 truncate text-sm font-semibold text-white">{displayName}</span>
+                <span className="flex flex-1 items-center gap-2 truncate text-sm font-semibold text-white">
+                  <span className="truncate">{displayName}</span>
+                  <span className="shrink-0 rounded bg-indigo-900/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-200">
+                    LVL {user?.progression?.level ?? 1}
+                  </span>
+                </span>
                 <span className={`text-xs text-gray-300 transition-transform ${menuOpen ? "rotate-180" : ""}`}>⌃</span>
               </button>
 

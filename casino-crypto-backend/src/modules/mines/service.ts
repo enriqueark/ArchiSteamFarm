@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { applyWagerXpInTx } from "../progression/service";
 import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
 import {
   BOARD_SIZE,
@@ -748,6 +749,7 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
         amountAtomic: input.betAtomic,
         lockAmountAtomic: input.betAtomic
       });
+      await applyWagerXpInTx(tx, input.userId, input.betAtomic);
 
       const betReference = `mines:${seed.serverSeedHash.slice(0, 12)}:${nonceState.nonce}:${randomUUID()}`;
 

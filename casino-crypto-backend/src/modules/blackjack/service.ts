@@ -10,6 +10,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { applyWagerXpInTx } from "../progression/service";
 import {
   MAX_GAME_BET_COINS,
   PLATFORM_INTERNAL_CURRENCY,
@@ -728,6 +729,7 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
       amountAtomic: totalInitial,
       lockAmountAtomic: totalInitial
     });
+    await applyWagerXpInTx(tx, input.userId, totalInitial);
 
     const betReference = `blackjack:${randomUUID()}`;
     const holdEntry = await tx.ledgerEntry.create({

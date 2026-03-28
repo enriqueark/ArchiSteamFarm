@@ -5,12 +5,15 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { ensureUserDepositAddresses, isCashierEnabled } from "../cashier/service";
+import { getLevelFromXp } from "../progression/service";
 import { createDefaultWallets } from "../wallets/service";
 
 type AuthUser = {
   id: string;
   email: string;
   role: "PLAYER" | "ADMIN" | "SUPPORT";
+  level: number;
+  levelXpAtomic: string;
 };
 
 type TokenPair = {
@@ -23,10 +26,17 @@ const DEFAULT_REFRESH_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
-const sanitizeUser = (user: { id: string; email: string; role: "PLAYER" | "ADMIN" | "SUPPORT" }): AuthUser => ({
+const sanitizeUser = (user: {
+  id: string;
+  email: string;
+  role: "PLAYER" | "ADMIN" | "SUPPORT";
+  levelXpAtomic: bigint;
+}): AuthUser => ({
   id: user.id,
   email: user.email,
-  role: user.role
+  role: user.role,
+  level: getLevelFromXp(user.levelXpAtomic),
+  levelXpAtomic: user.levelXpAtomic.toString()
 });
 
 const decodeExpiryDate = (fastify: FastifyInstance, token: string): Date => {
@@ -144,7 +154,8 @@ export const register = async (
     select: {
       id: true,
       email: true,
-      role: true
+      role: true,
+      levelXpAtomic: true
     }
   });
 
@@ -167,7 +178,15 @@ export const login = async (
   const email = normalizeEmail(input.email);
 
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      passwordHash: true,
+      role: true,
+      status: true,
+      levelXpAtomic: true
+    }
   });
 
   if (!user) {

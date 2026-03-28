@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 
 import { requireAuth } from "../../core/auth";
 import { prisma } from "../../infrastructure/db/prisma";
+import { getLevelFromXp } from "../progression/service";
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/me", { preHandler: requireAuth }, async (request, reply) => {
@@ -14,6 +15,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         email: true,
         role: true,
         status: true,
+        levelXpAtomic: true,
         createdAt: true
       }
     });
@@ -22,6 +24,20 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ message: "User not found" });
     }
 
-    return reply.send(user);
+    const level = getLevelFromXp(user.levelXpAtomic);
+
+    return reply.send({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      level,
+      levelXpAtomic: user.levelXpAtomic.toString(),
+      progression: {
+        level,
+        xpAtomic: user.levelXpAtomic.toString()
+      }
+    });
   });
 };

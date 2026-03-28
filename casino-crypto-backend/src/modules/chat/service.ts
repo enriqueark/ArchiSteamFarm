@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../core/errors";
 import { redis } from "../../infrastructure/cache/redis";
 import { prisma } from "../../infrastructure/db/prisma";
+import { getLevelFromXp } from "../progression/service";
 
 export type ChatMessageState = {
   id: string;
@@ -42,12 +43,13 @@ const toState = (row: {
   createdAt: Date;
   user: {
     email: string;
+    levelXpAtomic: bigint;
   };
 }): ChatMessageState => ({
   id: row.id,
   userId: row.userId,
   username: formatUsername(row.user.email, row.userId),
-  userLevel: 1,
+  userLevel: getLevelFromXp(row.user.levelXpAtomic),
   avatarUrl: null,
   message: row.message,
   createdAt: row.createdAt
@@ -63,7 +65,8 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
     include: {
       user: {
         select: {
-          email: true
+          email: true,
+          levelXpAtomic: true
         }
       }
     }
@@ -112,7 +115,8 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
       include: {
         user: {
           select: {
-            email: true
+            email: true,
+            levelXpAtomic: true
           }
         }
       }
