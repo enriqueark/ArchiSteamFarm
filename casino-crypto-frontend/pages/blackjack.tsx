@@ -10,6 +10,7 @@ const INTERNAL_GAME_CURRENCY = "USDT";
 const COIN_DECIMALS = 8;
 const MAX_BET_COINS = 5000;
 const DEALER_REVEAL_STEP_MS = 500;
+const BLACKJACK_REVEAL_LOCK_KEY = "blackjack:reveal-lock:v1";
 
 const toAtomicString = (coinsRaw: string): string => {
   const value = Number(coinsRaw);
@@ -142,42 +143,71 @@ export default function BlackjackPage() {
   const [dealSeed, setDealSeed] = useState(0);
   const [winPulse, setWinPulse] = useState(false);
   const [dealerRevealStep, setDealerRevealStep] = useState(1);
+  const [dealerRevealStartedAt, setDealerRevealStartedAt] = useState<number | null>(null);
   const [pendingSettleToast, setPendingSettleToast] = useState<null | { payoutAtomic: number; payoutRaw: string | null }>(null);
+
+  const setRevealLock = (locked: boolean) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      if (locked) {
+        window.localStorage.setItem(BLACKJACK_REVEAL_LOCK_KEY, String(Date.now()));
+      } else {
+        window.localStorage.removeItem(BLACKJACK_REVEAL_LOCK_KEY);
+      }
+    } catch {
+      // Ignore storage write failures.
+    }
+  };
 
   useEffect(() => {
     if (!game) {
       setDealerRevealStep(1);
+      setDealerRevealStartedAt(null);
       return;
     }
 
     if (!game.dealerRevealed) {
       setDealerRevealStep(1);
+      setDealerRevealStartedAt(null);
       return;
     }
 
     const totalCards = game.dealerCards.length;
-    setDealerRevealStep(1);
     if (totalCards <= 1) {
       setDealerRevealStep(totalCards);
+      setDealerRevealStartedAt(Date.now());
       return;
     }
 
-    let disposed = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (let step = 2; step <= totalCards; step += 1) {
-      const timeout = setTimeout(() => {
-        if (!disposed) {
-          setDealerRevealStep(step);
-        }
-      }, (step - 1) * DEALER_REVEAL_STEP_MS);
-      timers.push(timeout);
-    }
+    setDealerRevealStep(1);
+    setDealerRevealStartedAt(Date.now());
+    let cancelled = false;
+    let currentStep = 1;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    return () => {
-      disposed = true;
-      timers.forEach((t) => clearTimeout(t));
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        currentStep += 1;
+        setDealerRevealStep(currentStep);
+        if (currentStep < totalCards) {
+          scheduleNext();
+        }
+      }, DEALER_REVEAL_STEP_MS);
     };
-  }, [game, dealSeed]);
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [game, game?.gameId, game?.dealerRevealed, game?.dealerCards.length, dealSeed]);
 
   useEffect(() => {
     if (!authed) {
@@ -194,13 +224,27 @@ export default function BlackjackPage() {
     if (!game.dealerRevealed) {
       return game.dealerVisibleCards ?? [];
     }
-    return game.dealerCards.slice(0, Math.max(1, dealerRevealStep));
-  }, [game, dealerRevealStep]);
+    const safeRevealStep = dealerRevealStartedAt === null ? 1 : dealerRevealStep;
+    return game.dealerCards.slice(0, Math.max(1, safeRevealStep));
+  }, [dealerRevealStartedAt, dealerRevealStep, game]);
   const activeHand = game ? game.playerHands[game.activeHandIndex] : null;
   const canAct = !!game && game.status === "ACTIVE";
-  const dealerRevealComplete = !!game && game.dealerRevealed && dealerRevealStep >= game.dealerCards.length;
+  const dealerRevealComplete =
+    !!game &&
+    game.dealerRevealed &&
+    dealerRevealStartedAt !== null &&
+    dealerRevealStep >= game.dealerCards.length;
   const canShowResult = !!game && game.status !== "ACTIVE" && dealerRevealComplete;
   const canStartNewDeal = !game || canShowResult;
+
+  useEffect(() => {
+    const shouldLock =
+      !!game && game.status !== "ACTIVE" && game.dealerRevealed && !dealerRevealComplete;
+    setRevealLock(shouldLock);
+    return () => {
+      setRevealLock(false);
+    };
+  }, [dealerRevealComplete, game]);
 
   useEffect(() => {
     if (!pendingSettleToast || !canShowResult) {
@@ -251,7 +295,10 @@ export default function BlackjackPage() {
     setLoading(true);
     try {
       const next = await actBlackjack(game.gameId, action);
-      setDealSeed(Date.now());
+      if (next.status !== "ACTIVE" && next.dealerRevealed) {
+        setDealerRevealStep(1);
+        setDealerRevealStartedAt(null);
+      }
       setGame(next);
       if (next.status !== "ACTIVE") {
         setPendingSettleToast({
@@ -333,9 +380,17 @@ export default function BlackjackPage() {
             <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
               <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">Dealer</div>
               <div className="flex gap-3 flex-wrap">
-                {dealerCardsDisplay.map((card, idx) => (
-                  <PlayingCard key={`${dealSeed}-dealer-${card}-${idx}`} card={card} delayMs={idx * 900} />
-                ))}
+                {dealerCardsDisplay.map((card, idx) => {
+                  const shouldAnimateReveal = !!game.dealerRevealed && dealerRevealStartedAt !== null;
+                  const animationDelay = shouldAnimateReveal ? 0 : idx * 900;
+                  return (
+                    <PlayingCard
+                      key={`${dealSeed}-dealer-${card}-${idx}`}
+                      card={card}
+                      delayMs={animationDelay}
+                    />
+                  );
+                })}
                 {!game.dealerRevealed ? (
                   <PlayingCard hidden delayMs={dealerCardsDisplay.length * 900} />
                 ) : null}
