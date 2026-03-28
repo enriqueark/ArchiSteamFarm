@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 
@@ -67,6 +68,32 @@ const sanitizeLegacyUser = (user: {
   level: 1,
   levelXpAtomic: "0"
 });
+
+const isBcryptHash = (hash: string): boolean => /^\$2[aby]\$/.test(hash);
+
+const verifyPasswordWithLegacySupport = async (
+  storedHash: string,
+  inputPassword: string
+): Promise<{ valid: boolean; shouldUpgradeHash: boolean }> => {
+  try {
+    const valid = await argon2.verify(storedHash, inputPassword);
+    return { valid, shouldUpgradeHash: false };
+  } catch {
+    // Continue with legacy hash strategies.
+  }
+
+  if (isBcryptHash(storedHash)) {
+    const valid = await bcrypt.compare(inputPassword, storedHash).catch(() => false);
+    return { valid, shouldUpgradeHash: valid };
+  }
+
+  // Last-resort legacy support for plain-text historical rows.
+  if (storedHash === inputPassword) {
+    return { valid: true, shouldUpgradeHash: true };
+  }
+
+  return { valid: false, shouldUpgradeHash: false };
+};
 
 const decodeExpiryDate = (fastify: FastifyInstance, token: string): Date => {
   const decoded = fastify.jwt.decode<{ exp?: number }>(token);
@@ -278,9 +305,8 @@ export const login = async (
     throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
   }
 
-  const passwordValid = await argon2.verify(user.passwordHash, input.password);
-
-  if (!passwordValid) {
+  const passwordVerification = await verifyPasswordWithLegacySupport(user.passwordHash, input.password);
+  if (!passwordVerification.valid) {
     throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
   }
 
@@ -290,6 +316,17 @@ export const login = async (
 
   const sanitizedUser =
     "levelXpAtomic" in user ? sanitizeUser(user) : sanitizeLegacyUser(user);
+  if (passwordVerification.shouldUpgradeHash) {
+    const upgradedHash = await argon2.hash(input.password);
+    await prisma.user
+      .update({
+        where: { id: user.id },
+        data: { passwordHash: upgradedHash }
+      })
+      .catch(() => {
+        // Do not block login if hash upgrade fails.
+      });
+  }
   const tokens = await openSession(fastify, sanitizedUser, input.userAgent, input.ipAddress);
 
   return {
