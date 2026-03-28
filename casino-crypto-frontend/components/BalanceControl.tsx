@@ -11,6 +11,7 @@ import { useToast } from "@/lib/toast";
 
 const COIN_DECIMALS = 8;
 const CURRENCIES = ["BTC", "ETH", "USDT", "USDC", "SOL"] as const;
+const BLACKJACK_REVEAL_LOCK_KEY = "blackjack:reveal-lock:v1";
 type WalletMode = "deposit" | "withdraw";
 
 type DeltaNotice = {
@@ -32,6 +33,17 @@ const formatCoins = (value: number): string => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+};
+
+const isBlackjackRevealLocked = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return !!window.localStorage.getItem(BLACKJACK_REVEAL_LOCK_KEY);
+  } catch {
+    return false;
+  }
 };
 
 const RedTokenIcon = () => (
@@ -114,6 +126,11 @@ export default function BalanceControl() {
           return;
         }
         const nextBalance = wallets.reduce((sum, wallet) => sum + toCoins(wallet.balanceAtomic), 0);
+        // Avoid spoiler: while dealer reveal is in progress, freeze visible balance
+        // updates and apply them right after reveal lock is released.
+        if (isBlackjackRevealLocked()) {
+          return;
+        }
         const previous = previousBalanceRef.current;
         setTargetBalance(nextBalance);
         if (previous !== null) {
