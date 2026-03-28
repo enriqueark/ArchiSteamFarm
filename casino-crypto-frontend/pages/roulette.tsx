@@ -461,7 +461,10 @@ export default function RoulettePage() {
         round.winningNumber
       );
       if (round.status === "SETTLED") {
-        flushPendingHistoryForRound(roundKey);
+        const flushDelayMs = 1000;
+        const delay = Math.max(0, new Date(round.settleAt).getTime() + flushDelayMs - Date.now());
+        const timeout = setTimeout(() => flushPendingHistoryForRound(roundKey), delay);
+        return () => clearTimeout(timeout);
       }
       return;
     }

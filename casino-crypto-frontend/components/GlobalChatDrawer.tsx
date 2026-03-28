@@ -100,7 +100,7 @@ export default function GlobalChatDrawer() {
   return (
     <div className="fixed bottom-0 right-0 top-[72px] z-40 pointer-events-none">
       <aside
-        className={`pointer-events-auto relative h-full w-[340px] border-l border-cyan-500/40 bg-gray-950/95 shadow-[-20px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ${
+        className={`pointer-events-auto relative h-full w-[270px] md:w-[290px] border-l border-cyan-500/40 bg-gray-950/95 shadow-[-20px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
