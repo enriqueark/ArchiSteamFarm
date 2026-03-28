@@ -146,35 +146,52 @@ export const addUserXpInTx = async (
   wagerAtomic: bigint
 ): Promise<{ levelXpAtomic: bigint; level: number; gainedXpAtomic: bigint }> => {
   const gainedXpAtomic = coinsAtomicToXpScaled(wagerAtomic);
-  if (gainedXpAtomic <= 0n) {
-    const row = await tx.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { levelXpAtomic: true }
-    });
-    return {
-      levelXpAtomic: row.levelXpAtomic,
-      level: getLevelFromXp(row.levelXpAtomic),
-      gainedXpAtomic: 0n
-    };
-  }
-
-  const updated = await tx.user.update({
-    where: { id: userId },
-    data: {
-      levelXpAtomic: {
-        increment: gainedXpAtomic
-      }
-    },
-    select: {
-      levelXpAtomic: true
+  try {
+    if (gainedXpAtomic <= 0n) {
+      const row = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { levelXpAtomic: true }
+      });
+      return {
+        levelXpAtomic: row.levelXpAtomic,
+        level: getLevelFromXp(row.levelXpAtomic),
+        gainedXpAtomic: 0n
+      };
     }
-  });
 
-  return {
-    levelXpAtomic: updated.levelXpAtomic,
-    level: getLevelFromXp(updated.levelXpAtomic),
-    gainedXpAtomic
-  };
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: {
+        levelXpAtomic: {
+          increment: gainedXpAtomic
+        }
+      },
+      select: {
+        levelXpAtomic: true
+      }
+    });
+
+    return {
+      levelXpAtomic: updated.levelXpAtomic,
+      level: getLevelFromXp(updated.levelXpAtomic),
+      gainedXpAtomic
+    };
+  } catch (error) {
+    // Safety fallback for deployments where the migration adding levelXpAtomic
+    // hasn't run yet. Never block auth/game flows due to progression storage.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2022" &&
+      String((error.meta as Record<string, unknown> | undefined)?.column ?? "").includes("levelXpAtomic")
+    ) {
+      return {
+        levelXpAtomic: 0n,
+        level: 1,
+        gainedXpAtomic: 0n
+      };
+    }
+    throw error;
+  }
 };
 
 // Backward-compatible alias for existing call sites.

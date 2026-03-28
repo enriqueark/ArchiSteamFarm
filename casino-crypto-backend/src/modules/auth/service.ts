@@ -26,6 +26,12 @@ const DEFAULT_REFRESH_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
+const hasLevelXpColumn = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.message.includes("levelXpAtomic") ||
+    error.message.includes("users.levelXpAtomic") ||
+    error.message.includes("column") && error.message.includes("levelxpatomic"));
+
 const sanitizeUser = (user: {
   id: string;
   email: string;
@@ -37,6 +43,18 @@ const sanitizeUser = (user: {
   role: user.role,
   level: getLevelFromXp(user.levelXpAtomic),
   levelXpAtomic: user.levelXpAtomic.toString()
+});
+
+const sanitizeLegacyUser = (user: {
+  id: string;
+  email: string;
+  role: "PLAYER" | "ADMIN" | "SUPPORT";
+}): AuthUser => ({
+  id: user.id,
+  email: user.email,
+  role: user.role,
+  level: 1,
+  levelXpAtomic: "0"
 });
 
 const decodeExpiryDate = (fastify: FastifyInstance, token: string): Date => {
@@ -146,27 +164,50 @@ export const register = async (
 
   const passwordHash = await argon2.hash(input.password);
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash
-    },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      levelXpAtomic: true
+  let createdUser: AuthUser;
+  let authIdentity: { id: string; email: string; role: "PLAYER" | "ADMIN" | "SUPPORT" };
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        levelXpAtomic: true
+      }
+    });
+    createdUser = sanitizeUser(user);
+    authIdentity = { id: user.id, email: user.email, role: user.role };
+  } catch (error) {
+    if (!hasLevelXpColumn(error)) {
+      throw error;
     }
-  });
-
-  await createDefaultWallets(user.id);
-  if (isCashierEnabled()) {
-    await ensureUserDepositAddresses(user.id);
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true
+      }
+    });
+    createdUser = sanitizeLegacyUser(user);
+    authIdentity = { id: user.id, email: user.email, role: user.role };
   }
-  const tokens = await openSession(fastify, user, input.userAgent, input.ipAddress);
+
+  await createDefaultWallets(authIdentity.id);
+  if (isCashierEnabled()) {
+    await ensureUserDepositAddresses(authIdentity.id);
+  }
+  const tokens = await openSession(fastify, authIdentity, input.userAgent, input.ipAddress);
 
   return {
-    user: sanitizeUser(user),
+    user: createdUser,
     tokens
   };
 };
@@ -177,17 +218,50 @@ export const login = async (
 ) => {
   const email = normalizeEmail(input.email);
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      passwordHash: true,
-      role: true,
-      status: true,
-      levelXpAtomic: true
+  let user:
+    | {
+        id: string;
+        email: string;
+        passwordHash: string;
+        role: "PLAYER" | "ADMIN" | "SUPPORT";
+        status: "ACTIVE" | "SUSPENDED";
+        levelXpAtomic: bigint;
+      }
+    | {
+        id: string;
+        email: string;
+        passwordHash: string;
+        role: "PLAYER" | "ADMIN" | "SUPPORT";
+        status: "ACTIVE" | "SUSPENDED";
+      }
+    | null;
+  try {
+    user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        status: true,
+        levelXpAtomic: true
+      }
+    });
+  } catch (error) {
+    if (!hasLevelXpColumn(error)) {
+      throw error;
     }
-  });
+    user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        status: true
+      }
+    });
+  }
 
   if (!user) {
     throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
@@ -203,7 +277,8 @@ export const login = async (
     throw new AppError("User is not active", 403, "USER_NOT_ACTIVE");
   }
 
-  const sanitizedUser = sanitizeUser(user);
+  const sanitizedUser =
+    "levelXpAtomic" in user ? sanitizeUser(user) : sanitizeLegacyUser(user);
   const tokens = await openSession(fastify, sanitizedUser, input.userAgent, input.ipAddress);
 
   return {
