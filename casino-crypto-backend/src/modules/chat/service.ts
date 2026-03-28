@@ -36,6 +36,12 @@ const normalizeMessage = (value: string): string => {
   return value.replace(/\s+/g, " ").trim();
 };
 
+const hasLevelXpColumn = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.message.includes("levelXpAtomic") ||
+    error.message.includes("users.levelXpAtomic") ||
+    error.message.includes("column") && error.message.toLowerCase().includes("levelxpatomic"));
+
 const toState = (row: {
   id: string;
   userId: string;
@@ -57,20 +63,46 @@ const toState = (row: {
 
 export const listRecentChatMessages = async (limit: number): Promise<ChatMessageState[]> => {
   const safeLimit = Math.max(1, Math.min(100, limit));
-  const rows = await prisma.chatMessage.findMany({
-    orderBy: {
-      createdAt: "desc"
-    },
-    take: safeLimit,
-    include: {
-      user: {
-        select: {
-          email: true,
-          levelXpAtomic: true
+  const rows = await prisma.chatMessage
+    .findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: safeLimit,
+      include: {
+        user: {
+          select: {
+            email: true,
+            levelXpAtomic: true
+          }
         }
       }
-    }
-  });
+    })
+    .catch(async (error) => {
+      if (!hasLevelXpColumn(error)) {
+        throw error;
+      }
+      const legacyRows = await prisma.chatMessage.findMany({
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: safeLimit,
+        include: {
+          user: {
+            select: {
+              email: true
+            }
+          }
+        }
+      });
+      return legacyRows.map((row) => ({
+        ...row,
+        user: {
+          ...row.user,
+          levelXpAtomic: 0n
+        }
+      }));
+    });
 
   return rows.reverse().map(toState);
 };
@@ -107,20 +139,46 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
   }
 
   try {
-    const row = await prisma.chatMessage.create({
-      data: {
-        userId: input.userId,
-        message
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
-            levelXpAtomic: true
+    const row = await prisma.chatMessage
+      .create({
+        data: {
+          userId: input.userId,
+          message
+        },
+        include: {
+          user: {
+            select: {
+              email: true,
+              levelXpAtomic: true
+            }
           }
         }
-      }
-    });
+      })
+      .catch(async (error) => {
+        if (!hasLevelXpColumn(error)) {
+          throw error;
+        }
+        const legacyRow = await prisma.chatMessage.create({
+          data: {
+            userId: input.userId,
+            message
+          },
+          include: {
+            user: {
+              select: {
+                email: true
+              }
+            }
+          }
+        });
+        return {
+          ...legacyRow,
+          user: {
+            ...legacyRow.user,
+            levelXpAtomic: 0n
+          }
+        };
+      });
     return toState(row);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

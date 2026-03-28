@@ -4,6 +4,17 @@ import { requireAuth } from "../../core/auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
 
+const isMissingLevelXpColumnError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("levelxpatomic") ||
+    (message.includes("column") && message.includes("users"))
+  );
+};
+
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/me", { preHandler: requireAuth }, async (request, reply) => {
     const user = await prisma.user
@@ -23,12 +34,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       .catch((error) => {
         // Backward compatible fallback for deployments where levelXpAtomic
         // column is not present yet.
-        if (
-          error instanceof Error &&
-          (error.message.includes("levelXpAtomic") ||
-            error.message.includes("users.levelXpAtomic") ||
-            error.message.includes("column"))
-        ) {
+        if (isMissingLevelXpColumnError(error)) {
           return prisma.user.findUnique({
             where: {
               id: request.user.sub

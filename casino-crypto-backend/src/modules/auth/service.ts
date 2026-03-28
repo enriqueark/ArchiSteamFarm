@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import { Prisma } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 
 import { env } from "../../config/env";
@@ -26,11 +27,21 @@ const DEFAULT_REFRESH_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
-const hasLevelXpColumn = (error: unknown): boolean =>
-  error instanceof Error &&
-  (error.message.includes("levelXpAtomic") ||
-    error.message.includes("users.levelXpAtomic") ||
-    error.message.includes("column") && error.message.includes("levelxpatomic"));
+const isMissingLevelXpColumnError = (error: unknown): boolean => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    const meta = error.meta as Record<string, unknown> | undefined;
+    const metaText = `${String(meta?.column ?? "")} ${String(meta?.target ?? "")}`.toLowerCase();
+    if (metaText.includes("levelxpatomic")) {
+      return true;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes("levelxpatomic");
+  }
+
+  return false;
+};
 
 const sanitizeUser = (user: {
   id: string;
@@ -182,7 +193,7 @@ export const register = async (
     createdUser = sanitizeUser(user);
     authIdentity = { id: user.id, email: user.email, role: user.role };
   } catch (error) {
-    if (!hasLevelXpColumn(error)) {
+    if (!isMissingLevelXpColumnError(error)) {
       throw error;
     }
     const user = await prisma.user.create({
@@ -248,7 +259,7 @@ export const login = async (
       }
     });
   } catch (error) {
-    if (!hasLevelXpColumn(error)) {
+    if (!isMissingLevelXpColumnError(error)) {
       throw error;
     }
     user = await prisma.user.findUnique({
