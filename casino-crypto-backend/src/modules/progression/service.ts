@@ -146,6 +146,13 @@ export const addUserXpInTx = async (
   wagerAtomic: bigint
 ): Promise<{ levelXpAtomic: bigint; level: number; gainedXpAtomic: bigint }> => {
   const gainedXpAtomic = coinsAtomicToXpScaled(wagerAtomic);
+  const isMissingLevelXpColumn = (error: unknown): boolean =>
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2022" &&
+    String((error.meta as Record<string, unknown> | undefined)?.column ?? "")
+      .toLowerCase()
+      .includes("levelxpatomic");
+
   try {
     if (gainedXpAtomic <= 0n) {
       const row = await tx.user.findUniqueOrThrow({
@@ -179,11 +186,7 @@ export const addUserXpInTx = async (
   } catch (error) {
     // Safety fallback for deployments where the migration adding levelXpAtomic
     // hasn't run yet. Never block auth/game flows due to progression storage.
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2022" &&
-      String((error.meta as Record<string, unknown> | undefined)?.column ?? "").includes("levelXpAtomic")
-    ) {
+    if (isMissingLevelXpColumn(error)) {
       return {
         levelXpAtomic: 0n,
         level: 1,
