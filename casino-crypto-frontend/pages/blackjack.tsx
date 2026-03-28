@@ -9,6 +9,7 @@ import { useToast } from "@/lib/toast";
 const INTERNAL_GAME_CURRENCY = "USDT";
 const COIN_DECIMALS = 8;
 const MAX_BET_COINS = 5000;
+const DEALER_REVEAL_STEP_MS = 500;
 
 const toAtomicString = (coinsRaw: string): string => {
   const value = Number(coinsRaw);
@@ -162,15 +163,13 @@ export default function BlackjackPage() {
     }
 
     let disposed = false;
-    let step = 1;
     const timers: ReturnType<typeof setTimeout>[] = [];
-    while (step < totalCards) {
-      step += 1;
+    for (let step = 2; step <= totalCards; step += 1) {
       const timeout = setTimeout(() => {
         if (!disposed) {
           setDealerRevealStep(step);
         }
-      }, step * 1000);
+      }, (step - 1) * DEALER_REVEAL_STEP_MS);
       timers.push(timeout);
     }
 
