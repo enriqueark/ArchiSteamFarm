@@ -142,25 +142,47 @@ export const coinsAtomicToXpScaled = (amountAtomic: bigint): bigint => {
   return amountAtomic * XP_PER_COIN_SCALED / 100000000n;
 };
 
+const isMissingLevelXpColumn = (error: unknown): boolean => {
+  // Prisma uses P2022 for missing-column errors.
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return message.includes("levelxpatomic");
+  }
+  return false;
+};
+
+let ensureLevelXpColumnPromise: Promise<void> | null = null;
+
+const ensureLevelXpColumnExistsBestEffort = async (): Promise<void> => {
+  if (ensureLevelXpColumnPromise) {
+    return ensureLevelXpColumnPromise;
+  }
+
+  ensureLevelXpColumnPromise = (async () => {
+    try {
+      // Self-heal old deployments where the migration did not run yet.
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "levelXpAtomic" BIGINT NOT NULL DEFAULT 0'
+      );
+    } catch {
+      // If this fails (permissions/locks), caller will safely ignore.
+    } finally {
+      ensureLevelXpColumnPromise = null;
+    }
+  })();
+
+  await ensureLevelXpColumnPromise;
+};
+
 export const addUserXpInTx = async (
   tx: Prisma.TransactionClient,
   userId: string,
   wagerAtomic: bigint
 ): Promise<{ levelXpAtomic: bigint; level: number; gainedXpAtomic: bigint }> => {
   const gainedXpAtomic = coinsAtomicToXpScaled(wagerAtomic);
-  const isMissingLevelXpColumn = (error: unknown): boolean => {
-    // On some environments Prisma returns P2022 with "(not available)" as
-    // column metadata. Since this function only writes progression data, treat
-    // any P2022 here as a non-fatal missing progression-column case.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
-      return true;
-    }
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-      return message.includes("levelxpatomic");
-    }
-    return false;
-  };
 
   try {
     if (gainedXpAtomic <= 0n) {
@@ -207,10 +229,25 @@ export const addUserXpInTx = async (
 };
 
 export const addUserXpBestEffort = async (userId: string, wagerAtomic: bigint): Promise<void> => {
-  try {
+  const runIncrement = async (): Promise<void> => {
     await prisma.$transaction(async (tx) => {
       await addUserXpInTx(tx, userId, wagerAtomic);
     });
+  };
+
+  try {
+    await runIncrement();
+    return;
+  } catch (error) {
+    if (!isMissingLevelXpColumn(error)) {
+      return;
+    }
+  }
+
+  // If the column is missing, try to create it and retry once.
+  await ensureLevelXpColumnExistsBestEffort();
+  try {
+    await runIncrement();
   } catch {
     // Never let progression updates block core betting flows.
   }
