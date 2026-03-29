@@ -57,6 +57,18 @@ export const saveAffiliateCode = async (userId: string, rawCode: string) => {
     );
   }
 
+  const existingForUser = await prisma.affiliateCode.findUnique({
+    where: { userId },
+    select: { code: true, createdAt: true, updatedAt: true }
+  });
+  if (existingForUser) {
+    throw new AppError(
+      "Affiliate code is permanent and cannot be changed once created",
+      409,
+      "AFFILIATE_CODE_LOCKED"
+    );
+  }
+
   const taken = await prisma.affiliateCode.findUnique({
     where: { code },
     select: { userId: true }
@@ -65,10 +77,8 @@ export const saveAffiliateCode = async (userId: string, rawCode: string) => {
     throw new AppError("Affiliate code is already taken", 409, "AFFILIATE_CODE_TAKEN");
   }
 
-  const saved = await prisma.affiliateCode.upsert({
-    where: { userId },
-    update: { code },
-    create: { userId, code },
+  const saved = await prisma.affiliateCode.create({
+    data: { userId, code },
     select: { code: true, createdAt: true, updatedAt: true }
   });
 

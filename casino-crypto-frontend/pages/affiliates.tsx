@@ -165,6 +165,7 @@ export default function AffiliatesPage() {
               value={myCodeInput}
               onChange={(e) => setMyCodeInput(e.target.value.toUpperCase())}
               placeholder="AFFILIATE-CODE"
+              disabled={Boolean(dashboard?.myCode)}
             />
           </div>
           <Button
@@ -172,11 +173,16 @@ export default function AffiliatesPage() {
             onClick={() => {
               void handleSaveCode();
             }}
-            disabled={savingCode}
+            disabled={savingCode || Boolean(dashboard?.myCode)}
           >
-            {savingCode ? "Saving..." : "Save"}
+            {dashboard?.myCode ? "Locked" : savingCode ? "Saving..." : "Save"}
           </Button>
         </div>
+        {dashboard?.myCode ? (
+          <p className="text-xs text-slate-300">
+            Your affiliate code is permanent: <span className="font-semibold">{dashboard.myCode.code}</span>
+          </p>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div className="w-64">
