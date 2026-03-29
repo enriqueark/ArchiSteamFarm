@@ -16,7 +16,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
-import { applyWagerXpInTx } from "../progression/service";
+import { addUserXpBestEffort } from "../progression/service";
 import {
   MAX_GAME_BET_COINS,
   PLATFORM_INTERNAL_CURRENCY,
@@ -1306,8 +1306,6 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
         amountAtomic: input.stakeAtomic,
         lockAmountAtomic: input.stakeAtomic
       });
-      await applyWagerXpInTx(tx, input.userId, input.stakeAtomic);
-
       const betReference = `roulette:${lockedRound.id}:${randomUUID()}`;
 
       const holdEntry = await tx.ledgerEntry.create({
@@ -1397,6 +1395,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
       };
     });
 
+    void addUserXpBestEffort(input.userId, input.stakeAtomic);
     emitTotalsEvent(result.round.id, result.round.currency, result.round.totalStakedAtomic);
     const breakdown = await getRouletteBetBreakdownByRoundId(result.round.id);
     emitBetBreakdownEvent(breakdown);

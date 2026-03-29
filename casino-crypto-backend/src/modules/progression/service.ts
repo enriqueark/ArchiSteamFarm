@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 
+import { prisma } from "../../infrastructure/db/prisma";
+
 const XP_SCALE = 1_000_000n;
 const XP_PER_COIN_SCALED = 100n * XP_SCALE;
 
@@ -201,6 +203,16 @@ export const addUserXpInTx = async (
       };
     }
     throw error;
+  }
+};
+
+export const addUserXpBestEffort = async (userId: string, wagerAtomic: bigint): Promise<void> => {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await addUserXpInTx(tx, userId, wagerAtomic);
+    });
+  } catch {
+    // Never let progression updates block core betting flows.
   }
 };
 
