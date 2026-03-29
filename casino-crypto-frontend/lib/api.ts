@@ -101,11 +101,15 @@ export async function validateSession(): Promise<boolean> {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) return true;
+    // Keep session on transient server issues (e.g. temporary 5xx while deploy rolls out).
+    if (res.status >= 500) {
+      return true;
+    }
     clearSession();
     return false;
   } catch {
-    clearSession();
-    return false;
+    // Network issues should not force-log users out.
+    return true;
   }
 }
 

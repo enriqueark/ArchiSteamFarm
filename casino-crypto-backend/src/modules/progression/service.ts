@@ -146,12 +146,21 @@ export const addUserXpInTx = async (
   wagerAtomic: bigint
 ): Promise<{ levelXpAtomic: bigint; level: number; gainedXpAtomic: bigint }> => {
   const gainedXpAtomic = coinsAtomicToXpScaled(wagerAtomic);
-  const isMissingLevelXpColumn = (error: unknown): boolean =>
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2022" &&
-    String((error.meta as Record<string, unknown> | undefined)?.column ?? "")
-      .toLowerCase()
-      .includes("levelxpatomic");
+  const isMissingLevelXpColumn = (error: unknown): boolean => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+      const column = String((error.meta as Record<string, unknown> | undefined)?.column ?? "").toLowerCase();
+      if (column.includes("levelxpatomic")) {
+        return true;
+      }
+    }
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("levelxpatomic")) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   try {
     if (gainedXpAtomic <= 0n) {
