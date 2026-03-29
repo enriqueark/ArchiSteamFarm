@@ -130,7 +130,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <div class="card">
       <div class="row">
         <label>Search user:</label>
-        <input id="query" placeholder="email, id..." />
+        <input id="query" placeholder="email, uuid, or user #id..." />
         <label>Limit:</label>
         <input id="limit" type="number" min="1" max="5000" value="1000" style="width:100px" />
         <label style="display:flex;align-items:center;gap:6px;">
@@ -252,7 +252,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             "<div class=\\"grid-2\\">" +
               "<div>" +
                 "<h3>User</h3>" +
-                "<div class=\\"mono\\">id=" + data.user.id + "</div>" +
+                "<div class=\\"mono\\">publicId=#" + (data.user.publicId ?? "-") + " | id=" + data.user.id + "</div>" +
                 "<div class=\\"mono\\">email=" + data.user.email + "</div>" +
                 "<div class=\\"mono\\">role=" + data.user.role + " status=" + data.user.status + "</div>" +
                 "<div class=\\"mono\\">level=" + data.user.level + " xpAtomic=" + data.user.levelXpAtomic + "</div>" +
@@ -330,7 +330,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           tr.innerHTML = \`
             <td>
               <div><strong>\${user.email}</strong></div>
-              <div class="mono">id=\${user.id}</div>
+              <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">level=\${user.level} xpAtomic=\${user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
@@ -605,9 +605,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const query = userSearchQuerySchema.parse(request.query);
+      const qPublicId = query.q ? Number.parseInt(query.q, 10) : Number.NaN;
       const where = query.q
         ? {
-            OR: [{ email: { contains: query.q, mode: "insensitive" as const } }, { id: { equals: query.q } }]
+            OR: [
+              { email: { contains: query.q, mode: "insensitive" as const } },
+              { id: { equals: query.q } },
+              ...(Number.isInteger(qPublicId) && qPublicId > 0 ? [{ publicId: { equals: qPublicId } }] : [])
+            ]
           }
         : {};
 
@@ -625,6 +630,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         take,
         select: {
           id: true,
+          publicId: true,
           email: true,
           role: true,
           status: true,
@@ -679,6 +685,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         });
         return legacyRows.map((row) => ({
           ...row,
+          publicId: null,
           levelXpAtomic: 0n
         }));
       });
@@ -688,6 +695,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         pendingApprovalCount,
         users: rows.map((user) => ({
           id: user.id,
+          publicId: user.publicId ?? null,
           email: user.email,
           role: user.role,
           status: user.status,
@@ -725,6 +733,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: {
           id: true,
+          publicId: true,
           email: true,
           role: true,
           status: true,
@@ -757,6 +766,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: params.userId },
         select: {
           id: true,
+          publicId: true,
           email: true,
           role: true,
           status: true,
@@ -806,6 +816,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
         return {
           ...legacy,
+          publicId: null,
           levelXpAtomic: 0n
         };
       });
@@ -937,6 +948,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         user: {
           id: userRow.id,
+          publicId: userRow.publicId ?? null,
           email: userRow.email,
           role: userRow.role,
           status: userRow.status,

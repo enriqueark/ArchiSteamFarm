@@ -13,6 +13,7 @@ import { createDefaultWallets } from "../wallets/service";
 
 type AuthUser = {
   id: string;
+  publicId: number | null;
   email: string;
   role: "PLAYER" | "ADMIN" | "SUPPORT";
   level: number;
@@ -45,12 +46,29 @@ const isMissingLevelXpColumnError = (error: unknown): boolean => {
   return false;
 };
 
+const isMissingPublicIdColumnError = (error: unknown): boolean => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    const meta = error.meta as Record<string, unknown> | undefined;
+    const metaText = `${String(meta?.column ?? "")} ${String(meta?.target ?? "")}`.toLowerCase();
+    if (metaText.includes("publicid")) {
+      return true;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes("publicid");
+  }
+
+  return false;
+};
+
 const sanitizeLegacyUser = (user: {
   id: string;
   email: string;
   role: "PLAYER" | "ADMIN" | "SUPPORT";
-}): AuthUser => ({
+}, publicId: number | null = null): AuthUser => ({
   id: user.id,
+  publicId,
   email: user.email,
   role: user.role,
   level: 1,
@@ -70,6 +88,42 @@ const toBigIntSafe = (value: unknown): bigint => {
   return 0n;
 };
 
+const toPublicIdSafe = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    const converted = Number(value);
+    if (Number.isSafeInteger(converted) && converted > 0) {
+      return converted;
+    }
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const getPublicIdBestEffort = async (userId: string): Promise<number | null> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ publicId: unknown }>>`
+      SELECT "publicId"
+      FROM "users"
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    return toPublicIdSafe(rows[0]?.publicId ?? null);
+  } catch (error) {
+    if (isMissingPublicIdColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+};
+
 const enrichUserWithProgression = async (user: {
   id: string;
   email: string;
@@ -85,6 +139,7 @@ const enrichUserWithProgression = async (user: {
     const xp = toBigIntSafe(rows[0]?.levelXpAtomic ?? 0);
     return {
       id: user.id,
+      publicId: await getPublicIdBestEffort(user.id),
       email: user.email,
       role: user.role,
       level: getLevelFromXp(xp),
@@ -92,7 +147,7 @@ const enrichUserWithProgression = async (user: {
     };
   } catch (error) {
     if (isMissingLevelXpColumnError(error)) {
-      return sanitizeLegacyUser(user);
+      return sanitizeLegacyUser(user, await getPublicIdBestEffort(user.id));
     }
     throw error;
   }

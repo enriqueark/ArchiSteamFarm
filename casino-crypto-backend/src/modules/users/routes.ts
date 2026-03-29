@@ -15,6 +15,49 @@ const isMissingLevelXpColumnError = (error: unknown): boolean => {
   );
 };
 
+const isMissingPublicIdColumnError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("publicid");
+};
+
+const toPublicIdSafe = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    const converted = Number(value);
+    if (Number.isSafeInteger(converted) && converted > 0) {
+      return converted;
+    }
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const getPublicIdBestEffort = async (userId: string): Promise<number | null> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ publicId: unknown }>>`
+      SELECT "publicId"
+      FROM "users"
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    return toPublicIdSafe(rows[0]?.publicId ?? null);
+  } catch (error) {
+    if (isMissingPublicIdColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+};
+
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/me", { preHandler: requireAuth }, async (request, reply) => {
     const user = await prisma.user
@@ -24,6 +67,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: {
           id: true,
+          publicId: true,
           email: true,
           role: true,
           status: true,
@@ -57,9 +101,14 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
 
     const xpAtomic = "levelXpAtomic" in user ? user.levelXpAtomic : 0n;
     const level = getLevelFromXp(xpAtomic);
+    const publicId =
+      "publicId" in user
+        ? toPublicIdSafe(user.publicId)
+        : await getPublicIdBestEffort(request.user.sub);
 
     return reply.send({
       id: user.id,
+      publicId,
       email: user.email,
       role: user.role,
       status: user.status,

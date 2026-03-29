@@ -170,6 +170,7 @@ async function request<T>(
 export interface AuthResponse {
   user: {
     id: string;
+    publicId: number | null;
     email: string;
     role: string;
     level: number;
@@ -600,6 +601,7 @@ export async function cashoutMines(gameId: string): Promise<MinesGame> {
 
 export interface User {
   id: string;
+  publicId: number | null;
   email: string;
   role: string;
   status: string;

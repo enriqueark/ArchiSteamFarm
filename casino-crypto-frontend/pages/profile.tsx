@@ -106,6 +106,12 @@ export default function ProfilePage() {
                 <span className="rounded bg-cyan-400/90 px-2 py-0.5 text-xs font-bold text-[#10263a]">{level}</span>
               </div>
               <p className="text-sm text-gray-300">Member since {memberSince}</p>
+              <p className="text-xs text-gray-400">
+                User ID:{" "}
+                <span className="font-semibold text-gray-200">
+                  {user?.publicId ? `#${user.publicId}` : "-"}
+                </span>
+              </p>
             </div>
           </div>
           <div className="text-right">
