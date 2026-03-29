@@ -58,7 +58,10 @@ export const buildApp = (): FastifyInstance => {
   app.register(sensible);
   app.register(cors, {
     origin: true,
-    credentials: true
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key", "X-Request-Id"],
+    exposedHeaders: ["X-Request-Id"]
   });
   app.register(helmet);
   app.register(websocket, {
