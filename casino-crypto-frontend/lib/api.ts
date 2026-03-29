@@ -436,6 +436,160 @@ export async function getMyRouletteBets(limit = 50) {
   return request<unknown[]>(`/roulette/bets/me?limit=${limit}`);
 }
 
+// ── Cases ────────────────────────────────────────────────────────────────
+
+export interface CaseListItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+}
+
+export interface CaseItem {
+  id: string;
+  name: string;
+  valueAtomic: string;
+  dropRate: string;
+  imageUrl: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface CaseDetails {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items: CaseItem[];
+}
+
+export interface CaseOpeningResult {
+  openingId: string;
+  caseId: string;
+  caseSlug: string;
+  caseTitle: string;
+  item: CaseItem;
+  topTierEligible: boolean;
+  topTierItems: CaseItem[];
+  roll: number;
+  payoutAtomic: string;
+  profitAtomic: string;
+  priceAtomic: string;
+  currency: string;
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
+  wallet: {
+    walletId: string;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+  };
+  createdAt: string;
+}
+
+export interface CasesRtpSimulationResult {
+  caseId: string;
+  rounds: number;
+  spentAtomic: string;
+  payoutAtomic: string;
+  profitAtomic: string;
+  rtpPercent: number;
+  hitTopTierCount: number;
+}
+
+export async function getCases(): Promise<CaseListItem[]> {
+  return request<CaseListItem[]>("/cases", {}, false);
+}
+
+export async function getCaseDetails(caseId: string): Promise<CaseDetails> {
+  return request<CaseDetails>(`/cases/${caseId}`, {}, false);
+}
+
+export async function openCase(caseId: string): Promise<CaseOpeningResult> {
+  return request<CaseOpeningResult>(
+    `/cases/${caseId}/open`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    },
+    true,
+    true
+  );
+}
+
+export async function getMyCaseOpenings(limit = 30): Promise<CaseOpeningResult[]> {
+  return request<CaseOpeningResult[]>(`/cases/openings/me?limit=${limit}`);
+}
+
+export async function adminListCases(): Promise<CaseDetails[]> {
+  return request<CaseDetails[]>("/cases/admin/cases");
+}
+
+export async function adminUpsertCase(input: {
+  caseId?: string;
+  slug: string;
+  title: string;
+  description?: string;
+  priceAtomic: string;
+  isActive?: boolean;
+  items: Array<{
+    name: string;
+    valueAtomic: string;
+    dropRate: string;
+    imageUrl?: string;
+    sortOrder?: number;
+    isActive?: boolean;
+  }>;
+}): Promise<CaseDetails> {
+  return request<CaseDetails>(
+    "/cases/admin/cases",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function adminSetCaseStatus(caseId: string, isActive: boolean): Promise<CaseDetails> {
+  return request<CaseDetails>(
+    `/cases/admin/cases/${caseId}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ isActive })
+    },
+    true,
+    true
+  );
+}
+
+export async function adminSimulateCasesRtp(rounds = 100_000): Promise<CasesRtpSimulationResult[]> {
+  return request<CasesRtpSimulationResult[]>(
+    "/cases/admin/simulate-rtp",
+    {
+      method: "POST",
+      body: JSON.stringify({ rounds })
+    },
+    true,
+    true
+  );
+}
+
 // ── Blackjack ─────────────────────────────────────────────────────────────
 
 export type BlackjackAction = "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE";
