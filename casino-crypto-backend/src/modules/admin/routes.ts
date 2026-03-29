@@ -82,8 +82,15 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <h1>Admin Panel</h1>
     <div class="card">
       <div class="row">
+        <label>Admin email:</label>
+        <input id="adminEmail" style="min-width:260px" placeholder="admin@domain.com" />
+        <label>Password:</label>
+        <input id="adminPassword" type="password" style="min-width:220px" placeholder="********" />
+        <button id="loginBtn">Login as admin</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
         <label>Access token:</label>
-        <input id="token" style="min-width:520px" placeholder="Paste admin Bearer token" />
+        <input id="token" style="min-width:520px" placeholder="Auto-filled after login (or paste manually)" />
         <button id="checkTokenBtn">Verify token</button>
         <button id="logoutBtn">Logout current token</button>
       </div>
@@ -113,6 +120,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
     <script>
       const tokenInput = document.getElementById("token");
+      const adminEmailInput = document.getElementById("adminEmail");
+      const adminPasswordInput = document.getElementById("adminPassword");
+      const loginBtn = document.getElementById("loginBtn");
       const queryInput = document.getElementById("query");
       const limitInput = document.getElementById("limit");
       const allUsersInput = document.getElementById("allUsers");
@@ -146,10 +156,21 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         try { localStorage.setItem("admin_panel_token", tokenInput.value.trim()); } catch (_e) {}
       };
 
+      const persistAdminEmail = () => {
+        try { localStorage.setItem("admin_panel_email", adminEmailInput.value.trim()); } catch (_e) {}
+      };
+
       const restoreToken = () => {
         try {
           const saved = localStorage.getItem("admin_panel_token");
           if (saved) tokenInput.value = saved;
+        } catch (_e) {}
+      };
+
+      const restoreAdminEmail = () => {
+        try {
+          const saved = localStorage.getItem("admin_panel_email");
+          if (saved) adminEmailInput.value = saved;
         } catch (_e) {}
       };
 
@@ -299,6 +320,53 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
       });
 
+      loginBtn.addEventListener("click", async () => {
+        authStatus.textContent = "";
+        authStatus.className = "mono";
+        const email = adminEmailInput.value.trim();
+        const password = adminPasswordInput.value;
+        if (!email || !password) {
+          authStatus.textContent = "Enter admin email and password first.";
+          authStatus.className = "mono err";
+          return;
+        }
+        try {
+          persistAdminEmail();
+          const res = await fetch("/api/v1/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            authStatus.textContent = (data && data.message) ? data.message : "Login failed.";
+            authStatus.className = "mono err";
+            return;
+          }
+          if (!data || !data.tokens || !data.tokens.accessToken) {
+            authStatus.textContent = "Login response is missing access token.";
+            authStatus.className = "mono err";
+            return;
+          }
+          if (!data.user || data.user.role !== "ADMIN") {
+            authStatus.textContent = "Login succeeded, but this user is not ADMIN.";
+            authStatus.className = "mono err";
+            tokenInput.value = "";
+            persistToken();
+            return;
+          }
+          tokenInput.value = data.tokens.accessToken;
+          persistToken();
+          adminPasswordInput.value = "";
+          authStatus.textContent = "Login OK. ADMIN access granted for " + data.user.email + ".";
+          authStatus.className = "mono ok";
+          document.getElementById("searchBtn").click();
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Login failed.";
+          authStatus.className = "mono err";
+        }
+      });
+
       document.getElementById("logoutBtn").addEventListener("click", async () => {
         const token = tokenInput.value.trim();
         if (!token) {
@@ -328,8 +396,17 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
       });
 
+      adminPasswordInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loginBtn.click();
+        }
+      });
+
       tokenInput.addEventListener("change", persistToken);
+      adminEmailInput.addEventListener("change", persistAdminEmail);
       restoreToken();
+      restoreAdminEmail();
       if (tokenInput.value.trim()) {
         document.getElementById("searchBtn").click();
       }
