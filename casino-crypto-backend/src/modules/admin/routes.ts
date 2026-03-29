@@ -9,11 +9,23 @@ import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
 import { adjustWalletBalance } from "../ledger/service";
 import { getBlackjackPayoutConfig, setBlackjackPayoutConfig } from "../blackjack/config";
+import { getLevelFromXp } from "../progression/service";
 
 const userSearchQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20)
+  limit: z.coerce.number().int().min(1).max(5000).default(1000),
+  all: z.coerce.boolean().default(true)
 });
+
+const isMissingLevelXpColumnError = (error: unknown): boolean => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes("levelxpatomic");
+  }
+  return false;
+};
 
 const adjustByAdminSchema = z
   .object({
@@ -82,12 +94,18 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       <div class="row">
         <label>Search user:</label>
         <input id="query" placeholder="email, id..." />
-        <button id="searchBtn">Search</button>
+        <label>Limit:</label>
+        <input id="limit" type="number" min="1" max="5000" value="1000" style="width:100px" />
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input id="allUsers" type="checkbox" checked />
+          All users
+        </label>
+        <button id="searchBtn">Refresh users</button>
       </div>
       <div id="searchStatus"></div>
       <table id="usersTable">
         <thead>
-          <tr><th>User</th><th>Wallets</th><th>Adjust balance</th></tr>
+          <tr><th>User / Progression</th><th>Wallets</th><th>Adjust balance</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -96,6 +114,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <script>
       const tokenInput = document.getElementById("token");
       const queryInput = document.getElementById("query");
+      const limitInput = document.getElementById("limit");
+      const allUsersInput = document.getElementById("allUsers");
       const usersTbody = document.querySelector("#usersTable tbody");
       const searchStatus = document.getElementById("searchStatus");
       const authStatus = document.getElementById("authStatus");
@@ -138,13 +158,20 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         for (const user of users) {
           const tr = document.createElement("tr");
           const walletLines = (user.wallets || []).map((w) =>
-            "<div class=\\"mono\\">" + w.currency + " balance=" + w.balanceAtomic + " locked=" + w.lockedAtomic + "</div>"
+            "<div class=\\"mono\\">" +
+            w.currency +
+            " balance=" + w.balanceAtomic +
+            " locked=" + w.lockedAtomic +
+            " available=" + w.availableAtomic +
+            "</div>"
           ).join("");
           tr.innerHTML = \`
             <td>
               <div><strong>\${user.email}</strong></div>
               <div class="mono">id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
+              <div class="mono">level=\${user.level} xpAtomic=\${user.levelXpAtomic}</div>
+              <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
             </td>
             <td>\${walletLines || "<span class=\\"mono\\">No wallets</span>"}</td>
             <td>
@@ -211,7 +238,20 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           searchStatus.textContent = "Searching...";
           searchStatus.className = "mono";
           const q = encodeURIComponent(queryInput.value.trim());
-          const res = await req("/api/v1/admin/users" + (q ? ("?q=" + q) : ""));
+          const params = new URLSearchParams();
+          if (q) {
+            params.set("q", decodeURIComponent(q));
+          }
+          const limit = Number(limitInput.value);
+          if (Number.isFinite(limit) && limit > 0) {
+            params.set("limit", String(Math.min(5000, Math.trunc(limit))));
+          }
+          if (allUsersInput.checked) {
+            params.set("all", "true");
+          } else {
+            params.set("all", "false");
+          }
+          const res = await req("/api/v1/admin/users?" + params.toString());
           if (!res.ok) {
             searchStatus.textContent = await getErrorMessage(res, "Search failed");
             searchStatus.className = "err";
@@ -219,7 +259,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             return;
           }
           const data = await res.json().catch(() => ({ users: [] }));
-          searchStatus.textContent = "Found " + data.users.length + " user(s)";
+          searchStatus.textContent = "Showing " + data.users.length + " / " + data.totalUsers + " user(s)";
           searchStatus.className = "ok";
           renderUsers(data.users);
         } catch (error) {
@@ -290,6 +330,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       tokenInput.addEventListener("change", persistToken);
       restoreToken();
+      if (tokenInput.value.trim()) {
+        document.getElementById("searchBtn").click();
+      }
     </script>
   </body>
 </html>`;
@@ -344,45 +387,123 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
         : {};
 
-      const users = await prisma.user.findMany({
-        where,
-        orderBy: {
-          createdAt: "desc"
-        },
-        take: query.limit,
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          wallets: {
-            select: {
-              id: true,
-              currency: true,
-              balanceAtomic: true,
-              lockedAtomic: true,
-              updatedAt: true
-            },
-            orderBy: {
-              createdAt: "asc"
+      const totalUsers = await prisma.user.count({ where });
+      const take = query.all ? undefined : query.limit;
+
+      let users: Array<{
+        id: string;
+        email: string;
+        role: string;
+        status: string;
+        createdAt: Date;
+        updatedAt: Date;
+        level: number;
+        levelXpAtomic: string;
+        wallets: Array<{
+          id: string;
+          currency: Currency;
+          balanceAtomic: bigint;
+          lockedAtomic: bigint;
+          updatedAt: Date;
+        }>;
+      }>;
+
+      try {
+        const rows = await prisma.user.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc"
+          },
+          take,
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            levelXpAtomic: true,
+            wallets: {
+              select: {
+                id: true,
+                currency: true,
+                balanceAtomic: true,
+                lockedAtomic: true,
+                updatedAt: true
+              },
+              orderBy: {
+                createdAt: "asc"
+              }
             }
           }
+        });
+        users = rows.map((row) => ({
+          id: row.id,
+          email: row.email,
+          role: row.role,
+          status: row.status,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          level: getLevelFromXp(row.levelXpAtomic),
+          levelXpAtomic: row.levelXpAtomic.toString(),
+          wallets: row.wallets
+        }));
+      } catch (error) {
+        if (!isMissingLevelXpColumnError(error)) {
+          throw error;
         }
-      });
+
+        const rows = await prisma.user.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc"
+          },
+          take,
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            wallets: {
+              select: {
+                id: true,
+                currency: true,
+                balanceAtomic: true,
+                lockedAtomic: true,
+                updatedAt: true
+              },
+              orderBy: {
+                createdAt: "asc"
+              }
+            }
+          }
+        });
+        users = rows.map((row) => ({
+          ...row,
+          level: 1,
+          levelXpAtomic: "0"
+        }));
+      }
 
       return reply.send({
+        totalUsers,
         users: users.map((user) => ({
           id: user.id,
           email: user.email,
           role: user.role,
           status: user.status,
+          level: user.level,
+          levelXpAtomic: user.levelXpAtomic,
           createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
           wallets: user.wallets.map((wallet) => ({
             id: wallet.id,
             currency: wallet.currency,
             balanceAtomic: wallet.balanceAtomic.toString(),
             lockedAtomic: wallet.lockedAtomic.toString(),
+            availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
             updatedAt: wallet.updatedAt
           }))
         }))
