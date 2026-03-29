@@ -14,6 +14,7 @@ import { env } from "./config/env";
 import { isAppError, toZodDetails } from "./core/errors";
 import { redis } from "./infrastructure/cache/redis";
 import { adminRoutes } from "./modules/admin/routes";
+import { affiliatesRoutes } from "./modules/affiliates/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { betsRoutes } from "./modules/bets/routes";
 import { blackjackRoutes } from "./modules/blackjack/routes";
@@ -102,6 +103,7 @@ export const buildApp = (): FastifyInstance => {
         { name: "mines", description: "Mines game with provably fair backend generation" },
         { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
         { name: "users", description: "User profile" },
+        { name: "affiliates", description: "Affiliate system, profile summary and fairness controls" },
         { name: "cashier", description: "Crypto deposit and withdraw via OxaPay" }
       ]
     }
@@ -118,6 +120,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(blackjackRoutes, { prefix: "/api/v1/blackjack" });
   app.register(chatRoutes, { prefix: "/api/v1/chat" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
+  app.register(affiliatesRoutes, { prefix: "/api/v1" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
   app.register(pricingRoutes, { prefix: "/api/v1/pricing" });
   app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });

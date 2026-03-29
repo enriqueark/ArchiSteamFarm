@@ -10,6 +10,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
 import {
   PLATFORM_INTERNAL_CURRENCY,
@@ -845,6 +846,12 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
       initialBetAtomic: result.state.initialBetAtomic.toString()
     }
   });
+  void addAffiliateCommissionBestEffort(
+    input.userId,
+    totalInitial,
+    "BLACKJACK",
+    `aff:commission:blackjack:${result.state.gameId}`
+  );
 
   return result;
 };

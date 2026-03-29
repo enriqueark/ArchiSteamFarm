@@ -605,6 +605,7 @@ export interface User {
   email: string;
   role: string;
   status: string;
+  profileVisible?: boolean;
   progression: {
     level: number;
     xpAtomic: string;
@@ -614,6 +615,218 @@ export interface User {
 
 export async function getMe(): Promise<User> {
   return request<User>("/users/me");
+}
+
+export interface ProfileSummary {
+  user: {
+    id: string;
+    publicId: number | null;
+    email: string;
+    role: string;
+    status: string;
+    profileVisible: boolean;
+    level: number;
+    levelXpAtomic: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  wallet: {
+    walletId: string | null;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+    updatedAt: string | null;
+  };
+  totals: {
+    depositsAtomic: string;
+    withdrawalsAtomic: string;
+    withdrawalFeesAtomic: string;
+    wageredAtomic: string;
+    payoutAtomic: string;
+    netGamingAtomic: string;
+    bonusFromReferralAtomic: string;
+    claimableAffiliateCommissionAtomic: string;
+    claimedAffiliateCommissionAtomic: string;
+  };
+  perGame: {
+    mines: {
+      wageredAtomic: string;
+      payoutAtomic: string;
+    };
+    blackjack: {
+      wageredAtomic: string;
+      payoutAtomic: string;
+    };
+    roulette: {
+      wageredAtomic: string;
+      payoutAtomic: string;
+    };
+  };
+}
+
+export async function getProfileSummary(): Promise<ProfileSummary> {
+  return request<ProfileSummary>("/profile/summary");
+}
+
+export async function setProfileVisibility(profileVisible: boolean): Promise<{ profileVisible: boolean; updatedAt: string }> {
+  return request<{ profileVisible: boolean; updatedAt: string }>(
+    "/profile/visibility",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ profileVisible })
+    },
+    true,
+    true
+  );
+}
+
+export interface AffiliateDashboard {
+  myCode: {
+    code: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  appliedCode: {
+    code: string;
+    createdAt: string;
+    bonusReceivedAtomic: string;
+    referrer: {
+      publicId: number | null;
+      userLabel: string;
+    };
+  } | null;
+  stats: {
+    referralCount: number;
+    totalWageredAtomic: string;
+    totalCommissionAtomic: string;
+    claimableCommissionAtomic: string;
+    claimedCommissionAtomic: string;
+  };
+  referrals: Array<{
+    referralId: string;
+    createdAt: string;
+    user: {
+      id: string;
+      publicId: number | null;
+      userLabel: string;
+      createdAt: string;
+    };
+    totalWageredAtomic: string;
+    totalCommissionAtomic: string;
+    claimableCommissionAtomic: string;
+    claimedCommissionAtomic: string;
+    bonusReceivedAtomic: string;
+    active: boolean;
+  }>;
+}
+
+export async function getAffiliateDashboard(): Promise<AffiliateDashboard> {
+  return request<AffiliateDashboard>("/affiliates/dashboard");
+}
+
+export async function saveAffiliateCode(code: string): Promise<{ code: string; createdAt: string; updatedAt: string }> {
+  return request<{ code: string; createdAt: string; updatedAt: string }>(
+    "/affiliates/code",
+    {
+      method: "PUT",
+      body: JSON.stringify({ code })
+    },
+    true,
+    true
+  );
+}
+
+export async function applyAffiliateCode(code: string): Promise<{
+  referralId: string;
+  createdAt: string;
+  code: string;
+  referrer: { publicId: number | null; userLabel: string };
+}> {
+  return request<{
+    referralId: string;
+    createdAt: string;
+    code: string;
+    referrer: { publicId: number | null; userLabel: string };
+  }>(
+    "/affiliates/apply",
+    {
+      method: "POST",
+      body: JSON.stringify({ code })
+    },
+    true,
+    true
+  );
+}
+
+export async function claimAffiliateCommission(): Promise<{
+  claimedAtomic: string;
+  balanceAtomic: string;
+  claimedAt: string;
+}> {
+  return request<{ claimedAtomic: string; balanceAtomic: string; claimedAt: string }>(
+    "/affiliates/claim",
+    {
+      method: "POST"
+    },
+    true,
+    true
+  );
+}
+
+export interface FairnessState {
+  clientSeed: string;
+  nonce: number;
+  activeServerSeedHash: string;
+  revealedSeeds: Array<{
+    id: string;
+    serverSeed: string;
+    serverSeedHash: string;
+    createdAt: string;
+    revealedAt: string | null;
+  }>;
+}
+
+export async function getFairnessState(): Promise<FairnessState> {
+  return request<FairnessState>("/fairness");
+}
+
+export async function setFairnessClientSeed(clientSeed: string): Promise<{
+  clientSeed: string;
+  nonce: number;
+  activeServerSeedHash: string;
+}> {
+  return request<{ clientSeed: string; nonce: number; activeServerSeedHash: string }>(
+    "/fairness/client-seed",
+    {
+      method: "PUT",
+      body: JSON.stringify({ clientSeed })
+    },
+    true,
+    true
+  );
+}
+
+export async function rotateFairnessServerSeed(): Promise<{
+  revealedServerSeed: string;
+  revealedServerSeedHash: string;
+  newServerSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+}> {
+  return request<{
+    revealedServerSeed: string;
+    revealedServerSeedHash: string;
+    newServerSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  }>(
+    "/fairness/rotate",
+    {
+      method: "POST"
+    },
+    true,
+    true
+  );
 }
 
 export function getApiUrl() {

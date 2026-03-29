@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from "fastify";
 import { requireAuth } from "../../core/auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
+import { getProfileSummary } from "../affiliates/service";
 
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
@@ -120,5 +121,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         xpAtomic: xpAtomic.toString()
       }
     });
+  });
+
+  fastify.get("/profile/summary", { preHandler: requireAuth }, async (request, reply) => {
+    const summary = await getProfileSummary(request.user.sub);
+    return reply.send(summary);
   });
 };

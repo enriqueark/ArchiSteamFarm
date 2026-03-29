@@ -16,6 +16,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
 import {
   MAX_GAME_BET_COINS,
@@ -1396,6 +1397,12 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
     });
 
     void addUserXpBestEffort(input.userId, input.stakeAtomic);
+    void addAffiliateCommissionBestEffort(
+      input.userId,
+      input.stakeAtomic,
+      "ROULETTE",
+      `aff:commission:roulette:${result.bet.id}`
+    );
     emitTotalsEvent(result.round.id, result.round.currency, result.round.totalStakedAtomic);
     const breakdown = await getRouletteBetBreakdownByRoundId(result.round.id);
     emitBetBreakdownEvent(breakdown);

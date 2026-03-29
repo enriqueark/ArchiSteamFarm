@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
 import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
 import {
@@ -833,6 +834,12 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
     });
 
     void addUserXpBestEffort(input.userId, input.betAtomic);
+    void addAffiliateCommissionBestEffort(
+      input.userId,
+      input.betAtomic,
+      "MINES",
+      `aff:commission:mines:${result.game.id}`
+    );
 
     void enqueueAuditEvent({
       type: "MINES_GAME_STARTED",

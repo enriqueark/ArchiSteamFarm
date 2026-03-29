@@ -1,12 +1,119 @@
+import { useEffect, useState } from "react";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
-
-const hashPreview = "a4d8e2f18b5de3e3e7f7be89f96cc5b67d48...";
-const clientSeedPreview = "b4bccae3bd4b53fe0419c2";
+import Input from "@/components/Input";
+import {
+  getFairnessState,
+  rotateFairnessServerSeed,
+  setFairnessClientSeed,
+  type FairnessState
+} from "@/lib/api";
+import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const tabs = ["How it works", "Battles", "Jackpot", "Coinflip", "Deals", "Cases", "Mines", "Keno"];
 
 export default function FairnessPage() {
+  const { authed, openAuth } = useAuthUI();
+  const { showError, showSuccess } = useToast();
+  const [state, setState] = useState<FairnessState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [clientSeedInput, setClientSeedInput] = useState("");
+  const [savingClientSeed, setSavingClientSeed] = useState(false);
+  const [rotating, setRotating] = useState(false);
+
+  const loadFairness = async () => {
+    const next = await getFairnessState();
+    setState(next);
+    setClientSeedInput(next.clientSeed);
+  };
+
+  useEffect(() => {
+    if (!authed) {
+      setState(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    loadFairness()
+      .catch(() => {
+        if (!cancelled) {
+          setState(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
+
+  const handleChangeClientSeed = async () => {
+    if (!clientSeedInput.trim() || savingClientSeed) {
+      return;
+    }
+    setSavingClientSeed(true);
+    try {
+      const updated = await setFairnessClientSeed(clientSeedInput.trim());
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              clientSeed: updated.clientSeed,
+              nonce: updated.nonce,
+              activeServerSeedHash: updated.activeServerSeedHash
+            }
+          : prev
+      );
+      showSuccess("Client seed updated.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Could not update client seed");
+    } finally {
+      setSavingClientSeed(false);
+    }
+  };
+
+  const handleRotate = async () => {
+    if (rotating) {
+      return;
+    }
+    setRotating(true);
+    try {
+      await rotateFairnessServerSeed();
+      await loadFairness();
+      showSuccess("Server seed rotated.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Could not rotate server seed");
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  if (!authed) {
+    return (
+      <Card title="Provably Fair">
+        <p className="text-sm text-gray-300">Sign in to access fairness controls.</p>
+        <button
+          type="button"
+          onClick={() => openAuth("login")}
+          className="mt-3 rounded bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+        >
+          Sign in
+        </button>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return <Card title="Provably Fair">Loading fairness state...</Card>;
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4">
       <h1 className="text-3xl font-bold text-white">Provably Fair</h1>
@@ -45,10 +152,17 @@ export default function FairnessPage() {
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-200">Server Seed Hash</h3>
             <div className="flex flex-wrap items-center gap-2">
               <code className="min-w-[320px] rounded border border-gray-700 bg-gray-950 px-3 py-2 text-xs text-cyan-200">
-                {hashPreview}
+                {state?.activeServerSeedHash ?? "-"}
               </code>
-              <Button variant="success" className="px-3 py-1.5 text-xs">
-                Generate New
+              <Button
+                variant="success"
+                className="px-3 py-1.5 text-xs"
+                disabled={rotating}
+                onClick={() => {
+                  void handleRotate();
+                }}
+              >
+                {rotating ? "Generating..." : "Generate New"}
               </Button>
             </div>
           </section>
@@ -56,14 +170,22 @@ export default function FairnessPage() {
           <section className="space-y-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-200">Client Seed</h3>
             <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-[320px] rounded border border-gray-700 bg-gray-950 px-3 py-2 text-xs text-cyan-200">
-                {clientSeedPreview}
-              </code>
-              <Button variant="success" className="px-3 py-1.5 text-xs">
-                Change
+              <div className="w-[360px]">
+                <Input value={clientSeedInput} onChange={(e) => setClientSeedInput(e.target.value)} />
+              </div>
+              <Button
+                variant="success"
+                className="px-3 py-1.5 text-xs"
+                disabled={savingClientSeed}
+                onClick={() => {
+                  void handleChangeClientSeed();
+                }}
+              >
+                {savingClientSeed ? "Changing..." : "Change"}
               </Button>
             </div>
           </section>
+          <p className="text-xs text-gray-400">Current nonce: {state?.nonce ?? 0}</p>
         </div>
       </Card>
 
@@ -80,11 +202,23 @@ export default function FairnessPage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-gray-800">
-                <td className="px-3 py-4 text-center text-gray-500" colSpan={5}>
-                  No data found...
-                </td>
-              </tr>
+              {state?.revealedSeeds.length ? (
+                state.revealedSeeds.map((seed) => (
+                  <tr className="border-t border-gray-800" key={seed.id}>
+                    <td className="px-3 py-2">{seed.id.slice(0, 8)}...</td>
+                    <td className="px-3 py-2">{seed.serverSeed}</td>
+                    <td className="px-3 py-2">{seed.serverSeedHash}</td>
+                    <td className="px-3 py-2">{state.clientSeed}</td>
+                    <td className="px-3 py-2">{state.nonce}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr className="border-t border-gray-800">
+                  <td className="px-3 py-4 text-center text-gray-500" colSpan={5}>
+                    No data found...
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -6,6 +6,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { adjustWalletBalance } from "../ledger/service";
 import { quoteDepositToCoins, quoteWithdrawFromCoins } from "../pricing/service";
+import { applyReferralDepositBonusBestEffort } from "../affiliates/service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 import {
   CASHIER_PROVIDER,
@@ -544,6 +545,7 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
       creditedTransactionId: credited.entry.id
     }
   });
+  void applyReferralDepositBonusBestEffort(deposit.id, deposit.userId, deposit.amountAtomic);
 };
 
 export const processPayoutWebhook = async (payload: OxaPayPayoutWebhookPayload): Promise<void> => {

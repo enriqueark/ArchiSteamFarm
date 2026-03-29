@@ -2,8 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import Card from "@/components/Card";
 import Input from "@/components/Input";
-import { getMe, getWallets, type User, type Wallet } from "@/lib/api";
+import {
+  getProfileSummary,
+  setProfileVisibility,
+  type ProfileSummary
+} from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
+import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
   const value = Number(atomic);
@@ -21,31 +26,28 @@ const formatCoins = (value: number): string =>
 
 export default function ProfilePage() {
   const { authed, openAuth } = useAuthUI();
-  const [user, setUser] = useState<User | null>(null);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const { showError, showSuccess } = useToast();
+  const [summary, setSummary] = useState<ProfileSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profileVisible, setProfileVisible] = useState(true);
+  const [savingVisibility, setSavingVisibility] = useState(false);
 
   useEffect(() => {
     if (!authed) {
-      setUser(null);
-      setWallets([]);
+      setSummary(null);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
-    Promise.all([getMe(), getWallets()])
-      .then(([me, rows]) => {
+    getProfileSummary()
+      .then((data) => {
         if (cancelled) return;
-        setUser(me);
-        setWallets(rows);
+        setSummary(data);
       })
       .catch(() => {
         if (cancelled) return;
-        setUser(null);
-        setWallets([]);
+        setSummary(null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -59,19 +61,52 @@ export default function ProfilePage() {
   }, [authed]);
 
   const username = useMemo(() => {
-    const email = user?.email ?? "";
+    const email = summary?.user.email ?? "";
     const [name] = email.split("@");
     return name || "Player";
-  }, [user?.email]);
+  }, [summary?.user.email]);
 
-  const level = user?.progression?.level ?? 1;
-  const xpCurrent = Number(user?.progression?.xpAtomic ?? "0");
+  const level = summary?.user.level ?? 1;
+  const xpCurrent = Number(summary?.user.levelXpAtomic ?? "0");
   const xpBand = 10_000;
   const xpInBand = Math.max(0, xpCurrent % xpBand);
   const xpTarget = xpCurrent - xpInBand + xpBand;
   const progressPct = Math.max(0, Math.min(100, (xpInBand / xpBand) * 100));
-  const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "-";
-  const totalBalance = wallets.reduce((sum, wallet) => sum + toCoins(wallet.balanceAtomic), 0);
+  const memberSince = summary?.user.createdAt
+    ? new Date(summary.user.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "-";
+  const totalBalance = toCoins(summary?.wallet.balanceAtomic ?? "0");
+  const deposits = toCoins(summary?.totals.depositsAtomic ?? "0");
+  const withdrawals = toCoins(summary?.totals.withdrawalsAtomic ?? "0");
+  const profileVisible = summary?.user.profileVisible ?? true;
+  const fallbackEmail = summary?.user.email ?? "player@casino.local";
+
+  const toggleProfileVisibility = async () => {
+    if (!summary || savingVisibility) {
+      return;
+    }
+    const next = !summary.user.profileVisible;
+    setSavingVisibility(true);
+    try {
+      await setProfileVisibility(next);
+      setSummary((prev) =>
+        prev
+          ? {
+              ...prev,
+              user: {
+                ...prev.user,
+                profileVisible: next
+              }
+            }
+          : prev
+      );
+      showSuccess(next ? "Profile set to visible." : "Profile set to hidden.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Unable to update profile visibility");
+    } finally {
+      setSavingVisibility(false);
+    }
+  };
 
   if (!authed) {
     return (
@@ -92,6 +127,14 @@ export default function ProfilePage() {
     return <Card title="Profile">Loading profile...</Card>;
   }
 
+  if (!summary) {
+    return (
+      <Card title="Profile">
+        <p className="text-sm text-gray-300">Unable to load your profile right now.</p>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-bold text-white">Profile</h1>
@@ -109,7 +152,7 @@ export default function ProfilePage() {
               <p className="text-xs text-gray-400">
                 User ID:{" "}
                 <span className="font-semibold text-gray-200">
-                  {user?.publicId ? `#${user.publicId}` : "-"}
+                  {summary?.user.publicId ? `#${summary.user.publicId}` : "-"}
                 </span>
               </p>
             </div>
@@ -127,11 +170,11 @@ export default function ProfilePage() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Card className="bg-[#1f2437] border-[#2a3349]">
-          <p className="text-3xl font-bold text-white">$0.00</p>
+          <p className="text-3xl font-bold text-white">{formatCoins(deposits)}</p>
           <p className="text-sm text-gray-300">Deposits</p>
         </Card>
         <Card className="bg-[#1f2437] border-[#2a3349]">
-          <p className="text-3xl font-bold text-white">$0.00</p>
+          <p className="text-3xl font-bold text-white">{formatCoins(withdrawals)}</p>
           <p className="text-sm text-gray-300">Withdraws</p>
         </Card>
         <Card className="bg-[#1f2437] border-[#2a3349]">
@@ -142,10 +185,16 @@ export default function ProfilePage() {
 
       <Card title="Account details" className="bg-[#1f2437] border-[#2a3349]">
         <Input label="Username" value={username} readOnly />
+        <div className="mt-3">
+          <Input label="Email" value={fallbackEmail} readOnly />
+        </div>
         <div className="mt-5 flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setProfileVisible((prev) => !prev)}
+            disabled={savingVisibility}
+            onClick={() => {
+              void toggleProfileVisibility();
+            }}
             className={`relative h-7 w-12 rounded-full transition-colors ${profileVisible ? "bg-indigo-600" : "bg-gray-700"}`}
           >
             <span
