@@ -9,9 +9,17 @@ OWNED BY "users"."publicId";
 ALTER TABLE "users"
 ALTER COLUMN "publicId" SET DEFAULT nextval('"users_publicId_seq"');
 
-UPDATE "users"
-SET "publicId" = nextval('"users_publicId_seq"')
-WHERE "publicId" IS NULL;
+WITH ordered_users AS (
+  SELECT
+    id,
+    ROW_NUMBER() OVER (ORDER BY "createdAt" ASC, id ASC) AS seq
+  FROM "users"
+  WHERE "publicId" IS NULL
+)
+UPDATE "users" u
+SET "publicId" = ordered_users.seq
+FROM ordered_users
+WHERE u.id = ordered_users.id;
 
 ALTER TABLE "users"
 ALTER COLUMN "publicId" SET NOT NULL;
