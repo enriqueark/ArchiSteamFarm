@@ -1,15 +1,23 @@
-import { Currency, LedgerReason } from "@prisma/client";
+import {
+  DepositStatus,
+  LedgerDirection,
+  LedgerReason,
+  Prisma,
+  UserRole,
+  UserStatus,
+  WithdrawalStatus
+} from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 
 import { requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
-import { adjustWalletBalance } from "../ledger/service";
 import { getBlackjackPayoutConfig, setBlackjackPayoutConfig } from "../blackjack/config";
+import { adjustWalletBalance } from "../ledger/service";
 import { getLevelFromXp } from "../progression/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
 const userSearchQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -17,21 +25,23 @@ const userSearchQuerySchema = z.object({
   all: z.coerce.boolean().default(true)
 });
 
-const isMissingLevelXpColumnError = (error: unknown): boolean => {
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
-    return true;
-  }
-  if (error instanceof Error) {
-    return error.message.toLowerCase().includes("levelxpatomic");
-  }
-  return false;
-};
+const userDetailParamsSchema = z.object({
+  userId: z.string().cuid()
+});
+
+const userDetailQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(200)
+});
+
+const updateUserStatusSchema = z.object({
+  status: z.nativeEnum(UserStatus),
+  role: z.nativeEnum(UserRole).optional()
+});
 
 const adjustByAdminSchema = z
   .object({
     userId: z.string().cuid().optional(),
     email: z.string().email().optional(),
-    currency: z.nativeEnum(Currency),
     amountAtomic: z
       .string()
       .regex(/^-?\d+$/, "amountAtomic must be an integer string")
@@ -58,6 +68,16 @@ const adjustByAdminSchema = z
     path: ["userId"]
   });
 
+const isMissingLevelXpColumnError = (error: unknown): boolean => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes("levelxpatomic");
+  }
+  return false;
+};
+
 const ADMIN_PANEL_HTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -67,8 +87,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <style>
       body { font-family: Arial, sans-serif; margin: 20px; background: #0b1220; color: #e5e7eb; }
       h1 { margin: 0 0 16px; }
+      h2 { margin: 0 0 10px; font-size: 16px; }
       .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-      input, select, button { padding: 8px; border-radius: 8px; border: 1px solid #374151; background: #0f172a; color: #e5e7eb; }
+      input, select, button, textarea { padding: 8px; border-radius: 8px; border: 1px solid #374151; background: #0f172a; color: #e5e7eb; }
       button { cursor: pointer; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; }
       th, td { border-bottom: 1px solid #1f2937; text-align: left; padding: 8px; vertical-align: top; }
@@ -76,10 +97,19 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       .ok { color: #22c55e; }
       .err { color: #ef4444; white-space: pre-wrap; }
       .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .muted { color: #94a3b8; }
+      .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .pill { border: 1px solid #334155; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+      .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      .danger { background: #7f1d1d; border-color: #991b1b; }
+      .warn { background: #78350f; border-color: #92400e; }
+      .success { background: #14532d; border-color: #166534; }
+      .detail-table td { border-bottom: 1px solid #1e293b; }
     </style>
   </head>
   <body>
     <h1>Admin Panel</h1>
+
     <div class="card">
       <div class="row">
         <label>Admin email:</label>
@@ -109,13 +139,20 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         </label>
         <button id="searchBtn">Refresh users</button>
       </div>
+      <div class="mono muted" style="margin-top:8px;">Balance adjust only uses ${PLATFORM_VIRTUAL_COIN_SYMBOL} (${PLATFORM_INTERNAL_CURRENCY})</div>
       <div id="searchStatus"></div>
       <table id="usersTable">
         <thead>
-          <tr><th>User / Progression</th><th>Wallets</th><th>Adjust balance</th></tr>
+          <tr><th>User / Progression</th><th>Wallets</th><th>Actions</th></tr>
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+
+    <div id="detailCard" class="card" style="display:none;">
+      <h2>User profile details</h2>
+      <div id="detailStatus" class="mono"></div>
+      <div id="detailContent"></div>
     </div>
 
     <script>
@@ -130,6 +167,11 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const searchStatus = document.getElementById("searchStatus");
       const authStatus = document.getElementById("authStatus");
       const checkTokenBtn = document.getElementById("checkTokenBtn");
+      const detailCard = document.getElementById("detailCard");
+      const detailStatus = document.getElementById("detailStatus");
+      const detailContent = document.getElementById("detailContent");
+      const COIN_CURRENCY = "${PLATFORM_INTERNAL_CURRENCY}";
+      const COIN_SYMBOL = "${PLATFORM_VIRTUAL_COIN_SYMBOL}";
 
       const req = async (url, options = {}) => {
         const token = tokenInput.value.trim();
@@ -174,6 +216,104 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         } catch (_e) {}
       };
 
+      const openUserDetails = async (userId, email) => {
+        detailCard.style.display = "block";
+        detailStatus.className = "mono";
+        detailStatus.textContent = "Loading details for " + email + "...";
+        detailContent.innerHTML = "";
+        try {
+          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/details?limit=300");
+          if (!res.ok) {
+            detailStatus.className = "mono err";
+            detailStatus.textContent = await getErrorMessage(res, "Failed to load details");
+            return;
+          }
+          const data = await res.json();
+          detailStatus.className = "mono ok";
+          detailStatus.textContent = "Loaded details for " + data.user.email;
+
+          const summary = data.summary || {};
+          const perGame = summary.perGame || {};
+          const wallets = (data.wallets || []).map((w) =>
+            "<div class=\\"mono\\">wallet=" + w.id + " " + w.currency + " bal=" + w.balanceAtomic + " locked=" + w.lockedAtomic + " avail=" + w.availableAtomic + "</div>"
+          ).join("");
+
+          const movementsRows = (data.movements || []).map((m) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + m.createdAt + "</td>" +
+              "<td class=\\"mono\\">" + m.tag + "</td>" +
+              "<td class=\\"mono\\">" + m.direction + "</td>" +
+              "<td class=\\"mono\\">" + m.signedAtomic + "</td>" +
+              "<td class=\\"mono\\">" + (m.referenceId || "") + "</td>" +
+            "</tr>"
+          ).join("");
+
+          detailContent.innerHTML =
+            "<div class=\\"grid-2\\">" +
+              "<div>" +
+                "<h3>User</h3>" +
+                "<div class=\\"mono\\">id=" + data.user.id + "</div>" +
+                "<div class=\\"mono\\">email=" + data.user.email + "</div>" +
+                "<div class=\\"mono\\">role=" + data.user.role + " status=" + data.user.status + "</div>" +
+                "<div class=\\"mono\\">level=" + data.user.level + " xpAtomic=" + data.user.levelXpAtomic + "</div>" +
+                "<div class=\\"mono\\">createdAt=" + data.user.createdAt + "</div>" +
+              "</div>" +
+              "<div>" +
+                "<h3>Wallets (" + COIN_SYMBOL + ")</h3>" +
+                (wallets || "<div class=\\"mono\\">No wallet found</div>") +
+              "</div>" +
+            "</div>" +
+            "<div class=\\"grid-2\\" style=\\"margin-top:12px;\\">" +
+              "<div>" +
+                "<h3>Financial summary</h3>" +
+                "<div class=\\"mono\\">totalDepositsAtomic=" + (summary.totalDepositsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawalsAtomic=" + (summary.totalWithdrawalsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawalFeesAtomic=" + (summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">rewardsRedeemedAtomic=" + (summary.rewardsRedeemedAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWageredAtomic=" + (summary.totalWageredAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalPayoutAtomic=" + (summary.totalPayoutAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">houseProfitAtomic=" + (summary.houseProfitAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">netPlayerGamingAtomic=" + (summary.netPlayerGamingAtomic || "0") + "</div>" +
+              "</div>" +
+              "<div>" +
+                "<h3>Spent by game</h3>" +
+                "<div class=\\"mono\\">mines wagered=" + ((perGame.mines && perGame.mines.wageredAtomic) || "0") + " payout=" + ((perGame.mines && perGame.mines.payoutAtomic) || "0") + " net=" + ((perGame.mines && perGame.mines.netAtomic) || "0") + "</div>" +
+                "<div class=\\"mono\\">blackjack wagered=" + ((perGame.blackjack && perGame.blackjack.wageredAtomic) || "0") + " payout=" + ((perGame.blackjack && perGame.blackjack.payoutAtomic) || "0") + " net=" + ((perGame.blackjack && perGame.blackjack.netAtomic) || "0") + "</div>" +
+                "<div class=\\"mono\\">roulette wagered=" + ((perGame.roulette && perGame.roulette.wageredAtomic) || "0") + " payout=" + ((perGame.roulette && perGame.roulette.payoutAtomic) || "0") + " net=" + ((perGame.roulette && perGame.roulette.netAtomic) || "0") + "</div>" +
+              "</div>" +
+            "</div>" +
+            "<h3 style=\\"margin-top:12px;\\">Movement history</h3>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Tag</th><th>Direction</th><th>Signed atomic</th><th>Reference</th></tr></thead><tbody>" +
+            (movementsRows || "<tr><td colspan=\\"5\\" class=\\"mono\\">No movements</td></tr>") +
+            "</tbody></table>";
+        } catch (error) {
+          detailStatus.className = "mono err";
+          detailStatus.textContent = error && error.message ? error.message : "Failed to load details";
+        }
+      };
+
+      const setUserAccess = async (userId, status, role, msgEl) => {
+        try {
+          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/access", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status, role })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            msgEl.className = "mono err";
+            msgEl.textContent = (data && data.message) ? data.message : "Failed to update user access";
+            return;
+          }
+          msgEl.className = "mono ok";
+          msgEl.textContent = "Updated: role=" + data.user.role + " status=" + data.user.status;
+          document.getElementById("searchBtn").click();
+        } catch (error) {
+          msgEl.className = "mono err";
+          msgEl.textContent = error && error.message ? error.message : "Failed to update user access";
+        }
+      };
+
       const renderUsers = (users) => {
         usersTbody.innerHTML = "";
         for (const user of users) {
@@ -186,6 +326,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             " available=" + w.availableAtomic +
             "</div>"
           ).join("");
+          const pending = user.status !== "ACTIVE";
           tr.innerHTML = \`
             <td>
               <div><strong>\${user.email}</strong></div>
@@ -193,22 +334,25 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">level=\${user.level} xpAtomic=\${user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
+              \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
             </td>
             <td>\${walletLines || "<span class=\\"mono\\">No wallets</span>"}</td>
             <td>
               <div class="row">
-                <select class="currency">
-                  <option>BTC</option><option>ETH</option><option>USDT</option><option>USDC</option>
-                </select>
+                <span class="mono">\${COIN_SYMBOL} only (\${COIN_CURRENCY})</span>
                 <input class="amount" placeholder="Amount (human)" />
                 <button class="credit">+ Credit</button>
                 <button class="debit">- Debit</button>
+              </div>
+              <div class="actions">
+                <button class="approve success">Approve (PLAYER+ACTIVE)</button>
+                <button class="suspend danger">Suspend</button>
+                <button class="details">View details</button>
               </div>
               <div class="mono msg"></div>
             </td>
           \`;
 
-          const currencyEl = tr.querySelector(".currency");
           const amountEl = tr.querySelector(".amount");
           const msgEl = tr.querySelector(".msg");
           const doAdjust = async (sign) => {
@@ -227,7 +371,6 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
                 body: JSON.stringify({
                   userId: user.id,
-                  currency: currencyEl.value,
                   amountAtomic,
                   reason: "ADMIN_ADJUSTMENT",
                   referenceId: "admin-panel"
@@ -239,7 +382,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 msgEl.className = "mono msg err";
                 return;
               }
-              msgEl.textContent = "OK. New balanceAtomic=" + data.balanceAtomic;
+              msgEl.textContent = "OK. " + COIN_CURRENCY + " balanceAtomic=" + data.balanceAtomic;
               msgEl.className = "mono msg ok";
             } catch (error) {
               msgEl.textContent = error && error.message ? error.message : "Adjustment failed.";
@@ -249,6 +392,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
           tr.querySelector(".credit").addEventListener("click", () => void doAdjust("+"));
           tr.querySelector(".debit").addEventListener("click", () => void doAdjust("-"));
+          tr.querySelector(".approve").addEventListener("click", () => void setUserAccess(user.id, "ACTIVE", "PLAYER", msgEl));
+          tr.querySelector(".suspend").addEventListener("click", () => void setUserAccess(user.id, "SUSPENDED", user.role, msgEl));
+          tr.querySelector(".details").addEventListener("click", () => void openUserDetails(user.id, user.email));
           usersTbody.appendChild(tr);
         }
       };
@@ -280,8 +426,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             return;
           }
           const data = await res.json().catch(() => ({ users: [] }));
-          searchStatus.textContent = "Showing " + data.users.length + " / " + data.totalUsers + " user(s)";
-          searchStatus.className = "ok";
+          const pendingCount = Number(data.pendingApprovalCount || 0);
+          searchStatus.textContent = "Showing " + data.users.length + " / " + data.totalUsers + " user(s) | pending approval: " + pendingCount;
+          searchStatus.className = pendingCount > 0 ? "ok" : "mono";
           renderUsers(data.users);
         } catch (error) {
           searchStatus.textContent = error && error.message ? error.message : "Search failed";
@@ -464,73 +611,45 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
         : {};
 
-      const totalUsers = await prisma.user.count({ where });
+      const [totalUsers, pendingApprovalCount] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.count({ where: { ...where, status: UserStatus.SUSPENDED, role: UserRole.PLAYER } })
+      ]);
       const take = query.all ? undefined : query.limit;
 
-      let users: Array<{
-        id: string;
-        email: string;
-        role: string;
-        status: string;
-        createdAt: Date;
-        updatedAt: Date;
-        level: number;
-        levelXpAtomic: string;
-        wallets: Array<{
-          id: string;
-          currency: Currency;
-          balanceAtomic: bigint;
-          lockedAtomic: bigint;
-          updatedAt: Date;
-        }>;
-      }>;
-
-      try {
-        const rows = await prisma.user.findMany({
-          where,
-          orderBy: {
-            createdAt: "desc"
-          },
-          take,
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            levelXpAtomic: true,
-            wallets: {
-              select: {
-                id: true,
-                currency: true,
-                balanceAtomic: true,
-                lockedAtomic: true,
-                updatedAt: true
-              },
-              orderBy: {
-                createdAt: "asc"
-              }
+      const rows = await prisma.user.findMany({
+        where,
+        orderBy: {
+          createdAt: "desc"
+        },
+        take,
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          levelXpAtomic: true,
+          wallets: {
+            where: { currency: PLATFORM_INTERNAL_CURRENCY },
+            select: {
+              id: true,
+              currency: true,
+              balanceAtomic: true,
+              lockedAtomic: true,
+              updatedAt: true
+            },
+            orderBy: {
+              createdAt: "asc"
             }
           }
-        });
-        users = rows.map((row) => ({
-          id: row.id,
-          email: row.email,
-          role: row.role,
-          status: row.status,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          level: getLevelFromXp(row.levelXpAtomic),
-          levelXpAtomic: row.levelXpAtomic.toString(),
-          wallets: row.wallets
-        }));
-      } catch (error) {
+        }
+      }).catch(async (error) => {
         if (!isMissingLevelXpColumnError(error)) {
           throw error;
         }
-
-        const rows = await prisma.user.findMany({
+        const legacyRows = await prisma.user.findMany({
           where,
           orderBy: {
             createdAt: "desc"
@@ -544,6 +663,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
             updatedAt: true,
             wallets: {
+              where: { currency: PLATFORM_INTERNAL_CURRENCY },
               select: {
                 id: true,
                 currency: true,
@@ -557,22 +677,22 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             }
           }
         });
-        users = rows.map((row) => ({
+        return legacyRows.map((row) => ({
           ...row,
-          level: 1,
-          levelXpAtomic: "0"
+          levelXpAtomic: 0n
         }));
-      }
+      });
 
       return reply.send({
         totalUsers,
-        users: users.map((user) => ({
+        pendingApprovalCount,
+        users: rows.map((user) => ({
           id: user.id,
           email: user.email,
           role: user.role,
           status: user.status,
-          level: user.level,
-          levelXpAtomic: user.levelXpAtomic,
+          level: getLevelFromXp(user.levelXpAtomic),
+          levelXpAtomic: user.levelXpAtomic.toString(),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
           wallets: user.wallets.map((wallet) => ({
@@ -584,6 +704,283 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             updatedAt: wallet.updatedAt
           }))
         }))
+      });
+    }
+  );
+
+  fastify.patch(
+    "/users/:userId/access",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const params = userDetailParamsSchema.parse(request.params);
+      const body = updateUserStatusSchema.parse(request.body);
+
+      const updated = await prisma.user.update({
+        where: { id: params.userId },
+        data: {
+          status: body.status,
+          ...(body.role ? { role: body.role } : {})
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          status: true,
+          updatedAt: true
+        }
+      });
+
+      return reply.send({
+        user: {
+          id: updated.id,
+          email: updated.email,
+          role: updated.role,
+          status: updated.status,
+          updatedAt: updated.updatedAt
+        }
+      });
+    }
+  );
+
+  fastify.get(
+    "/users/:userId/details",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const params = userDetailParamsSchema.parse(request.params);
+      const query = userDetailQuerySchema.parse(request.query);
+
+      const userRow = await prisma.user.findUnique({
+        where: { id: params.userId },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          levelXpAtomic: true,
+          wallets: {
+            where: { currency: PLATFORM_INTERNAL_CURRENCY },
+            select: {
+              id: true,
+              currency: true,
+              balanceAtomic: true,
+              lockedAtomic: true,
+              updatedAt: true
+            },
+            orderBy: { createdAt: "asc" }
+          }
+        }
+      }).catch(async (error) => {
+        if (!isMissingLevelXpColumnError(error)) {
+          throw error;
+        }
+        const legacy = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            wallets: {
+              where: { currency: PLATFORM_INTERNAL_CURRENCY },
+              select: {
+                id: true,
+                currency: true,
+                balanceAtomic: true,
+                lockedAtomic: true,
+                updatedAt: true
+              },
+              orderBy: { createdAt: "asc" }
+            }
+          }
+        });
+        if (!legacy) {
+          return null;
+        }
+        return {
+          ...legacy,
+          levelXpAtomic: 0n
+        };
+      });
+
+      if (!userRow) {
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
+      }
+
+      const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements] = await Promise.all([
+        prisma.deposit.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY,
+            status: DepositStatus.COMPLETED
+          },
+          _sum: {
+            amountAtomic: true
+          }
+        }),
+        prisma.withdrawal.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY,
+            status: WithdrawalStatus.COMPLETED
+          },
+          _sum: {
+            amountAtomic: true,
+            feeAtomic: true
+          }
+        }),
+        prisma.minesGame.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            betAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.blackjackGame.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            initialBetAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.rouletteBet.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            stakeAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.ledgerEntry.findMany({
+          where: {
+            wallet: {
+              userId: params.userId,
+              currency: PLATFORM_INTERNAL_CURRENCY
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: query.limit,
+          select: {
+            id: true,
+            walletId: true,
+            direction: true,
+            reason: true,
+            amountAtomic: true,
+            balanceBeforeAtomic: true,
+            balanceAfterAtomic: true,
+            referenceId: true,
+            idempotencyKey: true,
+            metadata: true,
+            createdAt: true
+          }
+        })
+      ]);
+
+      const minesWagered = minesAgg._sum.betAtomic ?? 0n;
+      const minesPayout = minesAgg._sum.payoutAtomic ?? 0n;
+      const blackjackWagered = blackjackAgg._sum.initialBetAtomic ?? 0n;
+      const blackjackPayout = blackjackAgg._sum.payoutAtomic ?? 0n;
+      const rouletteWagered = rouletteAgg._sum.stakeAtomic ?? 0n;
+      const roulettePayout = rouletteAgg._sum.payoutAtomic ?? 0n;
+
+      const totalWageredAtomic = minesWagered + blackjackWagered + rouletteWagered;
+      const totalPayoutAtomic = minesPayout + blackjackPayout + roulettePayout;
+      const houseProfitAtomic = totalWageredAtomic - totalPayoutAtomic;
+      const netPlayerGamingAtomic = totalPayoutAtomic - totalWageredAtomic;
+
+      const movementRows = movements.map((row) => {
+        const metadata =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : {};
+        const game = typeof metadata.game === "string" ? metadata.game : null;
+        const operation = typeof metadata.operation === "string" ? metadata.operation : null;
+        const tag = game ? (operation ? `${game}:${operation}` : game) : row.reason;
+        const signedAtomic = row.direction === LedgerDirection.CREDIT ? row.amountAtomic : -row.amountAtomic;
+
+        return {
+          id: row.id,
+          createdAt: row.createdAt,
+          walletId: row.walletId,
+          direction: row.direction,
+          reason: row.reason,
+          game: game ?? null,
+          operation: operation ?? null,
+          tag,
+          amountAtomic: row.amountAtomic.toString(),
+          signedAtomic: signedAtomic.toString(),
+          balanceBeforeAtomic: row.balanceBeforeAtomic.toString(),
+          balanceAfterAtomic: row.balanceAfterAtomic.toString(),
+          referenceId: row.referenceId,
+          idempotencyKey: row.idempotencyKey,
+          metadata
+        };
+      });
+
+      return reply.send({
+        user: {
+          id: userRow.id,
+          email: userRow.email,
+          role: userRow.role,
+          status: userRow.status,
+          level: getLevelFromXp(userRow.levelXpAtomic),
+          levelXpAtomic: userRow.levelXpAtomic.toString(),
+          createdAt: userRow.createdAt,
+          updatedAt: userRow.updatedAt
+        },
+        wallets: userRow.wallets.map((wallet) => ({
+          id: wallet.id,
+          currency: wallet.currency,
+          balanceAtomic: wallet.balanceAtomic.toString(),
+          lockedAtomic: wallet.lockedAtomic.toString(),
+          availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+          updatedAt: wallet.updatedAt
+        })),
+        summary: {
+          totalDepositsAtomic: (depositsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalWithdrawalsAtomic: (withdrawalsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalWithdrawalFeesAtomic: (withdrawalsAgg._sum.feeAtomic ?? 0n).toString(),
+          rewardsRedeemedAtomic: "0",
+          totalWageredAtomic: totalWageredAtomic.toString(),
+          totalPayoutAtomic: totalPayoutAtomic.toString(),
+          houseProfitAtomic: houseProfitAtomic.toString(),
+          netPlayerGamingAtomic: netPlayerGamingAtomic.toString(),
+          perGame: {
+            mines: {
+              wageredAtomic: minesWagered.toString(),
+              payoutAtomic: minesPayout.toString(),
+              netAtomic: (minesPayout - minesWagered).toString()
+            },
+            blackjack: {
+              wageredAtomic: blackjackWagered.toString(),
+              payoutAtomic: blackjackPayout.toString(),
+              netAtomic: (blackjackPayout - blackjackWagered).toString()
+            },
+            roulette: {
+              wageredAtomic: rouletteWagered.toString(),
+              payoutAtomic: roulettePayout.toString(),
+              netAtomic: (roulettePayout - rouletteWagered).toString()
+            }
+          }
+        },
+        movements: movementRows
       });
     }
   );
@@ -615,7 +1012,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const result = await adjustWalletBalance({
         actorUserId: request.user.sub,
         userId: targetUserId,
-        currency: body.currency,
+        currency: PLATFORM_INTERNAL_CURRENCY,
         amountAtomic: body.amountAtomic,
         reason: body.reason,
         idempotencyKey: request.idempotencyKey,
@@ -625,6 +1022,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         targetUserId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
         entry: {
           id: result.entry.id,
           walletId: result.entry.walletId,

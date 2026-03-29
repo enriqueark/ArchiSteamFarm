@@ -216,7 +216,7 @@ const openSession = async (
 };
 
 export const register = async (
-  fastify: FastifyInstance,
+  _fastify: FastifyInstance,
   input: { email: string; password: string; userAgent?: string; ipAddress?: string }
 ) => {
   const email = normalizeEmail(input.email);
@@ -251,7 +251,7 @@ export const register = async (
         ${email},
         ${passwordHash},
         CAST('PLAYER' AS "UserRole"),
-        CAST('ACTIVE' AS "UserStatus"),
+        CAST('SUSPENDED' AS "UserStatus"),
         NOW(),
         NOW()
       )
@@ -277,11 +277,11 @@ export const register = async (
   if (isCashierEnabled()) {
     await ensureUserDepositAddresses(authIdentity.id);
   }
-  const tokens = await openSession(fastify, authIdentity, input.userAgent, input.ipAddress);
 
   return {
     user: createdUser,
-    tokens
+    pendingApproval: true,
+    message: "Registration successful. Your account is pending admin approval."
   };
 };
 
