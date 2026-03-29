@@ -234,29 +234,20 @@ export const addUserXpBestEffort = async (userId: string, wagerAtomic: bigint): 
     return;
   }
 
+  const applyRawIncrement = async (): Promise<void> => {
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET "levelXpAtomic" = COALESCE("levelXpAtomic", 0) + ${gainedXpAtomic}
+      WHERE id = ${userId}
+    `;
+  };
+
   try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        levelXpAtomic: {
-          increment: gainedXpAtomic
-        }
-      }
-    });
+    await applyRawIncrement();
     return;
   } catch (error) {
     if (!isMissingLevelXpColumn(error)) {
-      // Best-effort fallback for environments where Prisma increment may fail
-      // due to transient adapter quirks. Keep wagering unaffected.
-      try {
-        await prisma.$executeRaw`
-          UPDATE "users"
-          SET "levelXpAtomic" = "levelXpAtomic" + ${gainedXpAtomic}
-          WHERE id = ${userId}
-        `;
-      } catch {
-        // Never let progression updates block core betting flows.
-      }
+      // Never let progression updates block core betting flows.
       return;
     }
   }
@@ -264,14 +255,7 @@ export const addUserXpBestEffort = async (userId: string, wagerAtomic: bigint): 
   // If the column is missing, try to create it and retry once.
   await ensureLevelXpColumnExistsBestEffort();
   try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        levelXpAtomic: {
-          increment: gainedXpAtomic
-        }
-      }
-    });
+    await applyRawIncrement();
   } catch {
     // Never let progression updates block core betting flows.
   }
