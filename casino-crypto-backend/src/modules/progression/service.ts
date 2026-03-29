@@ -147,17 +147,15 @@ export const addUserXpInTx = async (
 ): Promise<{ levelXpAtomic: bigint; level: number; gainedXpAtomic: bigint }> => {
   const gainedXpAtomic = coinsAtomicToXpScaled(wagerAtomic);
   const isMissingLevelXpColumn = (error: unknown): boolean => {
+    // On some environments Prisma returns P2022 with "(not available)" as
+    // column metadata. Since this function only writes progression data, treat
+    // any P2022 here as a non-fatal missing progression-column case.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
-      const column = String((error.meta as Record<string, unknown> | undefined)?.column ?? "").toLowerCase();
-      if (column.includes("levelxpatomic")) {
-        return true;
-      }
+      return true;
     }
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
-      if (message.includes("levelxpatomic")) {
-        return true;
-      }
+      return message.includes("levelxpatomic");
     }
     return false;
   };
