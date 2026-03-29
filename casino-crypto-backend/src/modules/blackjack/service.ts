@@ -12,7 +12,6 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { addUserXpBestEffort } from "../progression/service";
 import {
-  MAX_GAME_BET_COINS,
   PLATFORM_INTERNAL_CURRENCY,
   MAX_GAME_BET_ATOMIC,
   debitBalanceInTx
@@ -183,7 +182,7 @@ const isPair = (cards: CardCode[]): boolean => {
 const ensureBetWithinLimit = (betAtomic: bigint): void => {
   const maxAtomic = MAX_GAME_BET_ATOMIC;
   if (betAtomic > maxAtomic) {
-    throw new AppError(`Maximum bet is ${MAX_GAME_BET_COINS.toString()} USD`, 400, "BET_LIMIT_EXCEEDED");
+    throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
   }
 };
 

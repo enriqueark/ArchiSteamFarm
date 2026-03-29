@@ -689,7 +689,7 @@ export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesG
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET_AMOUNT");
   }
   if (input.betAtomic > MAX_GAME_BET_ATOMIC) {
-    throw new AppError("betAtomic exceeds max allowed bet of 5000 COINS", 400, "BET_LIMIT_EXCEEDED");
+    throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
   }
 
   const active = await getActiveMinesGame(input.userId);

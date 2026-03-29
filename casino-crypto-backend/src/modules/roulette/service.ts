@@ -1184,7 +1184,7 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
     throw new AppError("stakeAtomic must be greater than 0", 400, "INVALID_STAKE");
   }
   if (input.stakeAtomic > MAX_ROULETTE_BET_ATOMIC) {
-    throw new AppError(`Maximum roulette bet is ${MAX_GAME_BET_COINS.toString()} COINS`, 400, "ROULETTE_MAX_BET_EXCEEDED");
+    throw new AppError("You can't bet more than 5000 per game", 400, "ROULETTE_MAX_BET_EXCEEDED");
   }
 
   try {

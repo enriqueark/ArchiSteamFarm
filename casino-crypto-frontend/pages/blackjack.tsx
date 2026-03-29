@@ -69,6 +69,30 @@ const suitGlyph = (suit: "S" | "H" | "D" | "C"): string => {
 const suitColorClass = (suit: "S" | "H" | "D" | "C"): string =>
   suit === "H" || suit === "D" ? "text-red-500" : "text-gray-100";
 
+const handValueFromCards = (cards: string[]): number => {
+  let total = 0;
+  let aces = 0;
+  for (const card of cards) {
+    const rank = cardRank(card);
+    if (rank === "A") {
+      total += 11;
+      aces += 1;
+      continue;
+    }
+    if (rank === "K" || rank === "Q" || rank === "J") {
+      total += 10;
+      continue;
+    }
+    const numeric = Number(rank);
+    total += Number.isFinite(numeric) ? numeric : 0;
+  }
+  while (total > 21 && aces > 0) {
+    total -= 10;
+    aces -= 1;
+  }
+  return total;
+};
+
 const Chip = ({ label, value, color }: { label: string; value: string; color: string }) => (
   <div
     className={`blackjack-chip blackjack-chip-bounce rounded-full px-3 py-2 text-xs font-semibold shadow-lg ${color}`}
@@ -236,6 +260,7 @@ export default function BlackjackPage() {
     dealerRevealStep >= game.dealerCards.length;
   const canShowResult = !!game && game.status !== "ACTIVE" && dealerRevealComplete;
   const canStartNewDeal = !game || canShowResult;
+  const dealerDisplayValue = dealerCardsDisplay.length > 0 ? handValueFromCards(dealerCardsDisplay) : 0;
 
   useEffect(() => {
     const shouldLock =
@@ -378,7 +403,9 @@ export default function BlackjackPage() {
             </div>
 
             <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-              <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">Dealer</div>
+              <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">
+                Dealer · Value {dealerDisplayValue}
+              </div>
               <div className="flex gap-3 flex-wrap">
                 {dealerCardsDisplay.map((card, idx) => {
                   const shouldAnimateReveal = !!game.dealerRevealed && dealerRevealStartedAt !== null;
