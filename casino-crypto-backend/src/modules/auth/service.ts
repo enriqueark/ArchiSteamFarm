@@ -2,6 +2,7 @@ import argon2 from "argon2";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 
 import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
@@ -44,19 +45,6 @@ const isMissingLevelXpColumnError = (error: unknown): boolean => {
   return false;
 };
 
-const sanitizeUser = (user: {
-  id: string;
-  email: string;
-  role: "PLAYER" | "ADMIN" | "SUPPORT";
-  levelXpAtomic: bigint;
-}): AuthUser => ({
-  id: user.id,
-  email: user.email,
-  role: user.role,
-  level: getLevelFromXp(user.levelXpAtomic),
-  levelXpAtomic: user.levelXpAtomic.toString()
-});
-
 const sanitizeLegacyUser = (user: {
   id: string;
   email: string;
@@ -68,6 +56,47 @@ const sanitizeLegacyUser = (user: {
   level: 1,
   levelXpAtomic: "0"
 });
+
+const toBigIntSafe = (value: unknown): bigint => {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "string" && /^-?\d+$/.test(value)) {
+    return BigInt(value);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.trunc(value));
+  }
+  return 0n;
+};
+
+const enrichUserWithProgression = async (user: {
+  id: string;
+  email: string;
+  role: "PLAYER" | "ADMIN" | "SUPPORT";
+}): Promise<AuthUser> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ levelXpAtomic: unknown }>>`
+      SELECT "levelXpAtomic"
+      FROM "users"
+      WHERE id = ${user.id}
+      LIMIT 1
+    `;
+    const xp = toBigIntSafe(rows[0]?.levelXpAtomic ?? 0);
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      level: getLevelFromXp(xp),
+      levelXpAtomic: xp.toString()
+    };
+  } catch (error) {
+    if (isMissingLevelXpColumnError(error)) {
+      return sanitizeLegacyUser(user);
+    }
+    throw error;
+  }
+};
 
 const isBcryptHash = (hash: string): boolean => /^\$2[aby]\$/.test(hash);
 
@@ -191,52 +220,58 @@ export const register = async (
   input: { email: string; password: string; userAgent?: string; ipAddress?: string }
 ) => {
   const email = normalizeEmail(input.email);
-  const existing = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true }
-  });
+  const existingRows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM "users"
+    WHERE email = ${email}
+    LIMIT 1
+  `;
+  const existing = existingRows[0];
 
   if (existing) {
     throw new AppError("Email is already registered", 409, "EMAIL_ALREADY_EXISTS");
   }
 
   const passwordHash = await argon2.hash(input.password);
+  const userId = randomUUID();
 
-  let createdUser: AuthUser;
-  let authIdentity: { id: string; email: string; role: "PLAYER" | "ADMIN" | "SUPPORT" };
   try {
-    const user = await prisma.user.create({
-      data: {
+    await prisma.$executeRaw`
+      INSERT INTO "users" (
+        id,
         email,
-        passwordHash
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        levelXpAtomic: true
-      }
-    });
-    createdUser = sanitizeUser(user);
-    authIdentity = { id: user.id, email: user.email, role: user.role };
+        "passwordHash",
+        role,
+        status,
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${userId},
+        ${email},
+        ${passwordHash},
+        CAST('PLAYER' AS "UserRole"),
+        CAST('ACTIVE' AS "UserStatus"),
+        NOW(),
+        NOW()
+      )
+    `;
   } catch (error) {
-    if (!isMissingLevelXpColumnError(error)) {
-      throw error;
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new AppError("Email is already registered", 409, "EMAIL_ALREADY_EXISTS");
     }
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true
-      }
-    });
-    createdUser = sanitizeLegacyUser(user);
-    authIdentity = { id: user.id, email: user.email, role: user.role };
+    throw error;
   }
+
+  const authIdentity: { id: string; email: string; role: "PLAYER" | "ADMIN" | "SUPPORT" } = {
+    id: userId,
+    email,
+    role: "PLAYER"
+  };
+  const createdUser = await enrichUserWithProgression(authIdentity);
 
   await createDefaultWallets(authIdentity.id);
   if (isCashierEnabled()) {
@@ -255,51 +290,26 @@ export const login = async (
   input: { email: string; password: string; userAgent?: string; ipAddress?: string }
 ) => {
   const email = normalizeEmail(input.email);
-
-  let user:
-    | {
-        id: string;
-        email: string;
-        passwordHash: string;
-        role: "PLAYER" | "ADMIN" | "SUPPORT";
-        status: "ACTIVE" | "SUSPENDED";
-        levelXpAtomic: bigint;
-      }
-    | {
-        id: string;
-        email: string;
-        passwordHash: string;
-        role: "PLAYER" | "ADMIN" | "SUPPORT";
-        status: "ACTIVE" | "SUSPENDED";
-      }
-    | null;
-  try {
-    user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        passwordHash: true,
-        role: true,
-        status: true,
-        levelXpAtomic: true
-      }
-    });
-  } catch (error) {
-    if (!isMissingLevelXpColumnError(error)) {
-      throw error;
-    }
-    user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        passwordHash: true,
-        role: true,
-        status: true
-      }
-    });
-  }
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      email: string;
+      passwordHash: string;
+      role: "PLAYER" | "ADMIN" | "SUPPORT";
+      status: "ACTIVE" | "SUSPENDED";
+    }>
+  >`
+    SELECT
+      id,
+      email,
+      "passwordHash",
+      role,
+      status
+    FROM "users"
+    WHERE email = ${email}
+    LIMIT 1
+  `;
+  const user = rows[0] ?? null;
 
   if (!user) {
     throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
@@ -314,15 +324,20 @@ export const login = async (
     throw new AppError("User is not active", 403, "USER_NOT_ACTIVE");
   }
 
-  const sanitizedUser =
-    "levelXpAtomic" in user ? sanitizeUser(user) : sanitizeLegacyUser(user);
+  const sanitizedUser = await enrichUserWithProgression({
+    id: user.id,
+    email: user.email,
+    role: user.role
+  });
   if (passwordVerification.shouldUpgradeHash) {
     const upgradedHash = await argon2.hash(input.password);
-    await prisma.user
-      .update({
-        where: { id: user.id },
-        data: { passwordHash: upgradedHash }
-      })
+    await prisma
+      .$executeRaw`
+        UPDATE "users"
+        SET "passwordHash" = ${upgradedHash},
+            "updatedAt" = NOW()
+        WHERE id = ${user.id}
+      `
       .catch(() => {
         // Do not block login if hash upgrade fails.
       });
