@@ -1189,7 +1189,8 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
           select: {
             id: true,
             walletId: true,
-            status: true
+            status: true,
+            amountAtomic: true
           }
         }
       }
@@ -1199,13 +1200,13 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
       tx,
       gameForCapture as Awaited<ReturnType<typeof lockGameForUser>>,
       `blackjack:${game.id}:capture`,
-      gameForCapture.initialBetAtomic
+      gameForCapture.betReservation.amountAtomic
     );
     const finalized = await finalizeGameInTx(tx, {
       ...gameForCapture,
       playerHands: state.playerHands as unknown as Prisma.JsonValue,
       deck: state.deck as unknown as Prisma.JsonValue
-    } as Awaited<ReturnType<typeof lockGameForUser>>, gameForCapture.initialBetAtomic);
+    } as Awaited<ReturnType<typeof lockGameForUser>>, gameForCapture.betReservation.amountAtomic);
     return finalized.state;
   });
 

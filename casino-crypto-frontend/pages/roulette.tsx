@@ -15,6 +15,7 @@ import {
 import { CasinoSocket, type BetBreakdownEvent, type RouletteRoundEvent, type SocketEvent } from "@/lib/socket";
 import { useAuthUI } from "@/lib/auth-ui";
 import { useToast } from "@/lib/toast";
+import { getWallets } from "@/lib/api";
 
 const INTERNAL_GAME_CURRENCY = "USDT";
 const VIRTUAL_CURRENCY_LABEL = "COINS";
@@ -138,6 +139,7 @@ export default function RoulettePage() {
   const [stakeCoins, setStakeCoins] = useState("10.00");
   const [betType, setBetType] = useState<BetType>("RED");
   const [loading, setLoading] = useState(false);
+  const [availableCoins, setAvailableCoins] = useState(0);
   const [countdown, setCountdown] = useState<string>("");
   const [history, setHistory] = useState<RouletteResultHistoryItem[]>([]);
   const [betBreakdown, setBetBreakdown] = useState<RouletteBetBreakdown | null>(null);
@@ -506,6 +508,41 @@ export default function RoulettePage() {
   ]);
 
   useEffect(() => {
+    if (!authed) {
+      setAvailableCoins(0);
+      return;
+    }
+    let cancelled = false;
+    const refreshWallet = async () => {
+      try {
+        const wallets = await getWallets();
+        if (cancelled) {
+          return;
+        }
+        const nextAvailable = wallets.reduce((sum, wallet) => {
+          const balance = Number(wallet.balanceAtomic);
+          const locked = Number(wallet.lockedAtomic);
+          if (!Number.isFinite(balance) || !Number.isFinite(locked)) {
+            return sum;
+          }
+          return sum + (balance - locked) / 10 ** COIN_DECIMALS;
+        }, 0);
+        setAvailableCoins(Math.max(0, nextAvailable));
+      } catch {
+        // Ignore transient wallet fetch errors.
+      }
+    };
+    void refreshWallet();
+    const timer = setInterval(() => {
+      void refreshWallet();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [authed]);
+
+  useEffect(() => {
     return () => {
       stopWheelSpinAnimation();
       clearHistoryFlushTimeout();
@@ -549,6 +586,11 @@ export default function RoulettePage() {
     const current = Number(stakeCoins) || 0;
     const next = Math.max(0, current * factor);
     setStakeCoins(next.toFixed(2));
+  };
+
+  const setMaxStake = () => {
+    const capped = Math.max(0, Math.min(MAX_BET_COINS, availableCoins));
+    setStakeCoins(capped.toFixed(2));
   };
 
   const phaseProgressPercent = (() => {
@@ -720,9 +762,14 @@ export default function RoulettePage() {
               <Button variant="secondary" className="text-xs px-2 py-1" onClick={() => scaleStake(2)}>
                 x2
               </Button>
+              <Button variant="secondary" className="text-xs px-2 py-1" onClick={setMaxStake}>
+                MAX
+              </Button>
             </div>
           </div>
-          <p className="text-xs text-gray-500">1 USD = 1 COIN · BAIT wins when number is 1 or 14.</p>
+          <p className="text-xs text-gray-500">
+            1 USD = 1 COIN · Available: {formatCoins(availableCoins)} · BAIT wins when number is 1 or 14.
+          </p>
         </div>
       </Card>
 
