@@ -472,6 +472,15 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         renderCatalogSkins();
       };
 
+      const loadCatalogUnfiltered = async () => {
+        const params = new URLSearchParams();
+        params.set("limit", "200");
+        const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
+        casesState.catalog = await res.json();
+        renderCatalogSkins();
+      };
+
       casesSelect.addEventListener("change", () => pickCaseForEdit(casesSelect.value));
       casesRefreshBtn.addEventListener("click", async () => {
         try {
@@ -535,7 +544,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               " cases=" + summary.casesParsed +
               " skins=" + summary.skinsUpserted;
           }
-          await loadCatalog();
+          await loadCatalogUnfiltered();
           if (!casesState.catalog.length) {
             casesStatus.className = "mono err";
             casesStatus.textContent = "Import finished but catalog is still empty. Try pages=1 first, then Search skins.";

@@ -63,6 +63,7 @@ export type RainCatalogImportSummary = {
   failedCases: number;
   failureSamples: string[];
   fallbackSeedUsed: boolean;
+  totalCatalogSkins: number;
 };
 
 const FALLBACK_RAIN_SKIN_SEED: Array<{
@@ -192,6 +193,41 @@ const FALLBACK_RAIN_SKIN_SEED: Array<{
     imageUrl: "https://cdn.rain.gg/images/items/skeleton-knife-fade-factory-new.png"
   }
 ];
+
+const importFallbackRainSkinSeed = async (actorUserId?: string | null): Promise<number> => {
+  let upserted = 0;
+  for (const seed of FALLBACK_RAIN_SKIN_SEED) {
+    const normalizedName = seed.name.trim();
+    const sourceSkinKey = normalizeSourceSkinKey(seed.sourceCaseSlug, normalizedName);
+    await prisma.cs2SkinCatalog.upsert({
+      where: {
+        sourceProvider_sourceSkinKey: {
+          sourceProvider: RAIN_PROVIDER,
+          sourceSkinKey
+        }
+      },
+      create: {
+        sourceProvider: RAIN_PROVIDER,
+        sourceCaseSlug: seed.sourceCaseSlug,
+        sourceSkinKey,
+        name: normalizedName,
+        valueAtomic: parseCoinsToAtomic(seed.valueCoins),
+        imageUrl: seed.imageUrl,
+        isActive: true,
+        createdByUserId: actorUserId ?? null
+      },
+      update: {
+        sourceCaseSlug: seed.sourceCaseSlug,
+        name: normalizedName,
+        valueAtomic: parseCoinsToAtomic(seed.valueCoins),
+        imageUrl: seed.imageUrl,
+        isActive: true
+      }
+    });
+    upserted += 1;
+  }
+  return upserted;
+};
 
 const parseCoinsToAtomic = (value: string): bigint => {
   const normalized = value.replace(/,/g, "").trim();
@@ -450,7 +486,8 @@ export const importRainCatalogPageByAdmin = async (
     itemsParsed,
     failedCases,
     failureSamples,
-    fallbackSeedUsed: false
+    fallbackSeedUsed: false,
+    totalCatalogSkins: 0
   };
 };
 
@@ -468,7 +505,8 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     itemsParsed: 0,
     failedCases: 0,
     failureSamples: [],
-    fallbackSeedUsed: false
+    fallbackSeedUsed: false,
+    totalCatalogSkins: 0
   };
   for (let page = 0; page < safePages; page += 1) {
     try {
@@ -499,42 +537,26 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
   }
   const importedAnything = summary.skinsUpserted > 0;
   if (!importedAnything) {
-    for (const seed of FALLBACK_RAIN_SKIN_SEED) {
-      const normalizedName = seed.name.trim();
-      const sourceSkinKey = normalizeSourceSkinKey(seed.sourceCaseSlug, normalizedName);
-      await prisma.cs2SkinCatalog.upsert({
-        where: {
-          sourceProvider_sourceSkinKey: {
-            sourceProvider: RAIN_PROVIDER,
-            sourceSkinKey
-          }
-        },
-        create: {
-          sourceProvider: RAIN_PROVIDER,
-          sourceCaseSlug: seed.sourceCaseSlug,
-          sourceSkinKey,
-          name: normalizedName,
-          valueAtomic: parseCoinsToAtomic(seed.valueCoins),
-          imageUrl: seed.imageUrl,
-          isActive: true,
-          createdByUserId: actorUserId
-        },
-        update: {
-          sourceCaseSlug: seed.sourceCaseSlug,
-          name: normalizedName,
-          valueAtomic: parseCoinsToAtomic(seed.valueCoins),
-          imageUrl: seed.imageUrl,
-          isActive: true
-        }
-      });
-    }
-    summary.skinsUpserted = FALLBACK_RAIN_SKIN_SEED.length;
-    summary.itemsParsed = FALLBACK_RAIN_SKIN_SEED.length;
+    const seeded = await importFallbackRainSkinSeed(actorUserId);
+    summary.skinsUpserted = Math.max(summary.skinsUpserted, seeded);
+    summary.itemsParsed = Math.max(summary.itemsParsed, seeded);
     summary.fallbackSeedUsed = true;
     if (summary.failureSamples.length < 8) {
       summary.failureSamples.push(
         "Rain catalog unavailable right now, fallback CS2 seed imported so admin can continue."
       );
+    }
+  }
+
+  summary.totalCatalogSkins = await prisma.cs2SkinCatalog.count();
+  if (summary.totalCatalogSkins === 0) {
+    const seeded = await importFallbackRainSkinSeed(actorUserId);
+    summary.skinsUpserted = Math.max(summary.skinsUpserted, seeded);
+    summary.itemsParsed = Math.max(summary.itemsParsed, seeded);
+    summary.fallbackSeedUsed = true;
+    summary.totalCatalogSkins = await prisma.cs2SkinCatalog.count();
+    if (summary.failureSamples.length < 8) {
+      summary.failureSamples.push("Catalog was empty after import. Forced fallback seed import applied.");
     }
   }
   return summary;
@@ -544,17 +566,33 @@ export const listCs2SkinCatalogByAdmin = async (input: {
   q?: string;
   limit?: number;
   sourceCaseSlug?: string;
+  actorUserId?: string;
 }): Promise<Cs2SkinCatalogItem[]> => {
   const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 100)));
   const q = input.q?.trim();
-  const rows = await prisma.cs2SkinCatalog.findMany({
-    where: {
-      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
-      ...(input.sourceCaseSlug ? { sourceCaseSlug: input.sourceCaseSlug } : {})
-    },
+  const where = {
+    ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
+    ...(input.sourceCaseSlug ? { sourceCaseSlug: input.sourceCaseSlug } : {})
+  };
+
+  let rows = await prisma.cs2SkinCatalog.findMany({
+    where,
     orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
     take: limit
   });
+
+  if (!rows.length) {
+    const totalCatalogSkins = await prisma.cs2SkinCatalog.count();
+    if (totalCatalogSkins === 0) {
+      await importFallbackRainSkinSeed(input.actorUserId ?? null);
+      rows = await prisma.cs2SkinCatalog.findMany({
+        where,
+        orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
+        take: limit
+      });
+    }
+  }
+
   return rows.map((row) => ({
     id: row.id,
     sourceProvider: row.sourceProvider,
