@@ -1335,7 +1335,16 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
         }
       });
 
-      await tx.caseItem.deleteMany({ where: { caseId: updatedCase.id } });
+      // Keep historical case items referenced by past openings to avoid FK errors on edit.
+      await tx.caseItem.updateMany({
+        where: {
+          caseId: updatedCase.id,
+          isActive: true
+        },
+        data: {
+          isActive: false
+        }
+      });
       await tx.caseItem.createMany({
         data: normalizedItems.map((item) => ({
           caseId: updatedCase.id,
@@ -1381,7 +1390,7 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
     return created.id;
   });
 
-  return getCaseById(saved, true);
+  return getCaseById(saved, false);
 };
 
 export const setCaseActiveStatusByAdmin = async (caseId: string, isActive: boolean): Promise<CaseDetails> => {
@@ -1398,6 +1407,7 @@ export const listCasesByAdmin = async (): Promise<CaseDetails[]> => {
       orderBy: [{ createdAt: "desc" }],
       include: {
         items: {
+          where: { isActive: true },
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
         }
       }
@@ -1417,10 +1427,8 @@ export const listCasesByAdmin = async (): Promise<CaseDetails[]> => {
     priceAtomic: row.priceAtomic,
     currency: row.currency,
     isActive: row.isActive,
-    volatilityIndex: caseVolatilityIndexFromItems(row.items.filter((item) => item.isActive)),
-    volatilityTier: getVolatilityTier(
-      caseVolatilityIndexFromItems(row.items.filter((item) => item.isActive))
-    ),
+    volatilityIndex: caseVolatilityIndexFromItems(row.items),
+    volatilityTier: getVolatilityTier(caseVolatilityIndexFromItems(row.items)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     items: row.items.map(asItemState)
