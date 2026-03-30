@@ -215,15 +215,29 @@ export default function CasesPage() {
           >
             <div className="text-sm font-semibold text-white">{c.title}</div>
             <div className="text-xs text-slate-300">{fmtCoins(c.priceAtomic)} COINS</div>
+            <div className="text-[11px] text-slate-400">
+              VOL {c.volatilityTier} ({c.volatilityIndex})
+            </div>
           </button>
         ))}
       </div>
 
       {selectedCase ? (
         <Card title={selectedCase.title}>
+          {selectedCase.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={selectedCase.logoUrl}
+              alt={selectedCase.title}
+              className="mb-3 h-28 w-28 rounded border border-slate-700 object-cover"
+            />
+          ) : null}
           <p className="text-sm text-slate-300">{selectedCase.description || "No description."}</p>
           <p className="mt-2 text-sm text-slate-200">
             Price: <span className="font-semibold">{fmtCoins(selectedCase.priceAtomic)} COINS</span>
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Volatility: {selectedCase.volatilityTier} ({selectedCase.volatilityIndex})
           </p>
 
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">

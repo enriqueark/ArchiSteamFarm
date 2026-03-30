@@ -161,6 +161,7 @@ model User {
   affiliateCommissionEventsAsReferred AffiliateCommissionEvent[] @relation("AffiliateCommissionEventsAsReferred")
   affiliateDepositBonuses AffiliateDepositBonus[] @relation("AffiliateDepositBonusesAsReferred")
   createdCases Case[] @relation("CasesCreatedByUser")
+  createdSkinCatalogEntries Cs2SkinCatalog[] @relation("Cs2SkinCatalogCreatedByUser")
   caseOpenings CaseOpening[]
 
   @@map("users")
@@ -171,6 +172,7 @@ model Case {
   slug            String      @unique
   title           String
   description     String?
+  logoUrl         String?
   priceAtomic     BigInt
   currency        Currency    @default(USDT)
   isActive        Boolean     @default(true)
@@ -194,6 +196,8 @@ model CaseItem {
   imageUrl   String?
   sortOrder  Int       @default(0)
   isActive   Boolean   @default(true)
+  cs2SkinId  String?
+  cs2Skin    Cs2SkinCatalog? @relation(fields: [cs2SkinId], references: [id], onDelete: SetNull)
   case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   openings   CaseOpening[]
   createdAt  DateTime  @default(now())
@@ -201,6 +205,27 @@ model CaseItem {
 
   @@index([caseId, sortOrder])
   @@map("case_items")
+}
+
+model Cs2SkinCatalog {
+  id              String   @id @default(cuid())
+  sourceProvider  String   @default("RAIN_GG")
+  sourceCaseSlug  String?
+  sourceSkinKey   String
+  name            String
+  valueAtomic     BigInt
+  imageUrl        String?
+  isActive        Boolean  @default(true)
+  createdByUserId String?
+  createdByUser   User?    @relation("Cs2SkinCatalogCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  caseItems       CaseItem[]
+
+  @@unique([sourceProvider, sourceSkinKey])
+  @@index([name])
+  @@index([sourceCaseSlug, createdAt(sort: Desc)])
+  @@map("cs2_skin_catalog")
 }
 
 model CaseOpening {

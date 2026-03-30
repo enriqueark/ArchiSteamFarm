@@ -19,6 +19,311 @@ import {
 
 const RNG_BYTES = 6;
 const RNG_MAX = 2 ** (RNG_BYTES * 8);
+const RAIN_PROVIDER = "RAIN_GG";
+const CASE_VOLATILITY_MIN = 0;
+const CASE_VOLATILITY_MAX = 100;
+
+export type VolatilityTier = "L" | "M" | "H" | "I";
+
+export type Cs2SkinCatalogItem = {
+  id: string;
+  sourceProvider: string;
+  sourceCaseSlug: string | null;
+  sourceSkinKey: string;
+  name: string;
+  valueAtomic: bigint;
+  imageUrl: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type RainCaseCard = {
+  slug: string;
+};
+
+type RainCaseItemParsed = {
+  sourceCaseSlug: string;
+  sourceSkinKey: string;
+  name: string;
+  valueAtomic: bigint;
+  dropRate: string;
+  imageUrl: string | null;
+};
+
+export type RainCatalogImportSummary = {
+  pagesScanned: number;
+  casesFound: number;
+  casesParsed: number;
+  skinsUpserted: number;
+  itemsParsed: number;
+};
+
+const parseCoinsToAtomic = (value: string): bigint => {
+  const normalized = value.replace(/,/g, "").trim();
+  if (!/^\d+(\.\d+)?$/.test(normalized)) {
+    throw new AppError(`Invalid coins amount: ${value}`, 400, "INVALID_COINS_AMOUNT");
+  }
+  const [whole, fraction = ""] = normalized.split(".");
+  const fracPadded = (fraction + "00000000").slice(0, 8);
+  return BigInt(whole) * 100000000n + BigInt(fracPadded);
+};
+
+const clampVolatility = (value: number): number =>
+  Math.max(CASE_VOLATILITY_MIN, Math.min(CASE_VOLATILITY_MAX, Math.round(value)));
+
+const caseVolatilityIndexFromItems = (
+  items: Array<{ valueAtomic: bigint; dropRate: Prisma.Decimal }>
+): number => {
+  if (!items.length) {
+    return 0;
+  }
+  const probabilities = items.map((item) => Number(item.dropRate.toString()) / 100);
+  const values = items.map((item) => Number(item.valueAtomic) / 1e8);
+  const expected = values.reduce((acc, value, idx) => acc + value * probabilities[idx], 0);
+  if (!Number.isFinite(expected) || expected <= 0) {
+    return 0;
+  }
+  const variance = values.reduce((acc, value, idx) => {
+    const delta = value - expected;
+    return acc + probabilities[idx] * delta * delta;
+  }, 0);
+  const stdDev = Math.sqrt(Math.max(variance, 0));
+  const coefficientVariation = stdDev / expected;
+  return clampVolatility(coefficientVariation * 28);
+};
+
+const getVolatilityTier = (index: number): VolatilityTier => {
+  if (index < 25) {
+    return "L";
+  }
+  if (index < 50) {
+    return "M";
+  }
+  if (index < 75) {
+    return "H";
+  }
+  return "I";
+};
+
+const normalizeSkinLabel = (weapon: string, skin: string): string => {
+  const left = weapon.trim();
+  const right = skin.trim();
+  if (!left) {
+    return right;
+  }
+  if (!right) {
+    return left;
+  }
+  return `${left} | ${right}`;
+};
+
+const normalizeSourceSkinKey = (sourceCaseSlug: string, name: string): string =>
+  `${sourceCaseSlug}:${name.toLowerCase().replace(/\s+/g, " ").trim()}`;
+
+const buildFallbackImageUrlFromName = (name: string): string => {
+  const slug = name
+    .toLowerCase()
+    .replace(/\|/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `https://cdn.csgoskins.gg/public/icons/${slug}.png`;
+};
+
+const buildJinaMirrorUrl = (url: string): string => `https://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;
+
+
+const fetchMarkdownViaJina = async (url: string): Promise<string> => {
+  const response = await fetch(buildJinaMirrorUrl(url), {
+    headers: {
+      Accept: "text/plain"
+    }
+  });
+  if (!response.ok) {
+    throw new AppError(`Unable to fetch source page (${response.status})`, 502, "RAIN_FETCH_FAILED");
+  }
+  return response.text();
+};
+
+const extractRainCaseLinksFromIndex = (markdown: string): RainCaseCard[] => {
+  const regex = /\]\(https?:\/\/rain\.gg\/games\/case-opening\/([a-z0-9-]+)\)/g;
+  const slugs = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(markdown))) {
+    slugs.add(match[1]);
+  }
+  return Array.from(slugs).map((slug) => ({ slug }));
+};
+
+const parseRainCaseItemsFromMarkdown = (caseSlug: string, markdown: string): RainCaseItemParsed[] => {
+  const lines = markdown.split("\n").map((line) => line.trim());
+  const startIndex = lines.findIndex((line) => line.toLowerCase() === "## case contains");
+  if (startIndex < 0) {
+    return [];
+  }
+
+  const parsed: RainCaseItemParsed[] = [];
+  let idx = startIndex + 1;
+  while (idx < lines.length) {
+    const dropLine = lines[idx];
+    if (!dropLine) {
+      idx += 1;
+      continue;
+    }
+    if (dropLine.startsWith("## ")) {
+      break;
+    }
+    if (!/^\d+(\.\d+)?%$/.test(dropLine)) {
+      idx += 1;
+      continue;
+    }
+
+    const dropRate = dropLine.replace("%", "");
+    const imageLine = lines[idx + 1] ?? "";
+    const weaponLine = lines[idx + 2] ?? "";
+    const skinLine = lines[idx + 3] ?? "";
+    const valueLine = lines[idx + 4] ?? "";
+
+    if (!/^\d[\d,]*(\.\d+)?$/.test(valueLine)) {
+      idx += 1;
+      continue;
+    }
+
+    const imageUrlMatch = imageLine.match(/\((https?:\/\/[^)]+)\)/i);
+    const name = normalizeSkinLabel(weaponLine, skinLine);
+    const sourceSkinKey = normalizeSourceSkinKey(caseSlug, name);
+    const imageUrl = imageUrlMatch ? imageUrlMatch[1] : buildFallbackImageUrlFromName(name);
+    parsed.push({
+      sourceCaseSlug: caseSlug,
+      sourceSkinKey,
+      name,
+      valueAtomic: parseCoinsToAtomic(valueLine),
+      dropRate,
+      imageUrl
+    });
+
+    idx += 5;
+  }
+
+  return parsed;
+};
+
+export const importRainCatalogPageByAdmin = async (
+  actorUserId: string,
+  page: number
+): Promise<RainCatalogImportSummary> => {
+  const safePage = Math.max(0, Math.min(20, Math.trunc(page)));
+  const indexUrl =
+    safePage > 0
+      ? `https://rain.gg/games/case-opening?page=${safePage}`
+      : "https://rain.gg/games/case-opening";
+  const indexMarkdown = await fetchMarkdownViaJina(indexUrl);
+  const cases = extractRainCaseLinksFromIndex(indexMarkdown);
+
+  let casesParsed = 0;
+  let itemsParsed = 0;
+  let skinsUpserted = 0;
+
+  for (const rainCase of cases) {
+    const caseMarkdown = await fetchMarkdownViaJina(
+      `https://rain.gg/games/case-opening/${encodeURIComponent(rainCase.slug)}`
+    );
+    const items = parseRainCaseItemsFromMarkdown(rainCase.slug, caseMarkdown);
+    if (!items.length) {
+      continue;
+    }
+    casesParsed += 1;
+    itemsParsed += items.length;
+    for (const item of items) {
+      await prisma.cs2SkinCatalog.upsert({
+        where: {
+          sourceProvider_sourceSkinKey: {
+            sourceProvider: RAIN_PROVIDER,
+            sourceSkinKey: item.sourceSkinKey
+          }
+        },
+        create: {
+          sourceProvider: RAIN_PROVIDER,
+          sourceCaseSlug: item.sourceCaseSlug,
+          sourceSkinKey: item.sourceSkinKey,
+          name: item.name,
+          valueAtomic: item.valueAtomic,
+          imageUrl: item.imageUrl,
+          isActive: true,
+          createdByUserId: actorUserId
+        },
+        update: {
+          sourceCaseSlug: item.sourceCaseSlug,
+          name: item.name,
+          valueAtomic: item.valueAtomic,
+          imageUrl: item.imageUrl,
+          isActive: true
+        }
+      });
+      skinsUpserted += 1;
+    }
+  }
+
+  return {
+    pagesScanned: 1,
+    casesFound: cases.length,
+    casesParsed,
+    skinsUpserted,
+    itemsParsed
+  };
+};
+
+export const importRainCasesIntoSkinCatalogByAdmin = async (
+  actorUserId: string,
+  maxPages = 6
+): Promise<RainCatalogImportSummary> => {
+  const safePages = Math.max(1, Math.min(20, Math.trunc(maxPages)));
+  const summary: RainCatalogImportSummary = {
+    pagesScanned: 0,
+    casesFound: 0,
+    casesParsed: 0,
+    skinsUpserted: 0,
+    itemsParsed: 0
+  };
+  for (let page = 0; page < safePages; page += 1) {
+    const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page);
+    summary.pagesScanned += pageSummary.pagesScanned;
+    summary.casesFound += pageSummary.casesFound;
+    summary.casesParsed += pageSummary.casesParsed;
+    summary.skinsUpserted += pageSummary.skinsUpserted;
+    summary.itemsParsed += pageSummary.itemsParsed;
+  }
+  return summary;
+};
+
+export const listCs2SkinCatalogByAdmin = async (input: {
+  q?: string;
+  limit?: number;
+  sourceCaseSlug?: string;
+}): Promise<Cs2SkinCatalogItem[]> => {
+  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 100)));
+  const q = input.q?.trim();
+  const rows = await prisma.cs2SkinCatalog.findMany({
+    where: {
+      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+      ...(input.sourceCaseSlug ? { sourceCaseSlug: input.sourceCaseSlug } : {})
+    },
+    orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
+    take: limit
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    sourceProvider: row.sourceProvider,
+    sourceCaseSlug: row.sourceCaseSlug,
+    sourceSkinKey: row.sourceSkinKey,
+    name: row.name,
+    valueAtomic: row.valueAtomic,
+    imageUrl: row.imageUrl,
+    isActive: row.isActive,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  }));
+};
 
 const generateServerSeed = (): string => randomBytes(32).toString("hex");
 const hashServerSeed = (serverSeed: string): string =>
@@ -59,9 +364,12 @@ export type CaseListItem = {
   slug: string;
   title: string;
   description: string | null;
+  logoUrl: string | null;
   priceAtomic: bigint;
   currency: Currency;
   isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: VolatilityTier;
   createdAt: Date;
   updatedAt: Date;
   itemCount: number;
@@ -73,6 +381,7 @@ type CaseItemState = {
   valueAtomic: bigint;
   dropRate: string;
   imageUrl: string | null;
+  cs2SkinId: string | null;
   sortOrder: number;
   isActive: boolean;
 };
@@ -82,9 +391,12 @@ export type CaseDetails = {
   slug: string;
   title: string;
   description: string | null;
+  logoUrl: string | null;
   priceAtomic: bigint;
   currency: Currency;
   isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: VolatilityTier;
   createdAt: Date;
   updatedAt: Date;
   items: CaseItemState[];
@@ -126,6 +438,10 @@ export type CaseOpenResult = {
 
 export type CasesSimulationResult = {
   caseId: string;
+  caseSlug: string;
+  caseTitle: string;
+  volatilityIndex: number;
+  volatilityTier: VolatilityTier;
   rounds: number;
   spentAtomic: bigint;
   payoutAtomic: bigint;
@@ -140,6 +456,7 @@ type UpsertCaseInput = {
   slug: string;
   title: string;
   description?: string | null;
+  logoUrl?: string | null;
   priceAtomic: bigint;
   currency?: Currency;
   isActive: boolean;
@@ -150,6 +467,7 @@ type UpsertCaseInput = {
     imageUrl?: string | null;
     sortOrder?: number;
     isActive?: boolean;
+    cs2SkinId?: string | null;
   }>;
 };
 
@@ -188,6 +506,7 @@ const asItemState = (item: {
   valueAtomic: bigint;
   dropRate: Prisma.Decimal;
   imageUrl: string | null;
+  cs2SkinId?: string | null;
   sortOrder: number;
   isActive: boolean;
 }): CaseItemState => ({
@@ -196,6 +515,7 @@ const asItemState = (item: {
   valueAtomic: item.valueAtomic,
   dropRate: item.dropRate.toFixed(8),
   imageUrl: item.imageUrl,
+  cs2SkinId: item.cs2SkinId ?? null,
   sortOrder: item.sortOrder,
   isActive: item.isActive
 });
@@ -367,6 +687,13 @@ export const listCases = async (): Promise<CaseListItem[]> => {
       },
       orderBy: [{ createdAt: "desc" }],
       include: {
+        items: {
+          where: { isActive: true },
+          select: {
+            valueAtomic: true,
+            dropRate: true
+          }
+        },
         _count: {
           select: { items: true }
         }
@@ -383,9 +710,12 @@ export const listCases = async (): Promise<CaseListItem[]> => {
     slug: row.slug,
     title: row.title,
     description: row.description,
+    logoUrl: row.logoUrl,
     priceAtomic: row.priceAtomic,
     currency: row.currency,
     isActive: row.isActive,
+    volatilityIndex: caseVolatilityIndexFromItems(row.items),
+    volatilityTier: getVolatilityTier(caseVolatilityIndexFromItems(row.items)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     itemCount: row._count.items
@@ -423,9 +753,14 @@ export const getCaseById = async (
     slug: selected.slug,
     title: selected.title,
     description: selected.description,
+    logoUrl: selected.logoUrl,
     priceAtomic: selected.priceAtomic,
     currency: selected.currency,
     isActive: selected.isActive,
+    volatilityIndex: caseVolatilityIndexFromItems(selected.items.filter((item) => item.isActive)),
+    volatilityTier: getVolatilityTier(
+      caseVolatilityIndexFromItems(selected.items.filter((item) => item.isActive))
+    ),
     createdAt: selected.createdAt,
     updatedAt: selected.updatedAt,
     items: selected.items.map(asItemState)
@@ -806,6 +1141,23 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
     throw new AppError("A case must include at least one item", 400, "CASE_ITEMS_REQUIRED");
   }
 
+  const referencedSkinIds = Array.from(
+    new Set(
+      input.items
+        .map((item) => item.cs2SkinId?.trim())
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  if (referencedSkinIds.length) {
+    const existing = await prisma.cs2SkinCatalog.findMany({
+      where: { id: { in: referencedSkinIds } },
+      select: { id: true }
+    });
+    if (existing.length !== referencedSkinIds.length) {
+      throw new AppError("One or more selected CS2 skins do not exist", 400, "CS2_SKIN_NOT_FOUND");
+    }
+  }
+
   const normalizedItems = input.items.map((item, idx) => {
     if (!item.name.trim()) {
       throw new AppError("Case item name is required", 400, "INVALID_CASE_ITEM_NAME");
@@ -820,7 +1172,8 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
       dropRate: parsedDrop,
       imageUrl: item.imageUrl ?? null,
       sortOrder: item.sortOrder ?? idx,
-      isActive: item.isActive ?? true
+      isActive: item.isActive ?? true,
+      cs2SkinId: item.cs2SkinId ?? null
     };
   });
   validateDropRates(normalizedItems);
@@ -841,6 +1194,7 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
           slug,
           title: input.title.trim(),
           description: input.description?.trim() || null,
+          logoUrl: input.logoUrl?.trim() || null,
           priceAtomic: input.priceAtomic,
           currency: input.currency ?? PLATFORM_INTERNAL_CURRENCY,
           isActive: input.isActive
@@ -856,7 +1210,8 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
           dropRate: item.dropRate,
           imageUrl: item.imageUrl,
           sortOrder: item.sortOrder,
-          isActive: item.isActive
+          isActive: item.isActive,
+          cs2SkinId: item.cs2SkinId
         }))
       });
 
@@ -868,6 +1223,7 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
         slug,
         title: input.title.trim(),
         description: input.description?.trim() || null,
+        logoUrl: input.logoUrl?.trim() || null,
         priceAtomic: input.priceAtomic,
         currency: input.currency ?? PLATFORM_INTERNAL_CURRENCY,
         isActive: input.isActive,
@@ -883,7 +1239,8 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
         dropRate: item.dropRate,
         imageUrl: item.imageUrl,
         sortOrder: item.sortOrder,
-        isActive: item.isActive
+        isActive: item.isActive,
+        cs2SkinId: item.cs2SkinId
       }))
     });
 
@@ -922,9 +1279,14 @@ export const listCasesByAdmin = async (): Promise<CaseDetails[]> => {
     slug: row.slug,
     title: row.title,
     description: row.description,
+    logoUrl: row.logoUrl,
     priceAtomic: row.priceAtomic,
     currency: row.currency,
     isActive: row.isActive,
+    volatilityIndex: caseVolatilityIndexFromItems(row.items.filter((item) => item.isActive)),
+    volatilityTier: getVolatilityTier(
+      caseVolatilityIndexFromItems(row.items.filter((item) => item.isActive))
+    ),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     items: row.items.map(asItemState)
@@ -995,8 +1357,13 @@ export const simulateCasesRtpByAdmin = async (rounds: number): Promise<CasesSimu
     }
     const profitAtomic = spentAtomic - payoutAtomic;
     const rtpPercent = spentAtomic > 0n ? Number((payoutAtomic * 10000n) / spentAtomic) / 100 : 0;
+    const volatilityIndex = caseVolatilityIndexFromItems(row.items);
     results.push({
       caseId: row.id,
+      caseSlug: row.slug,
+      caseTitle: row.title,
+      volatilityIndex,
+      volatilityTier: getVolatilityTier(volatilityIndex),
       rounds: safeRounds,
       spentAtomic,
       payoutAtomic,
@@ -1012,3 +1379,6 @@ export const listCasesByAdminSafe = listCasesByAdmin;
 export const listCasesForAdmin = listCasesByAdmin;
 export const updateCaseStatusByAdmin = setCaseActiveStatusByAdmin;
 export const runCasesRtpSimulationByAdmin = simulateCasesRtpByAdmin;
+
+export const volatilityTierFromIndex = getVolatilityTier;
+export const volatilityIndexFromCaseItems = caseVolatilityIndexFromItems;

@@ -443,9 +443,12 @@ export interface CaseListItem {
   slug: string;
   title: string;
   description: string | null;
+  logoUrl: string | null;
   priceAtomic: string;
   currency: string;
   isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
   createdAt: string;
   updatedAt: string;
   itemCount: number;
@@ -457,6 +460,7 @@ export interface CaseItem {
   valueAtomic: string;
   dropRate: string;
   imageUrl: string | null;
+  cs2SkinId: string | null;
   sortOrder: number;
   isActive: boolean;
 }
@@ -466,9 +470,12 @@ export interface CaseDetails {
   slug: string;
   title: string;
   description: string | null;
+  logoUrl: string | null;
   priceAtomic: string;
   currency: string;
   isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
   createdAt: string;
   updatedAt: string;
   items: CaseItem[];
@@ -503,6 +510,10 @@ export interface CaseOpeningResult {
 
 export interface CasesRtpSimulationResult {
   caseId: string;
+  caseSlug: string;
+  caseTitle: string;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
   rounds: number;
   spentAtomic: string;
   payoutAtomic: string;

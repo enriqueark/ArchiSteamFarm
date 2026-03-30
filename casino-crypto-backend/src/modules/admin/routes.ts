@@ -155,6 +155,66 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       <div id="detailContent"></div>
     </div>
 
+    <div class="card">
+      <h2>Cases Manager (CS2)</h2>
+      <div class="row">
+        <label>Import pages:</label>
+        <input id="casesImportPages" type="number" min="1" max="20" value="6" style="width:90px" />
+        <button id="casesImportBtn">Import from Rain</button>
+        <input id="casesSkinSearch" placeholder="Search skin name..." style="min-width:220px" />
+        <button id="casesSearchSkinsBtn">Search skins</button>
+      </div>
+      <div id="casesStatus" class="mono" style="margin-top:8px;"></div>
+      <div class="row" style="margin-top:8px;">
+        <label>Cases:</label>
+        <select id="casesSelect" style="min-width:320px"></select>
+        <button id="casesRefreshBtn">Refresh</button>
+      </div>
+      <div class="grid-2" style="margin-top:10px;">
+        <div>
+          <h3 style="margin:0 0 8px;">Case form</h3>
+          <div class="row" style="margin-bottom:6px;">
+            <label>Slug</label><input id="caseSlug" style="min-width:180px" />
+            <label>Title</label><input id="caseTitle" style="min-width:180px" />
+          </div>
+          <div class="row" style="margin-bottom:6px;">
+            <label>Price (coins)</label><input id="casePriceCoins" type="number" step="0.01" min="0.01" style="width:120px" />
+            <label>Logo URL</label><input id="caseLogoUrl" style="min-width:220px" />
+          </div>
+          <div class="row" style="margin-bottom:6px;">
+            <label style="display:flex;align-items:center;gap:6px;"><input id="caseIsActive" type="checkbox" checked />Active</label>
+            <button id="caseNewBtn">New</button>
+            <button id="caseSaveBtn">Save case</button>
+          </div>
+          <textarea id="caseDescription" rows="3" placeholder="Description..." style="width:100%;"></textarea>
+          <div id="caseVolatility" class="mono" style="margin-top:8px;">Volatility: -</div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Simulation</h3>
+          <div class="row">
+            <label>Rounds</label>
+            <input id="casesSimRounds" type="number" min="1" max="1000000" value="100000" style="width:120px" />
+            <button id="casesSimBtn">Run RTP simulation</button>
+          </div>
+          <div id="casesSimStatus" class="mono" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      <h3 style="margin:12px 0 6px;">Selected items for this case</h3>
+      <table id="caseItemsTable">
+        <thead>
+          <tr><th>Skin</th><th>Price</th><th>Drop %</th><th>Action</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <h3 style="margin:12px 0 6px;">Catalog skins (search results)</h3>
+      <table id="catalogSkinsTable">
+        <thead>
+          <tr><th>Name</th><th>Price</th><th>Source case</th><th>Action</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
     <script>
       const tokenInput = document.getElementById("token");
       const adminEmailInput = document.getElementById("adminEmail");
@@ -189,10 +249,354 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         return String(Math.round(n * Math.pow(10, decimals)));
       };
 
+      const atomicToCoins = (atomic) => {
+        const n = Number(atomic);
+        if (!Number.isFinite(n)) return 0;
+        return n / 1e8;
+      };
+
+      const formatCoins = (atomic) => atomicToCoins(atomic).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const newCasesDraft = () => ({
+        caseId: null,
+        slug: "",
+        title: "",
+        description: "",
+        logoUrl: "",
+        priceCoins: "",
+        isActive: true,
+        items: []
+      });
+
+      const casesState = {
+        list: [],
+        selectedCaseId: null,
+        draft: newCasesDraft(),
+        catalog: [],
+        simulation: []
+      };
+
+      const casesStatus = document.getElementById("casesStatus");
+      const casesSelect = document.getElementById("casesSelect");
+      const casesImportPages = document.getElementById("casesImportPages");
+      const casesImportBtn = document.getElementById("casesImportBtn");
+      const casesSkinSearch = document.getElementById("casesSkinSearch");
+      const casesSearchSkinsBtn = document.getElementById("casesSearchSkinsBtn");
+      const caseSlug = document.getElementById("caseSlug");
+      const caseTitle = document.getElementById("caseTitle");
+      const casePriceCoins = document.getElementById("casePriceCoins");
+      const caseLogoUrl = document.getElementById("caseLogoUrl");
+      const caseDescription = document.getElementById("caseDescription");
+      const caseIsActive = document.getElementById("caseIsActive");
+      const caseVolatility = document.getElementById("caseVolatility");
+      const caseNewBtn = document.getElementById("caseNewBtn");
+      const caseSaveBtn = document.getElementById("caseSaveBtn");
+      const caseItemsTbody = document.querySelector("#caseItemsTable tbody");
+      const catalogSkinsTbody = document.querySelector("#catalogSkinsTable tbody");
+      const casesRefreshBtn = document.getElementById("casesRefreshBtn");
+      const casesSimRounds = document.getElementById("casesSimRounds");
+      const casesSimBtn = document.getElementById("casesSimBtn");
+      const casesSimStatus = document.getElementById("casesSimStatus");
+
+      const coinsToAtomicString = (coinsValue) => {
+        const value = Number(coinsValue);
+        if (!Number.isFinite(value) || value <= 0) {
+          throw new Error("Invalid case price");
+        }
+        return String(Math.round(value * 1e8));
+      };
+
+      const deriveVolatilityFromDraft = () => {
+        if (!casesState.draft.items.length) {
+          caseVolatility.textContent = "Volatility: -";
+          return;
+        }
+        const items = casesState.draft.items.map((item) => ({
+          p: Number(item.dropRate) / 100,
+          v: atomicToCoins(item.valueAtomic)
+        }));
+        const expected = items.reduce((acc, item) => acc + item.p * item.v, 0);
+        if (!Number.isFinite(expected) || expected <= 0) {
+          caseVolatility.textContent = "Volatility: -";
+          return;
+        }
+        const variance = items.reduce((acc, item) => {
+          const d = item.v - expected;
+          return acc + item.p * d * d;
+        }, 0);
+        const cv = Math.sqrt(Math.max(0, variance)) / expected;
+        const index = Math.max(0, Math.min(100, Math.round(cv * 28)));
+        const tier = index < 25 ? "L" : index < 50 ? "M" : index < 75 ? "H" : "I";
+        caseVolatility.textContent = "Volatility: " + index + " (" + tier + ")";
+      };
+
+      const renderCasesSelect = () => {
+        casesSelect.innerHTML = "";
+        const defaultOpt = document.createElement("option");
+        defaultOpt.value = "";
+        defaultOpt.textContent = "New case";
+        casesSelect.appendChild(defaultOpt);
+        for (const c of casesState.list) {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.title + " (" + c.slug + ") [" + c.volatilityTier + " " + c.volatilityIndex + "]";
+          casesSelect.appendChild(opt);
+        }
+        casesSelect.value = casesState.selectedCaseId || "";
+      };
+
+      const renderCaseItems = () => {
+        caseItemsTbody.innerHTML = "";
+        casesState.draft.items.forEach((item, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><div><strong>" + item.name + "</strong></div><div class=\\"mono\\">skinId=" + (item.cs2SkinId || "-") + "</div></td>" +
+            "<td class=\\"mono\\">" + formatCoins(item.valueAtomic) + "</td>" +
+            "<td><input data-idx=\\"" + idx + "\\" class=\\"case-drop\\" type=\\"number\\" min=\\"0.0001\\" max=\\"100\\" step=\\"0.0001\\" value=\\"" + Number(item.dropRate).toFixed(4) + "\\" style=\\"width:110px\\" /></td>" +
+            "<td><button data-idx=\\"" + idx + "\\" class=\\"case-remove danger\\">Remove</button></td>";
+          caseItemsTbody.appendChild(tr);
+        });
+        caseItemsTbody.querySelectorAll(".case-remove").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.getAttribute("data-idx"));
+            casesState.draft.items.splice(idx, 1);
+            renderCaseItems();
+            deriveVolatilityFromDraft();
+          });
+        });
+        caseItemsTbody.querySelectorAll(".case-drop").forEach((input) => {
+          input.addEventListener("change", () => {
+            const idx = Number(input.getAttribute("data-idx"));
+            casesState.draft.items[idx].dropRate = String(Number(input.value || "0"));
+            deriveVolatilityFromDraft();
+          });
+        });
+      };
+
+      const renderCatalogSkins = () => {
+        catalogSkinsTbody.innerHTML = "";
+        for (const skin of casesState.catalog) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><div><strong>" + skin.name + "</strong></div><div class=\\"mono\\">" + skin.id + "</div></td>" +
+            "<td class=\\"mono\\">" + formatCoins(skin.valueAtomic) + "</td>" +
+            "<td class=\\"mono\\">" + (skin.sourceCaseSlug || "-") + "</td>" +
+            "<td><button class=\\"case-add success\\">Add</button></td>";
+          tr.querySelector(".case-add").addEventListener("click", () => {
+            casesState.draft.items.push({
+              name: skin.name,
+              valueAtomic: skin.valueAtomic,
+              dropRate: "0",
+              imageUrl: skin.imageUrl || undefined,
+              cs2SkinId: skin.id,
+              isActive: true
+            });
+            renderCaseItems();
+            deriveVolatilityFromDraft();
+          });
+          catalogSkinsTbody.appendChild(tr);
+        }
+      };
+
+      const bindDraftFields = () => {
+        caseSlug.value = casesState.draft.slug;
+        caseTitle.value = casesState.draft.title;
+        casePriceCoins.value = casesState.draft.priceCoins;
+        caseLogoUrl.value = casesState.draft.logoUrl;
+        caseDescription.value = casesState.draft.description;
+        caseIsActive.checked = casesState.draft.isActive;
+      };
+
+      const pullDraftFromFields = () => {
+        casesState.draft.slug = caseSlug.value.trim();
+        casesState.draft.title = caseTitle.value.trim();
+        casesState.draft.priceCoins = casePriceCoins.value.trim();
+        casesState.draft.logoUrl = caseLogoUrl.value.trim();
+        casesState.draft.description = caseDescription.value.trim();
+        casesState.draft.isActive = !!caseIsActive.checked;
+      };
+
+      const pickCaseForEdit = (id) => {
+        if (!id) {
+          casesState.selectedCaseId = null;
+          casesState.draft = newCasesDraft();
+          bindDraftFields();
+          renderCaseItems();
+          deriveVolatilityFromDraft();
+          return;
+        }
+        const row = casesState.list.find((c) => c.id === id);
+        if (!row) return;
+        casesState.selectedCaseId = id;
+        casesState.draft = {
+          caseId: row.id,
+          slug: row.slug || "",
+          title: row.title || "",
+          description: row.description || "",
+          logoUrl: row.logoUrl || "",
+          priceCoins: String(atomicToCoins(row.priceAtomic)),
+          isActive: !!row.isActive,
+          items: (row.items || []).map((it) => ({
+            name: it.name,
+            valueAtomic: it.valueAtomic,
+            dropRate: String(it.dropRate),
+            imageUrl: it.imageUrl || undefined,
+            cs2SkinId: it.cs2SkinId || undefined,
+            isActive: it.isActive
+          }))
+        };
+        bindDraftFields();
+        renderCaseItems();
+        deriveVolatilityFromDraft();
+      };
+
+      const loadCases = async () => {
+        const res = await req("/api/v1/cases/admin/cases");
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load cases"));
+        casesState.list = await res.json();
+        renderCasesSelect();
+      };
+
+      const loadCatalog = async () => {
+        const params = new URLSearchParams();
+        params.set("limit", "200");
+        const q = casesSkinSearch.value.trim();
+        if (q) params.set("q", q);
+        const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
+        casesState.catalog = await res.json();
+        renderCatalogSkins();
+      };
+
+      casesSelect.addEventListener("change", () => pickCaseForEdit(casesSelect.value));
+      casesRefreshBtn.addEventListener("click", async () => {
+        try {
+          await loadCases();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Cases refreshed.";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to refresh cases.";
+        }
+      });
+      caseNewBtn.addEventListener("click", () => pickCaseForEdit(""));
+      casesSearchSkinsBtn.addEventListener("click", async () => {
+        try {
+          await loadCatalog();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Catalog updated (" + casesState.catalog.length + " skins).";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to load catalog.";
+        }
+      });
+      casesImportBtn.addEventListener("click", async () => {
+        try {
+          casesStatus.className = "mono";
+          casesStatus.textContent = "Importing Rain catalog...";
+          const pages = Math.max(1, Math.min(20, Number(casesImportPages.value || "6")));
+          const res = await req("/api/v1/cases/admin/catalog/import-rain", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pages })
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
+          const summary = await res.json();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Imported: pages=" + summary.pagesScanned + " cases=" + summary.casesParsed + " skins=" + summary.skinsUpserted;
+          await loadCatalog();
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Import failed.";
+        }
+      });
+      caseSaveBtn.addEventListener("click", async () => {
+        try {
+          pullDraftFromFields();
+          if (!casesState.draft.slug || !casesState.draft.title) {
+            throw new Error("Slug and title are required.");
+          }
+          if (!casesState.draft.items.length) {
+            throw new Error("Add at least 1 skin.");
+          }
+          const payload = {
+            caseId: casesState.draft.caseId || undefined,
+            slug: casesState.draft.slug,
+            title: casesState.draft.title,
+            description: casesState.draft.description || undefined,
+            logoUrl: casesState.draft.logoUrl || undefined,
+            priceAtomic: coinsToAtomicString(casesState.draft.priceCoins),
+            isActive: casesState.draft.isActive,
+            items: casesState.draft.items.map((item, idx) => ({
+              name: item.name,
+              valueAtomic: String(item.valueAtomic),
+              dropRate: String(item.dropRate),
+              imageUrl: item.imageUrl || undefined,
+              sortOrder: idx,
+              isActive: item.isActive !== false,
+              cs2SkinId: item.cs2SkinId || undefined
+            }))
+          };
+          const idempotency = "admin-cases:" + Date.now() + ":" + Math.random().toString(16).slice(2);
+          const res = await req("/api/v1/cases/admin/cases", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to save case"));
+          const saved = await res.json();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Saved case: " + saved.title;
+          await loadCases();
+          pickCaseForEdit(saved.id);
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to save case.";
+        }
+      });
+      casesSimBtn.addEventListener("click", async () => {
+        try {
+          casesSimStatus.className = "mono";
+          casesSimStatus.textContent = "Running simulation...";
+          const rounds = Math.max(1, Math.min(1000000, Number(casesSimRounds.value || "100000")));
+          const res = await req("/api/v1/cases/admin/simulate-rtp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rounds })
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Simulation failed"));
+          const rows = await res.json();
+          casesState.simulation = rows;
+          const summary = rows
+            .slice(0, 6)
+            .map((r) => r.caseTitle + " RTP=" + r.rtpPercent + "% VOL=" + r.volatilityTier + " (" + r.volatilityIndex + ")")
+            .join("\\n");
+          casesSimStatus.className = "mono ok";
+          casesSimStatus.textContent = summary || "No cases to simulate.";
+        } catch (error) {
+          casesSimStatus.className = "mono err";
+          casesSimStatus.textContent = error && error.message ? error.message : "Simulation failed.";
+        }
+      });
+
       const getErrorMessage = async (res, fallback) => {
         const data = await res.json().catch(() => ({}));
         return (data && data.message) ? data.message : fallback;
       };
+
+      const bootCasesAdmin = async () => {
+        try {
+          await loadCases();
+          pickCaseForEdit("");
+          await loadCatalog();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Cases admin ready.";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to initialize cases admin.";
+        }
+      };
+      void bootCasesAdmin();
 
       const persistToken = () => {
         try { localStorage.setItem("admin_panel_token", tokenInput.value.trim()); } catch (_e) {}

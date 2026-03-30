@@ -8,6 +8,8 @@ import { requireIdempotencyKey } from "../../core/idempotency";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 import {
   getCaseById,
+  importRainCasesIntoSkinCatalogByAdmin,
+  listCs2SkinCatalogByAdmin,
   listCases,
   listCasesByAdmin,
   listMyCaseOpenings,
@@ -38,7 +40,8 @@ const adminCaseItemSchema = z.object({
   dropRate: z.string().trim().regex(/^\d+(\.\d+)?$/, "dropRate must be a decimal string"),
   imageUrl: z.string().trim().url().optional(),
   sortOrder: z.coerce.number().int().optional(),
-  isActive: z.boolean().optional()
+  isActive: z.boolean().optional(),
+  cs2SkinId: z.string().cuid().optional()
 });
 
 const adminUpsertCaseSchema = z.object({
@@ -46,6 +49,7 @@ const adminUpsertCaseSchema = z.object({
   slug: z.string().trim().min(3).max(64),
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional(),
+  logoUrl: z.string().trim().url().optional(),
   priceAtomic: z
     .string()
     .regex(/^\d+$/, "priceAtomic must be an integer string")
@@ -64,6 +68,16 @@ const adminRtpSimulationSchema = z.object({
   rounds: z.coerce.number().int().min(1).max(1_000_000).default(100_000)
 });
 
+const adminImportSkinsSchema = z.object({
+  pages: z.coerce.number().int().min(1).max(20).default(6)
+});
+
+const adminCatalogQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  sourceCaseSlug: z.string().trim().max(120).optional()
+});
+
 const ensureIdempotencyKey = (request: { idempotencyKey?: string }): string => {
   if (!request.idempotencyKey) {
     throw new AppError("Idempotency-Key header is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
@@ -76,9 +90,12 @@ const toCaseResponse = (value: CaseDetails) => ({
   slug: value.slug,
   title: value.title,
   description: value.description,
+  logoUrl: value.logoUrl,
   priceAtomic: value.priceAtomic.toString(),
   currency: value.currency,
   isActive: value.isActive,
+  volatilityIndex: value.volatilityIndex,
+  volatilityTier: value.volatilityTier,
   createdAt: value.createdAt,
   updatedAt: value.updatedAt,
   items: value.items.map((item) => ({
@@ -87,6 +104,7 @@ const toCaseResponse = (value: CaseDetails) => ({
     valueAtomic: item.valueAtomic.toString(),
     dropRate: item.dropRate,
     imageUrl: item.imageUrl,
+    cs2SkinId: item.cs2SkinId,
     sortOrder: item.sortOrder,
     isActive: item.isActive
   }))
@@ -103,6 +121,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     valueAtomic: value.item.valueAtomic.toString(),
     dropRate: value.item.dropRate,
     imageUrl: value.item.imageUrl,
+    cs2SkinId: value.item.cs2SkinId,
     sortOrder: value.item.sortOrder,
     isActive: value.item.isActive
   },
@@ -113,6 +132,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     valueAtomic: item.valueAtomic.toString(),
     dropRate: item.dropRate,
     imageUrl: item.imageUrl,
+    cs2SkinId: item.cs2SkinId,
     sortOrder: item.sortOrder,
     isActive: item.isActive
   })),
@@ -144,6 +164,35 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post(
+    "/admin/catalog/import-rain",
+    { preHandler: [requireRoles(["ADMIN"])] },
+    async (request, reply) => {
+      const body = adminImportSkinsSchema.parse(request.body ?? {});
+      const summary = await importRainCasesIntoSkinCatalogByAdmin(request.user.sub, body.pages);
+      return reply.send(summary);
+    }
+  );
+
+  fastify.get("/admin/catalog/skins", { preHandler: [requireRoles(["ADMIN"])] }, async (request, reply) => {
+    const query = adminCatalogQuerySchema.parse(request.query);
+    const rows = await listCs2SkinCatalogByAdmin(query);
+    return reply.send(
+      rows.map((row) => ({
+        id: row.id,
+        sourceProvider: row.sourceProvider,
+        sourceCaseSlug: row.sourceCaseSlug,
+        sourceSkinKey: row.sourceSkinKey,
+        name: row.name,
+        valueAtomic: row.valueAtomic.toString(),
+        imageUrl: row.imageUrl,
+        isActive: row.isActive,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt
+      }))
+    );
+  });
+
+  fastify.post(
     "/admin/cases",
     { preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey] },
     async (request, reply) => {
@@ -157,6 +206,7 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         slug: body.slug,
         title: body.title,
         description: body.description ?? null,
+        logoUrl: body.logoUrl ?? null,
         priceAtomic: body.priceAtomic,
         currency: body.currency as Currency,
         isActive: body.isActive,
@@ -186,6 +236,10 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(
         rows.map((row) => ({
           caseId: row.caseId,
+          caseSlug: row.caseSlug,
+          caseTitle: row.caseTitle,
+          volatilityIndex: row.volatilityIndex,
+          volatilityTier: row.volatilityTier,
           rounds: row.rounds,
           spentAtomic: row.spentAtomic.toString(),
           payoutAtomic: row.payoutAtomic.toString(),
@@ -205,9 +259,12 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         slug: row.slug,
         title: row.title,
         description: row.description,
+        logoUrl: row.logoUrl,
         priceAtomic: row.priceAtomic.toString(),
         currency: row.currency,
         isActive: row.isActive,
+        volatilityIndex: row.volatilityIndex,
+        volatilityTier: row.volatilityTier,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         itemCount: row.itemCount
