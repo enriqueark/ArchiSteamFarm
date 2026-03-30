@@ -30,7 +30,8 @@ const userDetailParamsSchema = z.object({
 });
 
 const userDetailQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(200)
+  all: z.coerce.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(200000).optional()
 });
 
 const updateUserStatusSchema = z.object({
@@ -760,7 +761,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         detailStatus.textContent = "Loading details for " + email + "...";
         detailContent.innerHTML = "";
         try {
-          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/details?limit=300");
+          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/details?all=true");
           if (!res.ok) {
             detailStatus.className = "mono err";
             detailStatus.textContent = await getErrorMessage(res, "Failed to load details");
@@ -1367,6 +1368,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError("User not found", 404, "USER_NOT_FOUND");
       }
 
+      const movementTake = query.all ? undefined : query.limit ?? 500;
       const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements] = await Promise.all([
         prisma.deposit.aggregate({
           where: {
@@ -1429,7 +1431,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: {
             createdAt: "desc"
           },
-          take: query.limit,
+          take: movementTake,
           select: {
             id: true,
             walletId: true,
