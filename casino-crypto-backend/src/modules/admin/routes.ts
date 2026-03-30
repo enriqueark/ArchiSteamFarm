@@ -263,6 +263,30 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       };
 
       const formatCoins = (atomic) => atomicToCoins(atomic).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const withThousands = (value) => value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const parseAtomicBigInt = (value) => {
+        try {
+          if (typeof value === "bigint") return value;
+          if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+          if (typeof value === "string" && value.trim()) return BigInt(value.trim());
+        } catch (_error) {}
+        return 0n;
+      };
+      const formatAtomicUsd = (atomicValue, opts = {}) => {
+        const atomic = parseAtomicBigInt(atomicValue);
+        const negative = atomic < 0n;
+        const abs = negative ? -atomic : atomic;
+        // 1 coin = 1e8 atomic; cents rounded to nearest cent.
+        const cents = (abs + 500000n) / 1000000n;
+        const whole = cents / 100n;
+        const fraction = (cents % 100n).toString().padStart(2, "0");
+        const money = "$" + withThousands(whole.toString()) + "." + fraction;
+        const signed = opts.signed === true;
+        if (signed) {
+          return (negative ? "-" : "+") + money;
+        }
+        return negative ? "-" + money : money;
+      };
 
       const newCasesDraft = () => ({
         caseId: null,
@@ -749,7 +773,10 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           const summary = data.summary || {};
           const perGame = summary.perGame || {};
           const wallets = (data.wallets || []).map((w) =>
-            "<div class=\\"mono\\">wallet=" + w.id + " " + w.currency + " bal=" + w.balanceAtomic + " locked=" + w.lockedAtomic + " avail=" + w.availableAtomic + "</div>"
+            "<div class=\\"mono\\">wallet=" + w.id + " " + w.currency +
+            " | balance=" + formatAtomicUsd(w.balanceAtomic) +
+            " | locked=" + formatAtomicUsd(w.lockedAtomic) +
+            " | available=" + formatAtomicUsd(w.availableAtomic) + "</div>"
           ).join("");
 
           const movementsRows = (data.movements || []).map((m) =>
@@ -757,7 +784,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               "<td class=\\"mono\\">" + m.createdAt + "</td>" +
               "<td class=\\"mono\\">" + m.tag + "</td>" +
               "<td class=\\"mono\\">" + m.direction + "</td>" +
-              "<td class=\\"mono\\">" + m.signedAtomic + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(m.signedAtomic, { signed: true }) + "</td>" +
               "<td class=\\"mono\\">" + (m.referenceId || "") + "</td>" +
             "</tr>"
           ).join("");
@@ -774,30 +801,31 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               "</div>" +
               "<div>" +
                 "<h3>Wallets (" + COIN_SYMBOL + ")</h3>" +
+                "<div class=\\"mono muted\\">locked = funds temporarily reserved by active bets/games; available = balance - locked.</div>" +
                 (wallets || "<div class=\\"mono\\">No wallet found</div>") +
               "</div>" +
             "</div>" +
             "<div class=\\"grid-2\\" style=\\"margin-top:12px;\\">" +
               "<div>" +
                 "<h3>Financial summary</h3>" +
-                "<div class=\\"mono\\">totalDepositsAtomic=" + (summary.totalDepositsAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">totalWithdrawalsAtomic=" + (summary.totalWithdrawalsAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">totalWithdrawalFeesAtomic=" + (summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">rewardsRedeemedAtomic=" + (summary.rewardsRedeemedAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">totalWageredAtomic=" + (summary.totalWageredAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">totalPayoutAtomic=" + (summary.totalPayoutAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">houseProfitAtomic=" + (summary.houseProfitAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">netPlayerGamingAtomic=" + (summary.netPlayerGamingAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalDeposits=" + formatAtomicUsd(summary.totalDepositsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawals=" + formatAtomicUsd(summary.totalWithdrawalsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawalFees=" + formatAtomicUsd(summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">rewardsRedeemed=" + formatAtomicUsd(summary.rewardsRedeemedAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWagered=" + formatAtomicUsd(summary.totalWageredAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalPayout=" + formatAtomicUsd(summary.totalPayoutAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">houseProfit=" + formatAtomicUsd(summary.houseProfitAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">netPlayerGaming=" + formatAtomicUsd(summary.netPlayerGamingAtomic || "0") + "</div>" +
               "</div>" +
               "<div>" +
                 "<h3>Spent by game</h3>" +
-                "<div class=\\"mono\\">mines wagered=" + ((perGame.mines && perGame.mines.wageredAtomic) || "0") + " payout=" + ((perGame.mines && perGame.mines.payoutAtomic) || "0") + " net=" + ((perGame.mines && perGame.mines.netAtomic) || "0") + "</div>" +
-                "<div class=\\"mono\\">blackjack wagered=" + ((perGame.blackjack && perGame.blackjack.wageredAtomic) || "0") + " payout=" + ((perGame.blackjack && perGame.blackjack.payoutAtomic) || "0") + " net=" + ((perGame.blackjack && perGame.blackjack.netAtomic) || "0") + "</div>" +
-                "<div class=\\"mono\\">roulette wagered=" + ((perGame.roulette && perGame.roulette.wageredAtomic) || "0") + " payout=" + ((perGame.roulette && perGame.roulette.payoutAtomic) || "0") + " net=" + ((perGame.roulette && perGame.roulette.netAtomic) || "0") + "</div>" +
+                "<div class=\\"mono\\">mines wagered=" + formatAtomicUsd((perGame.mines && perGame.mines.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.mines && perGame.mines.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.mines && perGame.mines.netAtomic) || "0", { signed: true }) + "</div>" +
+                "<div class=\\"mono\\">blackjack wagered=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.netAtomic) || "0", { signed: true }) + "</div>" +
+                "<div class=\\"mono\\">roulette wagered=" + formatAtomicUsd((perGame.roulette && perGame.roulette.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.roulette && perGame.roulette.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.roulette && perGame.roulette.netAtomic) || "0", { signed: true }) + "</div>" +
               "</div>" +
             "</div>" +
             "<h3 style=\\"margin-top:12px;\\">Movement history</h3>" +
-            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Tag</th><th>Direction</th><th>Signed atomic</th><th>Reference</th></tr></thead><tbody>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Tag</th><th>Direction</th><th>Amount</th><th>Reference</th></tr></thead><tbody>" +
             (movementsRows || "<tr><td colspan=\\"5\\" class=\\"mono\\">No movements</td></tr>") +
             "</tbody></table>";
         } catch (error) {
@@ -835,9 +863,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           const walletLines = (user.wallets || []).map((w) =>
             "<div class=\\"mono\\">" +
             w.currency +
-            " balance=" + w.balanceAtomic +
-            " locked=" + w.lockedAtomic +
-            " available=" + w.availableAtomic +
+            " balance=" + formatAtomicUsd(w.balanceAtomic) +
+            " locked=" + formatAtomicUsd(w.lockedAtomic) +
+            " available=" + formatAtomicUsd(w.availableAtomic) +
             "</div>"
           ).join("");
           const pending = user.status !== "ACTIVE";
