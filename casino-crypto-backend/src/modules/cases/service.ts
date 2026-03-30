@@ -57,6 +57,8 @@ export type RainCatalogImportSummary = {
   casesParsed: number;
   skinsUpserted: number;
   itemsParsed: number;
+  failedCases: number;
+  failureSamples: string[];
 };
 
 const parseCoinsToAtomic = (value: string): bigint => {
@@ -133,16 +135,40 @@ const buildFallbackImageUrlFromName = (name: string): string => {
 const buildJinaMirrorUrl = (url: string): string => `https://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;
 
 
-const fetchMarkdownViaJina = async (url: string): Promise<string> => {
-  const response = await fetch(buildJinaMirrorUrl(url), {
-    headers: {
-      Accept: "text/plain"
-    }
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
   });
-  if (!response.ok) {
-    throw new AppError(`Unable to fetch source page (${response.status})`, 502, "RAIN_FETCH_FAILED");
+
+const fetchMarkdownViaJina = async (url: string): Promise<string> => {
+  let lastStatus = 0;
+  let lastError = "";
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const response = await fetch(buildJinaMirrorUrl(url), {
+        headers: {
+          Accept: "text/plain"
+        }
+      });
+      lastStatus = response.status;
+      if (response.ok) {
+        return response.text();
+      }
+      if (response.status === 429 || response.status >= 500) {
+        await sleep(500 * attempt);
+        continue;
+      }
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await sleep(500 * attempt);
+    }
   }
-  return response.text();
+  throw new AppError(
+    `Unable to fetch source page${lastStatus ? ` (${lastStatus})` : lastError ? ` (${lastError})` : ""}`,
+    502,
+    "RAIN_FETCH_FAILED"
+  );
 };
 
 const extractRainCaseLinksFromIndex = (markdown: string): RainCaseCard[] => {
@@ -223,44 +249,54 @@ export const importRainCatalogPageByAdmin = async (
   let casesParsed = 0;
   let itemsParsed = 0;
   let skinsUpserted = 0;
+  let failedCases = 0;
+  const failureSamples: string[] = [];
 
   for (const rainCase of cases) {
-    const caseMarkdown = await fetchMarkdownViaJina(
-      `https://rain.gg/games/case-opening/${encodeURIComponent(rainCase.slug)}`
-    );
-    const items = parseRainCaseItemsFromMarkdown(rainCase.slug, caseMarkdown);
-    if (!items.length) {
-      continue;
-    }
-    casesParsed += 1;
-    itemsParsed += items.length;
-    for (const item of items) {
-      await prisma.cs2SkinCatalog.upsert({
-        where: {
-          sourceProvider_sourceSkinKey: {
+    try {
+      const caseMarkdown = await fetchMarkdownViaJina(
+        `https://rain.gg/games/case-opening/${encodeURIComponent(rainCase.slug)}`
+      );
+      const items = parseRainCaseItemsFromMarkdown(rainCase.slug, caseMarkdown);
+      if (!items.length) {
+        continue;
+      }
+      casesParsed += 1;
+      itemsParsed += items.length;
+      for (const item of items) {
+        await prisma.cs2SkinCatalog.upsert({
+          where: {
+            sourceProvider_sourceSkinKey: {
+              sourceProvider: RAIN_PROVIDER,
+              sourceSkinKey: item.sourceSkinKey
+            }
+          },
+          create: {
             sourceProvider: RAIN_PROVIDER,
-            sourceSkinKey: item.sourceSkinKey
+            sourceCaseSlug: item.sourceCaseSlug,
+            sourceSkinKey: item.sourceSkinKey,
+            name: item.name,
+            valueAtomic: item.valueAtomic,
+            imageUrl: item.imageUrl,
+            isActive: true,
+            createdByUserId: actorUserId
+          },
+          update: {
+            sourceCaseSlug: item.sourceCaseSlug,
+            name: item.name,
+            valueAtomic: item.valueAtomic,
+            imageUrl: item.imageUrl,
+            isActive: true
           }
-        },
-        create: {
-          sourceProvider: RAIN_PROVIDER,
-          sourceCaseSlug: item.sourceCaseSlug,
-          sourceSkinKey: item.sourceSkinKey,
-          name: item.name,
-          valueAtomic: item.valueAtomic,
-          imageUrl: item.imageUrl,
-          isActive: true,
-          createdByUserId: actorUserId
-        },
-        update: {
-          sourceCaseSlug: item.sourceCaseSlug,
-          name: item.name,
-          valueAtomic: item.valueAtomic,
-          imageUrl: item.imageUrl,
-          isActive: true
-        }
-      });
-      skinsUpserted += 1;
+        });
+        skinsUpserted += 1;
+      }
+    } catch (error) {
+      failedCases += 1;
+      if (failureSamples.length < 5) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        failureSamples.push(`${rainCase.slug}: ${message}`);
+      }
     }
   }
 
@@ -269,7 +305,9 @@ export const importRainCatalogPageByAdmin = async (
     casesFound: cases.length,
     casesParsed,
     skinsUpserted,
-    itemsParsed
+    itemsParsed,
+    failedCases,
+    failureSamples
   };
 };
 
@@ -283,7 +321,9 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     casesFound: 0,
     casesParsed: 0,
     skinsUpserted: 0,
-    itemsParsed: 0
+    itemsParsed: 0,
+    failedCases: 0,
+    failureSamples: []
   };
   for (let page = 0; page < safePages; page += 1) {
     const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page);
@@ -292,6 +332,15 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     summary.casesParsed += pageSummary.casesParsed;
     summary.skinsUpserted += pageSummary.skinsUpserted;
     summary.itemsParsed += pageSummary.itemsParsed;
+    summary.failedCases += pageSummary.failedCases;
+    if (summary.failureSamples.length < 8 && pageSummary.failureSamples.length) {
+      for (const sample of pageSummary.failureSamples) {
+        if (summary.failureSamples.length >= 8) {
+          break;
+        }
+        summary.failureSamples.push(sample);
+      }
+    }
   }
   return summary;
 };

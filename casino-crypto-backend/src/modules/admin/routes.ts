@@ -165,6 +165,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         <button id="casesSearchSkinsBtn">Search skins</button>
       </div>
       <div id="casesStatus" class="mono" style="margin-top:8px;"></div>
+      <div class="mono muted" style="margin-top:4px;">
+        1) Import from Rain -> 2) Search skins -> 3) Add skins -> 4) Set drop % (must total 100) -> 5) Save case
+      </div>
       <div class="row" style="margin-top:8px;">
         <label>Cases:</label>
         <select id="casesSelect" style="min-width:320px"></select>
