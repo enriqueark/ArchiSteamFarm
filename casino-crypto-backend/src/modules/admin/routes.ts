@@ -30,8 +30,14 @@ const userDetailParamsSchema = z.object({
 });
 
 const userDetailQuerySchema = z.object({
-  all: z.coerce.boolean().default(true),
-  limit: z.coerce.number().int().min(1).max(200000).optional()
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  mode: z.string().trim().max(80).optional(),
+  reference: z.string().trim().max(120).optional(),
+  minAmount: z.coerce.number().min(0).optional(),
+  maxAmount: z.coerce.number().min(0).optional(),
+  from: z.string().trim().max(64).optional(),
+  to: z.string().trim().max(64).optional()
 });
 
 const updateUserStatusSchema = z.object({
@@ -153,6 +159,29 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <div id="detailCard" class="card" style="display:none;">
       <h2>User profile details</h2>
       <div id="detailStatus" class="mono"></div>
+      <div class="row" style="margin-top:8px;">
+        <label>Mode</label>
+        <input id="detailMode" placeholder="blackjack / mines / roulette / cases" style="min-width:220px" />
+        <label>Reference</label>
+        <input id="detailReference" placeholder="reference id..." style="min-width:180px" />
+        <label>Min $</label>
+        <input id="detailMinAmount" type="number" min="0" step="0.01" style="width:110px" />
+        <label>Max $</label>
+        <input id="detailMaxAmount" type="number" min="0" step="0.01" style="width:110px" />
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <label>From</label>
+        <input id="detailFrom" type="datetime-local" />
+        <label>To</label>
+        <input id="detailTo" type="datetime-local" />
+        <button id="detailApplyBtn">Apply filters</button>
+        <button id="detailResetBtn">Reset</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="detailPrevBtn">Prev 50</button>
+        <button id="detailNextBtn">Next 50</button>
+        <span id="detailPageInfo" class="mono muted">Page 1/1</span>
+      </div>
       <div id="detailContent"></div>
     </div>
 
@@ -238,6 +267,17 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const detailCard = document.getElementById("detailCard");
       const detailStatus = document.getElementById("detailStatus");
       const detailContent = document.getElementById("detailContent");
+      const detailModeInput = document.getElementById("detailMode");
+      const detailReferenceInput = document.getElementById("detailReference");
+      const detailMinAmountInput = document.getElementById("detailMinAmount");
+      const detailMaxAmountInput = document.getElementById("detailMaxAmount");
+      const detailFromInput = document.getElementById("detailFrom");
+      const detailToInput = document.getElementById("detailTo");
+      const detailApplyBtn = document.getElementById("detailApplyBtn");
+      const detailResetBtn = document.getElementById("detailResetBtn");
+      const detailPrevBtn = document.getElementById("detailPrevBtn");
+      const detailNextBtn = document.getElementById("detailNextBtn");
+      const detailPageInfo = document.getElementById("detailPageInfo");
       const COIN_CURRENCY = "${PLATFORM_INTERNAL_CURRENCY}";
       const COIN_SYMBOL = "${PLATFORM_VIRTUAL_COIN_SYMBOL}";
 
@@ -287,6 +327,40 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           return (negative ? "-" : "+") + money;
         }
         return negative ? "-" + money : money;
+      };
+      const toIsoIfPresent = (value) => {
+        if (!value || !String(value).trim()) return "";
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return "";
+        return parsed.toISOString();
+      };
+
+      const detailState = {
+        userId: null,
+        email: "",
+        page: 1,
+        pageSize: 50,
+        totalPages: 1,
+        totalMovements: 0
+      };
+
+      const detailFiltersToParams = () => {
+        const params = new URLSearchParams();
+        params.set("page", String(detailState.page));
+        params.set("pageSize", String(detailState.pageSize));
+        const mode = detailModeInput.value.trim();
+        const reference = detailReferenceInput.value.trim();
+        const minAmount = detailMinAmountInput.value.trim();
+        const maxAmount = detailMaxAmountInput.value.trim();
+        const from = toIsoIfPresent(detailFromInput.value);
+        const to = toIsoIfPresent(detailToInput.value);
+        if (mode) params.set("mode", mode);
+        if (reference) params.set("reference", reference);
+        if (minAmount) params.set("minAmount", minAmount);
+        if (maxAmount) params.set("maxAmount", maxAmount);
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        return params;
       };
 
       const newCasesDraft = () => ({
@@ -756,20 +830,34 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       };
 
       const openUserDetails = async (userId, email) => {
+        detailState.userId = userId;
+        detailState.email = email;
+        detailState.page = Math.max(1, detailState.page || 1);
         detailCard.style.display = "block";
         detailStatus.className = "mono";
-        detailStatus.textContent = "Loading details for " + email + "...";
+        detailStatus.textContent = "Loading details for " + detailState.email + "...";
         detailContent.innerHTML = "";
         try {
-          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/details?all=true");
+          const params = detailFiltersToParams();
+          const res = await req(
+            "/api/v1/admin/users/" + encodeURIComponent(detailState.userId) + "/details?" + params.toString()
+          );
           if (!res.ok) {
             detailStatus.className = "mono err";
             detailStatus.textContent = await getErrorMessage(res, "Failed to load details");
             return;
           }
           const data = await res.json();
+          const pagination = data.pagination || {};
+          detailState.totalPages = Math.max(1, Number(pagination.totalPages || 1));
+          detailState.totalMovements = Math.max(0, Number(pagination.totalMovements || 0));
+          detailState.page = Math.max(1, Math.min(detailState.page, detailState.totalPages));
+          detailPageInfo.textContent =
+            "Page " + detailState.page + "/" + detailState.totalPages + " | total movements: " + detailState.totalMovements;
+          detailPrevBtn.disabled = detailState.page <= 1;
+          detailNextBtn.disabled = detailState.page >= detailState.totalPages;
           detailStatus.className = "mono ok";
-          detailStatus.textContent = "Loaded details for " + data.user.email;
+          detailStatus.textContent = "Loaded details for " + data.user.email + " (page " + detailState.page + ").";
 
           const summary = data.summary || {};
           const perGame = summary.perGame || {};
@@ -830,10 +918,53 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             (movementsRows || "<tr><td colspan=\\"5\\" class=\\"mono\\">No movements</td></tr>") +
             "</tbody></table>";
         } catch (error) {
+          detailPageInfo.textContent = "Page -/-";
           detailStatus.className = "mono err";
           detailStatus.textContent = error && error.message ? error.message : "Failed to load details";
         }
       };
+
+      detailApplyBtn.addEventListener("click", async () => {
+        if (!detailState.userId) {
+          detailStatus.className = "mono err";
+          detailStatus.textContent = "Select a user first.";
+          return;
+        }
+        detailState.page = 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailResetBtn.addEventListener("click", async () => {
+        detailModeInput.value = "";
+        detailReferenceInput.value = "";
+        detailMinAmountInput.value = "";
+        detailMaxAmountInput.value = "";
+        detailFromInput.value = "";
+        detailToInput.value = "";
+        if (!detailState.userId) {
+          detailStatus.className = "mono err";
+          detailStatus.textContent = "Select a user first.";
+          return;
+        }
+        detailState.page = 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailPrevBtn.addEventListener("click", async () => {
+        if (!detailState.userId || detailState.page <= 1) {
+          return;
+        }
+        detailState.page -= 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailNextBtn.addEventListener("click", async () => {
+        if (!detailState.userId || detailState.page >= detailState.totalPages) {
+          return;
+        }
+        detailState.page += 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
 
       const setUserAccess = async (userId, status, role, msgEl) => {
         try {
@@ -1368,8 +1499,106 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         throw new AppError("User not found", 404, "USER_NOT_FOUND");
       }
 
-      const movementTake = query.all ? undefined : query.limit ?? 500;
-      const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements] = await Promise.all([
+      const parseDateFilter = (value?: string): Date | null => {
+        if (!value?.trim()) {
+          return null;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new AppError("Invalid date filter", 400, "INVALID_DATE_FILTER");
+        }
+        return parsed;
+      };
+      const toAtomicFromCoinsFilter = (value?: number): bigint | null => {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          return null;
+        }
+        if (value < 0) {
+          throw new AppError("Amount filters must be >= 0", 400, "INVALID_AMOUNT_FILTER");
+        }
+        return BigInt(Math.round(value * 100000000));
+      };
+      const page = Math.max(1, query.page);
+      const pageSize = Math.max(1, Math.min(200, query.pageSize));
+      const fromDate = parseDateFilter(query.from);
+      const toDate = parseDateFilter(query.to);
+      if (fromDate && toDate && fromDate > toDate) {
+        throw new AppError("'from' must be before 'to'", 400, "INVALID_DATE_RANGE");
+      }
+      const minAmountAtomic = toAtomicFromCoinsFilter(query.minAmount);
+      const maxAmountAtomic = toAtomicFromCoinsFilter(query.maxAmount);
+      if (
+        typeof minAmountAtomic === "bigint" &&
+        typeof maxAmountAtomic === "bigint" &&
+        minAmountAtomic > maxAmountAtomic
+      ) {
+        throw new AppError("'minAmount' must be <= 'maxAmount'", 400, "INVALID_AMOUNT_RANGE");
+      }
+
+      const movementWhere: Prisma.LedgerEntryWhereInput = {
+        wallet: {
+          userId: params.userId,
+          currency: PLATFORM_INTERNAL_CURRENCY
+        },
+        ...(query.reference
+          ? {
+              referenceId: {
+                contains: query.reference,
+                mode: "insensitive"
+              }
+            }
+          : {}),
+        ...(fromDate || toDate
+          ? {
+              createdAt: {
+                ...(fromDate ? { gte: fromDate } : {}),
+                ...(toDate ? { lte: toDate } : {})
+              }
+            }
+          : {}),
+        ...(typeof minAmountAtomic === "bigint" || typeof maxAmountAtomic === "bigint"
+          ? {
+              amountAtomic: {
+                ...(typeof minAmountAtomic === "bigint" ? { gte: minAmountAtomic } : {}),
+                ...(typeof maxAmountAtomic === "bigint" ? { lte: maxAmountAtomic } : {})
+              }
+            }
+          : {})
+      };
+      const modeFilter = query.mode?.trim();
+      if (modeFilter) {
+        movementWhere.OR = [
+          {
+            reason: {
+              equals:
+                modeFilter
+                  .toUpperCase()
+                  .replace(/[\s-]+/g, "_")
+                  .replace(/[^A-Z_]/g, "") as LedgerReason
+            }
+          },
+          {
+            referenceId: {
+              contains: modeFilter,
+              mode: "insensitive"
+            }
+          },
+          {
+            metadata: {
+              path: ["game"],
+              string_contains: modeFilter
+            }
+          },
+          {
+            metadata: {
+              path: ["operation"],
+              string_contains: modeFilter
+            }
+          }
+        ];
+      }
+
+      const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements, totalMovements] = await Promise.all([
         prisma.deposit.aggregate({
           where: {
             userId: params.userId,
@@ -1422,16 +1651,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }),
         prisma.ledgerEntry.findMany({
-          where: {
-            wallet: {
-              userId: params.userId,
-              currency: PLATFORM_INTERNAL_CURRENCY
-            }
-          },
+          where: movementWhere,
           orderBy: {
             createdAt: "desc"
           },
-          take: movementTake,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
           select: {
             id: true,
             walletId: true,
@@ -1445,6 +1670,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             metadata: true,
             createdAt: true
           }
+        }),
+        prisma.ledgerEntry.count({
+          where: movementWhere
         })
       ]);
 
@@ -1536,7 +1764,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             }
           }
         },
-        movements: movementRows
+        movements: movementRows,
+        pagination: {
+          page,
+          pageSize,
+          totalMovements,
+          totalPages: Math.max(1, Math.ceil(totalMovements / pageSize))
+        }
       });
     }
   );
