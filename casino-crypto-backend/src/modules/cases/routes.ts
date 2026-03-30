@@ -74,7 +74,7 @@ const adminImportSkinsSchema = z.object({
 
 const adminCatalogQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
+  limit: z.coerce.number().int().min(1).max(5000).default(2000),
   sourceCaseSlug: z.string().trim().max(120).optional()
 });
 

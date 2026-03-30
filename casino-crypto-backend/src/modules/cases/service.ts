@@ -16,6 +16,7 @@ import {
   PLATFORM_INTERNAL_CURRENCY,
   debitBalanceInTx
 } from "../wallets/service";
+import { RAIN_SNAPSHOT_SEED } from "./rain_snapshot_seed";
 
 const RNG_BYTES = 6;
 const RNG_MAX = 2 ** (RNG_BYTES * 8);
@@ -66,167 +67,44 @@ export type RainCatalogImportSummary = {
   totalCatalogSkins: number;
 };
 
-const FALLBACK_RAIN_SKIN_SEED: Array<{
-  sourceCaseSlug: string;
-  name: string;
-  valueCoins: string;
-  imageUrl: string;
-}> = [
-  {
-    sourceCaseSlug: "island-life",
-    name: "M9 Bayonet | StatTrak Lore",
-    valueCoins: "752.45",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-m9-bayonet-lore-field-tested.png"
-  },
-  {
-    sourceCaseSlug: "island-life",
-    name: "AK-47 | StatTrak Bloodsport",
-    valueCoins: "666.78",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-ak-47-bloodsport-well-worn.png"
-  },
-  {
-    sourceCaseSlug: "island-life",
-    name: "M4A4 | Cyber Security",
-    valueCoins: "433.20",
-    imageUrl: "https://cdn.rain.gg/images/items/m4a4-cyber-security-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "island-life",
-    name: "Paracord Knife | StatTrak Slaughter",
-    valueCoins: "355.61",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-paracord-knife-slaughter-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "island-life",
-    name: "Hand Wraps | Duct Tape",
-    valueCoins: "191.95",
-    imageUrl: "https://cdn.rain.gg/images/items/hand-wraps-duct-tape-minimal-wear.png"
-  },
-  {
-    sourceCaseSlug: "island-life",
-    name: "Desert Eagle | Code Red",
-    valueCoins: "103.95",
-    imageUrl: "https://cdn.rain.gg/images/items/desert-eagle-code-red-minimal-wear.png"
-  },
-  {
-    sourceCaseSlug: "raven",
-    name: "AK-47 | Cartel",
-    valueCoins: "10.70",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-ak-47-cartel-field-tested.png"
-  },
-  {
-    sourceCaseSlug: "otherworldly",
-    name: "Butterfly Knife | Doppler Black Pearl",
-    valueCoins: "2404.89",
-    imageUrl: "https://cdn.rain.gg/images/items/butterfly-knife-doppler-factory-new-black-pearl.png"
-  },
-  {
-    sourceCaseSlug: "container",
-    name: "Karambit | Doppler Phase 4",
-    valueCoins: "46.41",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-karambit-doppler-factory-new-phase-4.png"
-  },
-  {
-    sourceCaseSlug: "knapsack",
-    name: "M4A1-S | Welcome to the Jungle",
-    valueCoins: "50.01",
-    imageUrl: "https://cdn.rain.gg/images/items/souvenir-m4a1-s-welcome-to-the-jungle-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "asylum",
-    name: "AWP | Gungnir",
-    valueCoins: "401.06",
-    imageUrl: "https://cdn.rain.gg/images/items/awp-gungnir-minimal-wear.png"
-  },
-  {
-    sourceCaseSlug: "zipped",
-    name: "AWP | Dragon Lore",
-    valueCoins: "276.59",
-    imageUrl: "https://cdn.rain.gg/images/items/awp-dragon-lore-minimal-wear.png"
-  },
-  {
-    sourceCaseSlug: "iceberg",
-    name: "Karambit | Doppler Sapphire",
-    valueCoins: "41.07",
-    imageUrl: "https://cdn.rain.gg/images/items/karambit-doppler-factory-new-sapphire.png"
-  },
-  {
-    sourceCaseSlug: "reflection",
-    name: "AWP | Medusa",
-    valueCoins: "48.55",
-    imageUrl: "https://cdn.rain.gg/images/items/awp-medusa-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "fountain",
-    name: "M9 Bayonet | Doppler Sapphire",
-    valueCoins: "63.74",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-m9-bayonet-doppler-minimal-wear-sapphire.png"
-  },
-  {
-    sourceCaseSlug: "freezer",
-    name: "AWP | The Prince",
-    valueCoins: "70.58",
-    imageUrl: "https://cdn.rain.gg/images/items/awp-the-prince-minimal-wear.png"
-  },
-  {
-    sourceCaseSlug: "breaker-box",
-    name: "Butterfly Knife | Lore",
-    valueCoins: "39.47",
-    imageUrl: "https://cdn.rain.gg/images/items/butterfly-knife-lore-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "operation-wildfire",
-    name: "Bowie Knife | Case Hardened",
-    valueCoins: "7.37",
-    imageUrl: "https://cdn.rain.gg/images/items/stattrak-bowie-knife-case-hardened-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "falchion",
-    name: "Falchion Knife | Crimson Web",
-    valueCoins: "4.50",
-    imageUrl: "https://cdn.rain.gg/images/items/falchion-knife-crimson-web-factory-new.png"
-  },
-  {
-    sourceCaseSlug: "fracture",
-    name: "Skeleton Knife | Fade",
-    valueCoins: "5.42",
-    imageUrl: "https://cdn.rain.gg/images/items/skeleton-knife-fade-factory-new.png"
-  }
-];
+const FALLBACK_RAIN_SKIN_SEED = RAIN_SNAPSHOT_SEED;
+const STATIC_SNAPSHOT_CHUNK_SIZE = 250;
+const STATIC_SNAPSHOT_CASE_COUNT = new Set(
+  FALLBACK_RAIN_SKIN_SEED.map((entry) => entry.sourceCaseSlug)
+).size;
 
 const importFallbackRainSkinSeed = async (actorUserId?: string | null): Promise<number> => {
-  let upserted = 0;
-  for (const seed of FALLBACK_RAIN_SKIN_SEED) {
-    const normalizedName = seed.name.trim();
-    const sourceSkinKey = normalizeSourceSkinKey(seed.sourceCaseSlug, normalizedName);
-    await prisma.cs2SkinCatalog.upsert({
-      where: {
-        sourceProvider_sourceSkinKey: {
-          sourceProvider: RAIN_PROVIDER,
-          sourceSkinKey
-        }
-      },
-      create: {
+  let inserted = 0;
+  for (let offset = 0; offset < FALLBACK_RAIN_SKIN_SEED.length; offset += STATIC_SNAPSHOT_CHUNK_SIZE) {
+    const chunk = FALLBACK_RAIN_SKIN_SEED.slice(offset, offset + STATIC_SNAPSHOT_CHUNK_SIZE).map((seed) => {
+      const normalizedName = seed.name.trim();
+      return {
         sourceProvider: RAIN_PROVIDER,
         sourceCaseSlug: seed.sourceCaseSlug,
-        sourceSkinKey,
+        sourceSkinKey: normalizeSourceSkinKey(seed.sourceCaseSlug, normalizedName),
         name: normalizedName,
         valueAtomic: parseCoinsToAtomic(seed.valueCoins),
-        imageUrl: seed.imageUrl,
+        imageUrl: seed.imageUrl || null,
         isActive: true,
         createdByUserId: actorUserId ?? null
-      },
-      update: {
-        sourceCaseSlug: seed.sourceCaseSlug,
-        name: normalizedName,
-        valueAtomic: parseCoinsToAtomic(seed.valueCoins),
-        imageUrl: seed.imageUrl,
-        isActive: true
-      }
+      };
     });
-    upserted += 1;
+    const result = await prisma.cs2SkinCatalog.createMany({
+      data: chunk,
+      skipDuplicates: true
+    });
+    inserted += result.count;
   }
-  return upserted;
+  return inserted;
+};
+
+export const ensureCs2SkinCatalogPreloaded = async (actorUserId?: string | null): Promise<number> => {
+  const beforeCount = await prisma.cs2SkinCatalog.count();
+  if (beforeCount > 0) {
+    return beforeCount;
+  }
+  await importFallbackRainSkinSeed(actorUserId);
+  return prisma.cs2SkinCatalog.count();
 };
 
 const parseCoinsToAtomic = (value: string): bigint => {
@@ -497,68 +375,36 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
   caseLimit = 20
 ): Promise<RainCatalogImportSummary> => {
   const safePages = Math.max(1, Math.min(20, Math.trunc(maxPages)));
+  const safeCaseLimit = Math.max(1, Math.min(RAIN_MAX_CASES_PER_PAGE, Math.trunc(caseLimit)));
   const summary: RainCatalogImportSummary = {
     pagesScanned: 0,
-    casesFound: 0,
-    casesParsed: 0,
+    casesFound: STATIC_SNAPSHOT_CASE_COUNT,
+    casesParsed: STATIC_SNAPSHOT_CASE_COUNT,
     skinsUpserted: 0,
     itemsParsed: 0,
     failedCases: 0,
     failureSamples: [],
-    fallbackSeedUsed: false,
+    fallbackSeedUsed: true,
     totalCatalogSkins: 0
   };
-  for (let page = 0; page < safePages; page += 1) {
-    try {
-      const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page, caseLimit);
-      summary.pagesScanned += pageSummary.pagesScanned;
-      summary.casesFound += pageSummary.casesFound;
-      summary.casesParsed += pageSummary.casesParsed;
-      summary.skinsUpserted += pageSummary.skinsUpserted;
-      summary.itemsParsed += pageSummary.itemsParsed;
-      summary.failedCases += pageSummary.failedCases;
-      if (summary.failureSamples.length < 8 && pageSummary.failureSamples.length) {
-        for (const sample of pageSummary.failureSamples) {
-          if (summary.failureSamples.length >= 8) {
-            break;
-          }
-          summary.failureSamples.push(sample);
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      summary.failedCases += Math.max(1, caseLimit);
-      if (summary.failureSamples.length < 8) {
-        summary.failureSamples.push(`page-${page}: ${message}`);
-      }
-      // Continue so fallback can still be applied at the end.
-      continue;
-    }
-  }
-  const importedAnything = summary.skinsUpserted > 0;
-  if (!importedAnything) {
-    const seeded = await importFallbackRainSkinSeed(actorUserId);
-    summary.skinsUpserted = Math.max(summary.skinsUpserted, seeded);
-    summary.itemsParsed = Math.max(summary.itemsParsed, seeded);
-    summary.fallbackSeedUsed = true;
-    if (summary.failureSamples.length < 8) {
-      summary.failureSamples.push(
-        "Rain catalog unavailable right now, fallback CS2 seed imported so admin can continue."
-      );
-    }
-  }
-
+  const beforeCount = await prisma.cs2SkinCatalog.count();
+  const inserted = await importFallbackRainSkinSeed(actorUserId);
+  summary.skinsUpserted = inserted;
+  summary.itemsParsed = inserted;
   summary.totalCatalogSkins = await prisma.cs2SkinCatalog.count();
-  if (summary.totalCatalogSkins === 0) {
-    const seeded = await importFallbackRainSkinSeed(actorUserId);
-    summary.skinsUpserted = Math.max(summary.skinsUpserted, seeded);
-    summary.itemsParsed = Math.max(summary.itemsParsed, seeded);
-    summary.fallbackSeedUsed = true;
-    summary.totalCatalogSkins = await prisma.cs2SkinCatalog.count();
-    if (summary.failureSamples.length < 8) {
-      summary.failureSamples.push("Catalog was empty after import. Forced fallback seed import applied.");
+  if (summary.totalCatalogSkins > 0) {
+    if (summary.totalCatalogSkins === beforeCount) {
+      summary.failureSamples.push(`Catalog already preloaded (${summary.totalCatalogSkins} skins).`);
+    } else {
+      summary.failureSamples.push(`Catalog preloaded successfully (${summary.totalCatalogSkins} skins).`);
     }
+  } else {
+    summary.failedCases = Math.max(1, safePages * safeCaseLimit);
+    summary.failureSamples.push("Catalog preload failed: no skins were persisted.");
   }
+  summary.failureSamples.push(
+    `Live Rain sync disabled for stability. Request params ignored: pages=${safePages}, caseLimit=${safeCaseLimit}.`
+  );
   return summary;
 };
 
@@ -568,7 +414,8 @@ export const listCs2SkinCatalogByAdmin = async (input: {
   sourceCaseSlug?: string;
   actorUserId?: string;
 }): Promise<Cs2SkinCatalogItem[]> => {
-  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 100)));
+  const limit = Math.max(1, Math.min(5000, Math.trunc(input.limit ?? 5000)));
+  await ensureCs2SkinCatalogPreloaded(input.actorUserId ?? null);
   const q = input.q?.trim();
   const where = {
     ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
@@ -580,18 +427,6 @@ export const listCs2SkinCatalogByAdmin = async (input: {
     orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
     take: limit
   });
-
-  if (!rows.length) {
-    const totalCatalogSkins = await prisma.cs2SkinCatalog.count();
-    if (totalCatalogSkins === 0) {
-      await importFallbackRainSkinSeed(input.actorUserId ?? null);
-      rows = await prisma.cs2SkinCatalog.findMany({
-        where,
-        orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
-        take: limit
-      });
-    }
-  }
 
   return rows.map((row) => ({
     id: row.id,

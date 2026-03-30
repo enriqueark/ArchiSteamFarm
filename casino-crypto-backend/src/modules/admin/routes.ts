@@ -158,15 +158,15 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     <div class="card">
       <h2>Cases Manager (CS2)</h2>
       <div class="row">
-        <label>Import pages:</label>
-        <input id="casesImportPages" type="number" min="1" max="20" value="6" style="width:90px" />
-        <button id="casesImportBtn">Import from Rain</button>
+        <label>Preload snapshot:</label>
+        <input id="casesImportPages" type="number" min="1" max="20" value="1" style="width:90px" />
+        <button id="casesImportBtn">Preload skins</button>
         <input id="casesSkinSearch" placeholder="Search skin name..." style="min-width:220px" />
         <button id="casesSearchSkinsBtn">Search skins</button>
       </div>
       <div id="casesStatus" class="mono" style="margin-top:8px;"></div>
       <div class="mono muted" style="margin-top:4px;">
-        1) Import from Rain -> 2) Search skins -> 3) Add skins -> 4) Set drop % (must total 100) -> 5) Save case
+        1) Preload once -> 2) Search skins -> 3) Add skins -> 4) Set drop % (must total 100) -> 5) Save case
       </div>
       <div class="row" style="margin-top:8px;">
         <label>Cases:</label>
@@ -463,7 +463,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       const loadCatalog = async () => {
         const params = new URLSearchParams();
-        params.set("limit", "200");
+        params.set("limit", "2000");
         const q = casesSkinSearch.value.trim();
         if (q) params.set("q", q);
         const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
@@ -474,7 +474,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       const loadCatalogUnfiltered = async () => {
         const params = new URLSearchParams();
-        params.set("limit", "200");
+        params.set("limit", "2000");
         const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
         if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
         casesState.catalog = await res.json();
@@ -507,8 +507,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         casesImportBtn.disabled = true;
         try {
           casesStatus.className = "mono";
-          casesStatus.textContent = "Importing Rain catalog...";
-          const pages = Math.max(1, Math.min(20, Number(casesImportPages.value || "6")));
+          casesStatus.textContent = "Preloading static skins catalog...";
+          const pages = Math.max(1, Math.min(20, Number(casesImportPages.value || "1")));
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), IMPORT_TIMEOUT_MS);
           const res = await req("/api/v1/cases/admin/catalog/import-rain", {
@@ -520,41 +520,23 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           clearTimeout(timeoutId);
           if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
           const summary = await res.json();
-          const failures = Number(summary.failedCases || 0);
-          const usedFallbackSeed = Boolean(summary.fallbackSeedUsed);
-          const sampleText = Array.isArray(summary.failureSamples) && summary.failureSamples.length
-            ? " | sample: " + summary.failureSamples.slice(0, 2).join(" ; ")
-            : "";
-          if (usedFallbackSeed) {
-            casesStatus.className = "mono ok";
-            casesStatus.textContent =
-              "Import completed using fallback seed: skins=" + summary.skinsUpserted +
-              " (Rain is rate-limited now). You can continue creating cases." + sampleText;
-          } else if (failures > 0) {
-            casesStatus.className = "mono err";
-            casesStatus.textContent =
-              "Imported with warnings: pages=" + summary.pagesScanned +
-              " cases=" + summary.casesParsed +
-              " skins=" + summary.skinsUpserted +
-              " failedCases=" + failures + sampleText;
-          } else {
-            casesStatus.className = "mono ok";
-            casesStatus.textContent =
-              "Import complete: pages=" + summary.pagesScanned +
-              " cases=" + summary.casesParsed +
-              " skins=" + summary.skinsUpserted;
-          }
+          const total = Number(summary.totalCatalogSkins || 0);
+          casesStatus.className = total > 0 ? "mono ok" : "mono err";
+          casesStatus.textContent =
+            total > 0
+              ? "Catalog ready: " + total + " skins preloaded (persistent in DB)."
+              : "Preload finished but catalog is empty.";
           await loadCatalogUnfiltered();
           if (!casesState.catalog.length) {
             casesStatus.className = "mono err";
-            casesStatus.textContent = "Import finished but catalog is still empty. Try pages=1 first, then Search skins.";
+            casesStatus.textContent = "Catalog is still empty after preload. Check backend logs.";
           }
         } catch (error) {
           casesStatus.className = "mono err";
           if (error && error.name === "AbortError") {
-            casesStatus.textContent = "Import timeout. Try fewer pages (e.g. 1-2) and retry.";
+            casesStatus.textContent = "Preload timeout. Retry once; data is static snapshot.";
           } else {
-            casesStatus.textContent = error && error.message ? error.message : "Import failed.";
+            casesStatus.textContent = error && error.message ? error.message : "Preload failed.";
           }
         } finally {
           casesImportBtn.disabled = false;
