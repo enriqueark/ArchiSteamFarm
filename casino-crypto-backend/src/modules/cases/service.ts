@@ -471,20 +471,30 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     fallbackSeedUsed: false
   };
   for (let page = 0; page < safePages; page += 1) {
-    const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page, caseLimit);
-    summary.pagesScanned += pageSummary.pagesScanned;
-    summary.casesFound += pageSummary.casesFound;
-    summary.casesParsed += pageSummary.casesParsed;
-    summary.skinsUpserted += pageSummary.skinsUpserted;
-    summary.itemsParsed += pageSummary.itemsParsed;
-    summary.failedCases += pageSummary.failedCases;
-    if (summary.failureSamples.length < 8 && pageSummary.failureSamples.length) {
-      for (const sample of pageSummary.failureSamples) {
-        if (summary.failureSamples.length >= 8) {
-          break;
+    try {
+      const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page, caseLimit);
+      summary.pagesScanned += pageSummary.pagesScanned;
+      summary.casesFound += pageSummary.casesFound;
+      summary.casesParsed += pageSummary.casesParsed;
+      summary.skinsUpserted += pageSummary.skinsUpserted;
+      summary.itemsParsed += pageSummary.itemsParsed;
+      summary.failedCases += pageSummary.failedCases;
+      if (summary.failureSamples.length < 8 && pageSummary.failureSamples.length) {
+        for (const sample of pageSummary.failureSamples) {
+          if (summary.failureSamples.length >= 8) {
+            break;
+          }
+          summary.failureSamples.push(sample);
         }
-        summary.failureSamples.push(sample);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      summary.failedCases += Math.max(1, caseLimit);
+      if (summary.failureSamples.length < 8) {
+        summary.failureSamples.push(`page-${page}: ${message}`);
+      }
+      // Continue so fallback can still be applied at the end.
+      continue;
     }
   }
   const importedAnything = summary.skinsUpserted > 0;
