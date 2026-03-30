@@ -22,6 +22,9 @@ const RNG_MAX = 2 ** (RNG_BYTES * 8);
 const RAIN_PROVIDER = "RAIN_GG";
 const CASE_VOLATILITY_MIN = 0;
 const CASE_VOLATILITY_MAX = 100;
+const RAIN_FETCH_TIMEOUT_MS = 12_000;
+const RAIN_FETCH_ATTEMPTS = 3;
+const RAIN_MAX_CASES_PER_PAGE = 50;
 
 export type VolatilityTier = "L" | "M" | "H" | "I";
 
@@ -143,25 +146,30 @@ const sleep = async (ms: number): Promise<void> =>
 const fetchMarkdownViaJina = async (url: string): Promise<string> => {
   let lastStatus = 0;
   let lastError = "";
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  for (let attempt = 1; attempt <= RAIN_FETCH_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RAIN_FETCH_TIMEOUT_MS);
     try {
       const response = await fetch(buildJinaMirrorUrl(url), {
+        signal: controller.signal,
         headers: {
           Accept: "text/plain"
         }
       });
+      clearTimeout(timeout);
       lastStatus = response.status;
       if (response.ok) {
         return response.text();
       }
       if (response.status === 429 || response.status >= 500) {
-        await sleep(500 * attempt);
+        await sleep(250 * attempt);
         continue;
       }
       break;
     } catch (error) {
+      clearTimeout(timeout);
       lastError = error instanceof Error ? error.message : String(error);
-      await sleep(500 * attempt);
+      await sleep(250 * attempt);
     }
   }
   throw new AppError(
@@ -236,15 +244,17 @@ const parseRainCaseItemsFromMarkdown = (caseSlug: string, markdown: string): Rai
 
 export const importRainCatalogPageByAdmin = async (
   actorUserId: string,
-  page: number
+  page: number,
+  caseLimit = 20
 ): Promise<RainCatalogImportSummary> => {
   const safePage = Math.max(0, Math.min(20, Math.trunc(page)));
+  const safeCaseLimit = Math.max(1, Math.min(RAIN_MAX_CASES_PER_PAGE, Math.trunc(caseLimit)));
   const indexUrl =
     safePage > 0
       ? `https://rain.gg/games/case-opening?page=${safePage}`
       : "https://rain.gg/games/case-opening";
   const indexMarkdown = await fetchMarkdownViaJina(indexUrl);
-  const cases = extractRainCaseLinksFromIndex(indexMarkdown);
+  const cases = extractRainCaseLinksFromIndex(indexMarkdown).slice(0, safeCaseLimit);
 
   let casesParsed = 0;
   let itemsParsed = 0;
@@ -297,6 +307,9 @@ export const importRainCatalogPageByAdmin = async (
         const message = error instanceof Error ? error.message : "Unknown error";
         failureSamples.push(`${rainCase.slug}: ${message}`);
       }
+    } finally {
+      // Small pause to reduce provider rate-limits on burst imports.
+      await sleep(80);
     }
   }
 
@@ -313,7 +326,8 @@ export const importRainCatalogPageByAdmin = async (
 
 export const importRainCasesIntoSkinCatalogByAdmin = async (
   actorUserId: string,
-  maxPages = 6
+  maxPages = 6,
+  caseLimit = 20
 ): Promise<RainCatalogImportSummary> => {
   const safePages = Math.max(1, Math.min(20, Math.trunc(maxPages)));
   const summary: RainCatalogImportSummary = {
@@ -326,7 +340,7 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     failureSamples: []
   };
   for (let page = 0; page < safePages; page += 1) {
-    const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page);
+    const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page, caseLimit);
     summary.pagesScanned += pageSummary.pagesScanned;
     summary.casesFound += pageSummary.casesFound;
     summary.casesParsed += pageSummary.casesParsed;

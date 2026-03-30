@@ -300,6 +300,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const casesSimRounds = document.getElementById("casesSimRounds");
       const casesSimBtn = document.getElementById("casesSimBtn");
       const casesSimStatus = document.getElementById("casesSimStatus");
+      const IMPORT_TIMEOUT_MS = 120000;
 
       const coinsToAtomicString = (coinsValue) => {
         const value = Number(coinsValue);
@@ -494,23 +495,54 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
       });
       casesImportBtn.addEventListener("click", async () => {
+        casesImportBtn.disabled = true;
         try {
           casesStatus.className = "mono";
           casesStatus.textContent = "Importing Rain catalog...";
           const pages = Math.max(1, Math.min(20, Number(casesImportPages.value || "6")));
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), IMPORT_TIMEOUT_MS);
           const res = await req("/api/v1/cases/admin/catalog/import-rain", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pages })
+            body: JSON.stringify({ pages }),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
           if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
           const summary = await res.json();
-          casesStatus.className = "mono ok";
-          casesStatus.textContent = "Imported: pages=" + summary.pagesScanned + " cases=" + summary.casesParsed + " skins=" + summary.skinsUpserted;
+          const failures = Number(summary.failedCases || 0);
+          const sampleText = Array.isArray(summary.failureSamples) && summary.failureSamples.length
+            ? " | sample: " + summary.failureSamples.slice(0, 2).join(" ; ")
+            : "";
+          if (failures > 0) {
+            casesStatus.className = "mono err";
+            casesStatus.textContent =
+              "Imported with warnings: pages=" + summary.pagesScanned +
+              " cases=" + summary.casesParsed +
+              " skins=" + summary.skinsUpserted +
+              " failedCases=" + failures + sampleText;
+          } else {
+            casesStatus.className = "mono ok";
+            casesStatus.textContent =
+              "Import complete: pages=" + summary.pagesScanned +
+              " cases=" + summary.casesParsed +
+              " skins=" + summary.skinsUpserted;
+          }
           await loadCatalog();
+          if (!casesState.catalog.length) {
+            casesStatus.className = "mono err";
+            casesStatus.textContent = "Import finished but catalog is still empty. Try pages=1 first, then Search skins.";
+          }
         } catch (error) {
           casesStatus.className = "mono err";
-          casesStatus.textContent = error && error.message ? error.message : "Import failed.";
+          if (error && error.name === "AbortError") {
+            casesStatus.textContent = "Import timeout. Try fewer pages (e.g. 1-2) and retry.";
+          } else {
+            casesStatus.textContent = error && error.message ? error.message : "Import failed.";
+          }
+        } finally {
+          casesImportBtn.disabled = false;
         }
       });
       caseSaveBtn.addEventListener("click", async () => {
