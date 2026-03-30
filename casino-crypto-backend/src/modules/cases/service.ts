@@ -62,7 +62,136 @@ export type RainCatalogImportSummary = {
   itemsParsed: number;
   failedCases: number;
   failureSamples: string[];
+  fallbackSeedUsed: boolean;
 };
+
+const FALLBACK_RAIN_SKIN_SEED: Array<{
+  sourceCaseSlug: string;
+  name: string;
+  valueCoins: string;
+  imageUrl: string;
+}> = [
+  {
+    sourceCaseSlug: "island-life",
+    name: "M9 Bayonet | StatTrak Lore",
+    valueCoins: "752.45",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-m9-bayonet-lore-field-tested.png"
+  },
+  {
+    sourceCaseSlug: "island-life",
+    name: "AK-47 | StatTrak Bloodsport",
+    valueCoins: "666.78",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-ak-47-bloodsport-well-worn.png"
+  },
+  {
+    sourceCaseSlug: "island-life",
+    name: "M4A4 | Cyber Security",
+    valueCoins: "433.20",
+    imageUrl: "https://cdn.rain.gg/images/items/m4a4-cyber-security-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "island-life",
+    name: "Paracord Knife | StatTrak Slaughter",
+    valueCoins: "355.61",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-paracord-knife-slaughter-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "island-life",
+    name: "Hand Wraps | Duct Tape",
+    valueCoins: "191.95",
+    imageUrl: "https://cdn.rain.gg/images/items/hand-wraps-duct-tape-minimal-wear.png"
+  },
+  {
+    sourceCaseSlug: "island-life",
+    name: "Desert Eagle | Code Red",
+    valueCoins: "103.95",
+    imageUrl: "https://cdn.rain.gg/images/items/desert-eagle-code-red-minimal-wear.png"
+  },
+  {
+    sourceCaseSlug: "raven",
+    name: "AK-47 | Cartel",
+    valueCoins: "10.70",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-ak-47-cartel-field-tested.png"
+  },
+  {
+    sourceCaseSlug: "otherworldly",
+    name: "Butterfly Knife | Doppler Black Pearl",
+    valueCoins: "2404.89",
+    imageUrl: "https://cdn.rain.gg/images/items/butterfly-knife-doppler-factory-new-black-pearl.png"
+  },
+  {
+    sourceCaseSlug: "container",
+    name: "Karambit | Doppler Phase 4",
+    valueCoins: "46.41",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-karambit-doppler-factory-new-phase-4.png"
+  },
+  {
+    sourceCaseSlug: "knapsack",
+    name: "M4A1-S | Welcome to the Jungle",
+    valueCoins: "50.01",
+    imageUrl: "https://cdn.rain.gg/images/items/souvenir-m4a1-s-welcome-to-the-jungle-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "asylum",
+    name: "AWP | Gungnir",
+    valueCoins: "401.06",
+    imageUrl: "https://cdn.rain.gg/images/items/awp-gungnir-minimal-wear.png"
+  },
+  {
+    sourceCaseSlug: "zipped",
+    name: "AWP | Dragon Lore",
+    valueCoins: "276.59",
+    imageUrl: "https://cdn.rain.gg/images/items/awp-dragon-lore-minimal-wear.png"
+  },
+  {
+    sourceCaseSlug: "iceberg",
+    name: "Karambit | Doppler Sapphire",
+    valueCoins: "41.07",
+    imageUrl: "https://cdn.rain.gg/images/items/karambit-doppler-factory-new-sapphire.png"
+  },
+  {
+    sourceCaseSlug: "reflection",
+    name: "AWP | Medusa",
+    valueCoins: "48.55",
+    imageUrl: "https://cdn.rain.gg/images/items/awp-medusa-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "fountain",
+    name: "M9 Bayonet | Doppler Sapphire",
+    valueCoins: "63.74",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-m9-bayonet-doppler-minimal-wear-sapphire.png"
+  },
+  {
+    sourceCaseSlug: "freezer",
+    name: "AWP | The Prince",
+    valueCoins: "70.58",
+    imageUrl: "https://cdn.rain.gg/images/items/awp-the-prince-minimal-wear.png"
+  },
+  {
+    sourceCaseSlug: "breaker-box",
+    name: "Butterfly Knife | Lore",
+    valueCoins: "39.47",
+    imageUrl: "https://cdn.rain.gg/images/items/butterfly-knife-lore-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "operation-wildfire",
+    name: "Bowie Knife | Case Hardened",
+    valueCoins: "7.37",
+    imageUrl: "https://cdn.rain.gg/images/items/stattrak-bowie-knife-case-hardened-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "falchion",
+    name: "Falchion Knife | Crimson Web",
+    valueCoins: "4.50",
+    imageUrl: "https://cdn.rain.gg/images/items/falchion-knife-crimson-web-factory-new.png"
+  },
+  {
+    sourceCaseSlug: "fracture",
+    name: "Skeleton Knife | Fade",
+    valueCoins: "5.42",
+    imageUrl: "https://cdn.rain.gg/images/items/skeleton-knife-fade-factory-new.png"
+  }
+];
 
 const parseCoinsToAtomic = (value: string): bigint => {
   const normalized = value.replace(/,/g, "").trim();
@@ -320,7 +449,8 @@ export const importRainCatalogPageByAdmin = async (
     skinsUpserted,
     itemsParsed,
     failedCases,
-    failureSamples
+    failureSamples,
+    fallbackSeedUsed: false
   };
 };
 
@@ -337,7 +467,8 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     skinsUpserted: 0,
     itemsParsed: 0,
     failedCases: 0,
-    failureSamples: []
+    failureSamples: [],
+    fallbackSeedUsed: false
   };
   for (let page = 0; page < safePages; page += 1) {
     const pageSummary = await importRainCatalogPageByAdmin(actorUserId, page, caseLimit);
@@ -354,6 +485,46 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
         }
         summary.failureSamples.push(sample);
       }
+    }
+  }
+  const importedAnything = summary.skinsUpserted > 0;
+  if (!importedAnything) {
+    for (const seed of FALLBACK_RAIN_SKIN_SEED) {
+      const normalizedName = seed.name.trim();
+      const sourceSkinKey = normalizeSourceSkinKey(seed.sourceCaseSlug, normalizedName);
+      await prisma.cs2SkinCatalog.upsert({
+        where: {
+          sourceProvider_sourceSkinKey: {
+            sourceProvider: RAIN_PROVIDER,
+            sourceSkinKey
+          }
+        },
+        create: {
+          sourceProvider: RAIN_PROVIDER,
+          sourceCaseSlug: seed.sourceCaseSlug,
+          sourceSkinKey,
+          name: normalizedName,
+          valueAtomic: parseCoinsToAtomic(seed.valueCoins),
+          imageUrl: seed.imageUrl,
+          isActive: true,
+          createdByUserId: actorUserId
+        },
+        update: {
+          sourceCaseSlug: seed.sourceCaseSlug,
+          name: normalizedName,
+          valueAtomic: parseCoinsToAtomic(seed.valueCoins),
+          imageUrl: seed.imageUrl,
+          isActive: true
+        }
+      });
+    }
+    summary.skinsUpserted = FALLBACK_RAIN_SKIN_SEED.length;
+    summary.itemsParsed = FALLBACK_RAIN_SKIN_SEED.length;
+    summary.fallbackSeedUsed = true;
+    if (summary.failureSamples.length < 8) {
+      summary.failureSamples.push(
+        "Rain catalog unavailable right now, fallback CS2 seed imported so admin can continue."
+      );
     }
   }
   return summary;

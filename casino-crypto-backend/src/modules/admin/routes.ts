@@ -512,10 +512,16 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
           const summary = await res.json();
           const failures = Number(summary.failedCases || 0);
+          const usedFallbackSeed = Boolean(summary.fallbackSeedUsed);
           const sampleText = Array.isArray(summary.failureSamples) && summary.failureSamples.length
             ? " | sample: " + summary.failureSamples.slice(0, 2).join(" ; ")
             : "";
-          if (failures > 0) {
+          if (usedFallbackSeed) {
+            casesStatus.className = "mono ok";
+            casesStatus.textContent =
+              "Import completed using fallback seed: skins=" + summary.skinsUpserted +
+              " (Rain is rate-limited now). You can continue creating cases." + sampleText;
+          } else if (failures > 0) {
             casesStatus.className = "mono err";
             casesStatus.textContent =
               "Imported with warnings: pages=" + summary.pagesScanned +
