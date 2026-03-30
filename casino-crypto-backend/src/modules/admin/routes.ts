@@ -172,6 +172,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         <label>Cases:</label>
         <select id="casesSelect" style="min-width:320px"></select>
         <button id="casesRefreshBtn">Refresh</button>
+        <button id="caseEditBtn">Edit selected</button>
+        <span id="caseMode" class="mono muted">Mode: New case</span>
       </div>
       <div class="grid-2" style="margin-top:10px;">
         <div>
@@ -188,9 +190,11 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             <label style="display:flex;align-items:center;gap:6px;"><input id="caseIsActive" type="checkbox" checked />Active</label>
             <button id="caseNewBtn">New</button>
             <button id="caseSaveBtn">Save case</button>
+            <button id="caseSuggestPriceBtn" type="button">Suggest 97% RTP price</button>
           </div>
           <textarea id="caseDescription" rows="3" placeholder="Description..." style="width:100%;"></textarea>
           <div id="caseVolatility" class="mono" style="margin-top:8px;">Volatility: -</div>
+          <div id="caseRtpHint" class="mono muted" style="margin-top:6px;">RTP(97%) suggestion: -</div>
         </div>
         <div>
           <h3 style="margin:0 0 8px;">Simulation</h3>
@@ -297,10 +301,15 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const caseItemsTbody = document.querySelector("#caseItemsTable tbody");
       const catalogSkinsTbody = document.querySelector("#catalogSkinsTable tbody");
       const casesRefreshBtn = document.getElementById("casesRefreshBtn");
+      const caseEditBtn = document.getElementById("caseEditBtn");
+      const caseMode = document.getElementById("caseMode");
       const casesSimRounds = document.getElementById("casesSimRounds");
       const casesSimBtn = document.getElementById("casesSimBtn");
       const casesSimStatus = document.getElementById("casesSimStatus");
+      const caseSuggestPriceBtn = document.getElementById("caseSuggestPriceBtn");
+      const caseRtpHint = document.getElementById("caseRtpHint");
       const IMPORT_TIMEOUT_MS = 120000;
+      const TARGET_CASE_RTP = 0.97;
 
       const coinsToAtomicString = (coinsValue) => {
         const value = Number(coinsValue);
@@ -310,9 +319,14 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         return String(Math.round(value * 1e8));
       };
 
+      const setEditorModeLabel = (text) => {
+        caseMode.textContent = text;
+      };
+
       const deriveVolatilityFromDraft = () => {
         if (!casesState.draft.items.length) {
           caseVolatility.textContent = "Volatility: -";
+          caseRtpHint.textContent = "RTP(97%) suggestion: -";
           return;
         }
         const items = casesState.draft.items.map((item) => ({
@@ -322,6 +336,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         const expected = items.reduce((acc, item) => acc + item.p * item.v, 0);
         if (!Number.isFinite(expected) || expected <= 0) {
           caseVolatility.textContent = "Volatility: -";
+          caseRtpHint.textContent = "RTP(97%) suggestion: -";
           return;
         }
         const variance = items.reduce((acc, item) => {
@@ -332,6 +347,10 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         const index = Math.max(0, Math.min(100, Math.round(cv * 28)));
         const tier = index < 25 ? "L" : index < 50 ? "M" : index < 75 ? "H" : "I";
         caseVolatility.textContent = "Volatility: " + index + " (" + tier + ")";
+        const suggestedPrice = expected / TARGET_CASE_RTP;
+        caseRtpHint.textContent =
+          "RTP(97%) suggestion: " + suggestedPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+          " COINS (EV=" + expected.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ")";
       };
 
       const renderCasesSelect = () => {
@@ -426,6 +445,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           casesState.draft = newCasesDraft();
           bindDraftFields();
           renderCaseItems();
+          caseSaveBtn.textContent = "Create case";
+          setEditorModeLabel("Mode: New case");
           deriveVolatilityFromDraft();
           return;
         }
@@ -451,6 +472,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         };
         bindDraftFields();
         renderCaseItems();
+        caseSaveBtn.textContent = "Save changes";
+        setEditorModeLabel("Mode: Editing " + (row.title || row.slug || row.id));
         deriveVolatilityFromDraft();
       };
 
@@ -463,7 +486,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       const loadCatalog = async () => {
         const params = new URLSearchParams();
-        params.set("limit", "2000");
+        params.set("limit", "5000");
         const q = casesSkinSearch.value.trim();
         if (q) params.set("q", q);
         const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
@@ -474,14 +497,36 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       const loadCatalogUnfiltered = async () => {
         const params = new URLSearchParams();
-        params.set("limit", "2000");
+        params.set("limit", "5000");
         const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
         if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
         casesState.catalog = await res.json();
         renderCatalogSkins();
       };
 
-      casesSelect.addEventListener("change", () => pickCaseForEdit(casesSelect.value));
+      casesSelect.addEventListener("change", () => {
+        casesState.selectedCaseId = casesSelect.value || null;
+        if (!casesState.selectedCaseId) {
+          pickCaseForEdit("");
+          return;
+        }
+        const row = casesState.list.find((c) => c.id === casesState.selectedCaseId);
+        setEditorModeLabel(
+          row
+            ? "Mode: Selected " + row.title + " (click Edit selected)"
+            : "Mode: Select a case and click Edit selected"
+        );
+      });
+      caseEditBtn.addEventListener("click", () => {
+        if (!casesSelect.value) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Select a case first.";
+          return;
+        }
+        pickCaseForEdit(casesSelect.value);
+        casesStatus.className = "mono ok";
+        casesStatus.textContent = "Loaded case in edit mode.";
+      });
       casesRefreshBtn.addEventListener("click", async () => {
         try {
           await loadCases();
@@ -493,6 +538,35 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
       });
       caseNewBtn.addEventListener("click", () => pickCaseForEdit(""));
+      caseSuggestPriceBtn.addEventListener("click", () => {
+        if (!casesState.draft.items.length) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Add items first to calculate suggested price.";
+          return;
+        }
+        const expected = casesState.draft.items.reduce((acc, item) => {
+          const p = Number(item.dropRate) / 100;
+          const v = atomicToCoins(item.valueAtomic);
+          if (!Number.isFinite(p) || !Number.isFinite(v)) {
+            return acc;
+          }
+          return acc + p * v;
+        }, 0);
+        if (!Number.isFinite(expected) || expected <= 0) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Drop rates are invalid. Ensure they sum to 100.";
+          return;
+        }
+        const suggested = expected / TARGET_CASE_RTP;
+        casePriceCoins.value = String(Math.max(0.01, Math.round(suggested * 100) / 100));
+        pullDraftFromFields();
+        deriveVolatilityFromDraft();
+        casesStatus.className = "mono ok";
+        casesStatus.textContent =
+          "Suggested price applied for 97% RTP: " +
+          suggested.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+          " COINS.";
+      });
       casesSearchSkinsBtn.addEventListener("click", async () => {
         try {
           await loadCatalog();
@@ -521,10 +595,14 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
           const summary = await res.json();
           const total = Number(summary.totalCatalogSkins || 0);
+          const lowestName = summary.lowestSkinName || "";
+          const lowestAtomic = summary.lowestSkinValueAtomic || "0";
+          const lowestCoins = atomicToCoins(lowestAtomic);
           casesStatus.className = total > 0 ? "mono ok" : "mono err";
           casesStatus.textContent =
             total > 0
-              ? "Catalog ready: " + total + " skins preloaded (persistent in DB)."
+              ? "Catalog ready: " + total + " skins preloaded (persistent in DB). Lowest: " +
+                (lowestName || "-") + " @ " + lowestCoins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " COINS."
               : "Preload finished but catalog is empty.";
           await loadCatalogUnfiltered();
           if (!casesState.catalog.length) {

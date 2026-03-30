@@ -65,6 +65,8 @@ export type RainCatalogImportSummary = {
   failureSamples: string[];
   fallbackSeedUsed: boolean;
   totalCatalogSkins: number;
+  lowestSkinName: string | null;
+  lowestSkinValueAtomic: string | null;
 };
 
 const FALLBACK_RAIN_SKIN_SEED = RAIN_SNAPSHOT_SEED;
@@ -365,7 +367,9 @@ export const importRainCatalogPageByAdmin = async (
     failedCases,
     failureSamples,
     fallbackSeedUsed: false,
-    totalCatalogSkins: 0
+    totalCatalogSkins: 0,
+    lowestSkinName: null,
+    lowestSkinValueAtomic: null
   };
 };
 
@@ -385,26 +389,39 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
     failedCases: 0,
     failureSamples: [],
     fallbackSeedUsed: true,
-    totalCatalogSkins: 0
+    totalCatalogSkins: 0,
+    lowestSkinName: null,
+    lowestSkinValueAtomic: null
   };
   const beforeCount = await prisma.cs2SkinCatalog.count();
-  const inserted = await importFallbackRainSkinSeed(actorUserId);
-  summary.skinsUpserted = inserted;
-  summary.itemsParsed = inserted;
+  if (beforeCount === 0) {
+    const inserted = await importFallbackRainSkinSeed(actorUserId);
+    summary.skinsUpserted = inserted;
+    summary.itemsParsed = inserted;
+  }
   summary.totalCatalogSkins = await prisma.cs2SkinCatalog.count();
-  if (summary.totalCatalogSkins > 0) {
-    if (summary.totalCatalogSkins === beforeCount) {
-      summary.failureSamples.push(`Catalog already preloaded (${summary.totalCatalogSkins} skins).`);
-    } else {
-      summary.failureSamples.push(`Catalog preloaded successfully (${summary.totalCatalogSkins} skins).`);
-    }
-  } else {
+  if (summary.totalCatalogSkins <= 0) {
     summary.failedCases = Math.max(1, safePages * safeCaseLimit);
     summary.failureSamples.push("Catalog preload failed: no skins were persisted.");
+  } else if (beforeCount > 0) {
+    summary.failureSamples.push(
+      `Catalog already preloaded (${summary.totalCatalogSkins} skins). Existing catalog preserved.`
+    );
+  } else {
+    summary.failureSamples.push(`Catalog preloaded successfully (${summary.totalCatalogSkins} skins).`);
   }
   summary.failureSamples.push(
     `Live Rain sync disabled for stability. Request params ignored: pages=${safePages}, caseLimit=${safeCaseLimit}.`
   );
+  const lowestSkin = await prisma.cs2SkinCatalog.findFirst({
+    orderBy: [{ valueAtomic: "asc" }, { name: "asc" }],
+    select: {
+      name: true,
+      valueAtomic: true
+    }
+  });
+  summary.lowestSkinName = lowestSkin?.name ?? null;
+  summary.lowestSkinValueAtomic = lowestSkin ? lowestSkin.valueAtomic.toString() : null;
   return summary;
 };
 
