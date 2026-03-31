@@ -19,6 +19,30 @@ const BATTLE_MAX_BORROW_PERCENT = 100;
 const BATTLE_MAX_CASES = 50;
 const BATTLE_AFFILIATE_SOURCE = "BATTLES";
 
+const isMissingBattlesSchemaError = (error: unknown): boolean => {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+  if (error.code !== "P2021" && error.code !== "P2022") {
+    return false;
+  }
+  const target = String((error.meta as { table?: unknown; column?: unknown; target?: unknown } | undefined)?.target ?? "");
+  const table = String((error.meta as { table?: unknown } | undefined)?.table ?? "");
+  const column = String((error.meta as { column?: unknown } | undefined)?.column ?? "");
+  const payload = `${target} ${table} ${column}`.toLowerCase();
+  if (!payload) {
+    return true;
+  }
+  return payload.includes("battle");
+};
+
+const battlesNotReadyError = () =>
+  new AppError(
+    "Battles mode is initializing. Please run migrations/deploy and try again in a moment.",
+    503,
+    "BATTLES_NOT_READY"
+  );
+
 type TemplateDefinition = {
   seats: number;
   teams: number;
@@ -668,8 +692,9 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
 };
 
 export const createBattle = async (input: BattleCreateInput): Promise<BattleState> => {
-  const templateDef = battleTemplateSeats(input.template);
-  validateModes(input.template, input);
+  try {
+    const templateDef = battleTemplateSeats(input.template);
+    validateModes(input.template, input);
 
   if (!Array.isArray(input.cases) || input.cases.length < 1 || input.cases.length > BATTLE_MAX_CASES) {
     throw new AppError(`Battle must include between 1 and ${BATTLE_MAX_CASES} cases`, 400, "BATTLE_CASES_INVALID");
@@ -804,7 +829,13 @@ export const createBattle = async (input: BattleCreateInput): Promise<BattleStat
     `battle-aff:${battleId}:${input.userId}:create`
   );
 
-  return getBattleById(created, input.userId);
+    return getBattleById(created, input.userId);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
+  }
 };
 
 export const joinBattle = async (input: {
@@ -813,11 +844,12 @@ export const joinBattle = async (input: {
   seatIndex?: number;
   borrowPercent?: number;
 }): Promise<BattleState> => {
-  const battle = await getBattleForAction(input.battleId);
-  ensureBattleJoinable(battle);
-  if (battle.slots.some((slot) => slot.userId === input.userId)) {
-    throw new AppError("You are already in this battle", 409, "BATTLE_ALREADY_JOINED");
-  }
+  try {
+    const battle = await getBattleForAction(input.battleId);
+    ensureBattleJoinable(battle);
+    if (battle.slots.some((slot) => slot.userId === input.userId)) {
+      throw new AppError("You are already in this battle", 409, "BATTLE_ALREADY_JOINED");
+    }
   const seatIndex = getOpenSlotBySeat(
     battle.slots.map((slot) => ({ seatIndex: slot.seatIndex, state: slot.state })),
     input.seatIndex
@@ -884,8 +916,14 @@ export const joinBattle = async (input: {
     `battle-aff:${battle.id}:${input.userId}:join:${seatIndex}`
   );
 
-  await maybeSettleBattle(battle.id);
-  return getBattleById(battle.id, input.userId);
+    await maybeSettleBattle(battle.id);
+    return getBattleById(battle.id, input.userId);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
+  }
 };
 
 const fillBotIntoSeat = async (battle: Awaited<ReturnType<typeof getBattleForAction>>, seatIndex: number) => {
@@ -918,28 +956,42 @@ export const callBotForSeat = async (input: {
   battleId: string;
   seatIndex: number;
 }): Promise<BattleState> => {
-  const battle = await getBattleForAction(input.battleId);
-  ensureBattleJoinable(battle);
-  if (!battle.slots.some((slot) => slot.userId === input.userId)) {
-    throw new AppError("Only participants can call bots", 403, "BATTLE_CALL_BOT_FORBIDDEN");
+  try {
+    const battle = await getBattleForAction(input.battleId);
+    ensureBattleJoinable(battle);
+    if (!battle.slots.some((slot) => slot.userId === input.userId)) {
+      throw new AppError("Only participants can call bots", 403, "BATTLE_CALL_BOT_FORBIDDEN");
+    }
+    await fillBotIntoSeat(battle, input.seatIndex);
+    await maybeSettleBattle(battle.id);
+    return getBattleById(battle.id, input.userId);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
   }
-  await fillBotIntoSeat(battle, input.seatIndex);
-  await maybeSettleBattle(battle.id);
-  return getBattleById(battle.id, input.userId);
 };
 
 export const fillBots = async (input: { userId: string; battleId: string }): Promise<BattleState> => {
-  const battle = await getBattleForAction(input.battleId);
-  ensureBattleJoinable(battle);
-  if (!battle.slots.some((slot) => slot.userId === input.userId)) {
-    throw new AppError("Only participants can fill bots", 403, "BATTLE_FILL_BOTS_FORBIDDEN");
+  try {
+    const battle = await getBattleForAction(input.battleId);
+    ensureBattleJoinable(battle);
+    if (!battle.slots.some((slot) => slot.userId === input.userId)) {
+      throw new AppError("Only participants can fill bots", 403, "BATTLE_FILL_BOTS_FORBIDDEN");
+    }
+    const openSeats = battle.slots.filter((slot) => slot.state === BattleSlotState.OPEN).map((slot) => slot.seatIndex);
+    for (const seatIndex of openSeats) {
+      await fillBotIntoSeat(battle, seatIndex);
+    }
+    await maybeSettleBattle(battle.id);
+    return getBattleById(battle.id, input.userId);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
   }
-  const openSeats = battle.slots.filter((slot) => slot.state === BattleSlotState.OPEN).map((slot) => slot.seatIndex);
-  for (const seatIndex of openSeats) {
-    await fillBotIntoSeat(battle, seatIndex);
-  }
-  await maybeSettleBattle(battle.id);
-  return getBattleById(battle.id, input.userId);
 };
 
 export const getBattleById = async (
@@ -947,52 +999,59 @@ export const getBattleById = async (
   viewerUserId?: string,
   isAdmin = false
 ): Promise<BattleState> => {
-  const battle = await prisma.battle.findUnique({
-    where: { id: battleId },
-    include: {
-      cases: {
-        include: {
-          case: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              logoUrl: true
+  try {
+    const battle = await prisma.battle.findUnique({
+      where: { id: battleId },
+      include: {
+        cases: {
+          include: {
+            case: {
+              select: {
+                id: true,
+                slug: true,
+                title: true,
+                logoUrl: true
+              }
             }
-          }
+          },
+          orderBy: [{ orderIndex: "asc" }]
         },
-        orderBy: [{ orderIndex: "asc" }]
-      },
-      slots: {
-        orderBy: [{ seatIndex: "asc" }]
-      },
-      itemDrops: {
-        include: {
-          caseItem: {
-            select: {
-              id: true,
-              name: true,
-              imageUrl: true,
-              valueAtomic: true
+        slots: {
+          orderBy: [{ seatIndex: "asc" }]
+        },
+        itemDrops: {
+          include: {
+            caseItem: {
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                valueAtomic: true
+              }
             }
-          }
-        },
-        orderBy: [{ roundIndex: "asc" }, { orderIndex: "asc" }]
+          },
+          orderBy: [{ roundIndex: "asc" }, { orderIndex: "asc" }]
+        }
       }
-    }
-  });
-  if (!battle) {
-    throw new AppError("Battle not found", 404, "BATTLE_NOT_FOUND");
-  }
-  if (battle.modePrivate && !isAdmin) {
-    const allowed =
-      (viewerUserId && battle.createdByUserId === viewerUserId) ||
-      battle.slots.some((slot) => slot.userId && viewerUserId && slot.userId === viewerUserId);
-    if (!allowed) {
+    });
+    if (!battle) {
       throw new AppError("Battle not found", 404, "BATTLE_NOT_FOUND");
     }
+    if (battle.modePrivate && !isAdmin) {
+      const allowed =
+        (viewerUserId && battle.createdByUserId === viewerUserId) ||
+        battle.slots.some((slot) => slot.userId && viewerUserId && slot.userId === viewerUserId);
+      if (!allowed) {
+        throw new AppError("Battle not found", 404, "BATTLE_NOT_FOUND");
+      }
+    }
+    return toBattleState(battle);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
   }
-  return toBattleState(battle);
 };
 
 export type BattleListInput = {
@@ -1003,51 +1062,58 @@ export type BattleListInput = {
 };
 
 export const listBattles = async (input: BattleListInput): Promise<BattleState[]> => {
-  const limit = Math.max(1, Math.min(100, Math.trunc(input.limit ?? 30)));
-  const rows = await prisma.battle.findMany({
-    where: {
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.includePrivate
-        ? {}
-        : {
-            OR: [{ modePrivate: false }, ...(input.userId ? [{ createdByUserId: input.userId }] : [])]
-          })
-    },
-    include: {
-      cases: {
-        include: {
-          case: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              logoUrl: true
-            }
-          }
-        },
-        orderBy: [{ orderIndex: "asc" }]
+  try {
+    const limit = Math.max(1, Math.min(100, Math.trunc(input.limit ?? 30)));
+    const rows = await prisma.battle.findMany({
+      where: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.includePrivate
+          ? {}
+          : {
+              OR: [{ modePrivate: false }, ...(input.userId ? [{ createdByUserId: input.userId }] : [])]
+            })
       },
-      slots: {
-        orderBy: [{ seatIndex: "asc" }]
-      },
-      itemDrops: {
-        include: {
-          caseItem: {
-            select: {
-              id: true,
-              name: true,
-              imageUrl: true,
-              valueAtomic: true
+      include: {
+        cases: {
+          include: {
+            case: {
+              select: {
+                id: true,
+                slug: true,
+                title: true,
+                logoUrl: true
+              }
             }
-          }
+          },
+          orderBy: [{ orderIndex: "asc" }]
         },
-        orderBy: [{ roundIndex: "asc" }, { orderIndex: "asc" }]
-      }
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: limit
-  });
-  return rows.map(toBattleState);
+        slots: {
+          orderBy: [{ seatIndex: "asc" }]
+        },
+        itemDrops: {
+          include: {
+            caseItem: {
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                valueAtomic: true
+              }
+            }
+          },
+          orderBy: [{ roundIndex: "asc" }, { orderIndex: "asc" }]
+        }
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: limit
+    });
+    return rows.map(toBattleState);
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      return [];
+    }
+    throw error;
+  }
 };
 
 export const callBotIntoBattle = callBotForSeat;

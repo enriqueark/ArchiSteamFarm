@@ -60,6 +60,52 @@ type CreateDraft = {
   caseIds: string[];
 };
 
+type LobbyBattle = {
+  id: string;
+  status: BattleState["status"];
+  template: BattleState["template"];
+  modeCrazy: boolean;
+  modeGroup: boolean;
+  modeJackpot: boolean;
+  modeTerminal: boolean;
+  modePrivate: boolean;
+  modeBorrow: boolean;
+  totalCostAtomic: string;
+  totalPayoutAtomic: string;
+  winnerTeam: number | null;
+  winnerUserId: string | null;
+  jackpotRoll: number | null;
+  jackpotWinnerSlotId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  startedAt: string | null;
+  settledAt: string | null;
+  cases: Array<{
+    id: string;
+    orderIndex: number;
+    caseId: string;
+    caseTitle: string;
+    caseSlug: string;
+    casePriceAtomic: string;
+  }>;
+  slots: Array<{
+    id: string;
+    seatIndex: number;
+    teamIndex: number;
+    state: "OPEN" | "JOINED" | "BOT_FILLED";
+    userId: string | null;
+    displayName: string;
+    isBot: boolean;
+    borrowPercent: number;
+    paidAmountAtomic: string;
+    payoutAtomic: string;
+    winWeightAtomic: string;
+    profitAtomic: string;
+  }>;
+};
+
+type LobbyViewMode = "LOBBY" | "CREATOR";
+
 const initialDraft: CreateDraft = {
   template: "ONE_VS_ONE",
   modeCrazy: false,
@@ -81,6 +127,7 @@ export default function BattlesPage() {
   const [selectedBattleId, setSelectedBattleId] = useState<string | null>(null);
   const [selectedBattle, setSelectedBattle] = useState<BattleState | null>(null);
   const [draft, setDraft] = useState<CreateDraft>(initialDraft);
+  const [viewMode, setViewMode] = useState<LobbyViewMode>("LOBBY");
   const [joinBorrowPercent, setJoinBorrowPercent] = useState(100);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -154,19 +201,25 @@ export default function BattlesPage() {
     };
   }, [selectedBattleId, showError]);
 
-  const toggleCaseInDraft = (caseId: string) => {
+  const addCaseToDraft = (caseId: string) => {
     setDraft((prev) => {
       const next = [...prev.caseIds];
-      const idx = next.indexOf(caseId);
-      if (idx >= 0) {
-        next.splice(idx, 1);
-      } else {
-        if (next.length >= 50) {
-          showError("Maximum 50 cases per battle");
-          return prev;
-        }
-        next.push(caseId);
+      if (next.length >= 50) {
+        showError("Maximum 50 cases per battle");
+        return prev;
       }
+      next.push(caseId);
+      return { ...prev, caseIds: next };
+    });
+  };
+
+  const removeDraftCaseAt = (index: number) => {
+    setDraft((prev) => {
+      if (index < 0 || index >= prev.caseIds.length) {
+        return prev;
+      }
+      const next = [...prev.caseIds];
+      next.splice(index, 1);
       return { ...prev, caseIds: next };
     });
   };
@@ -205,6 +258,7 @@ export default function BattlesPage() {
       showSuccess("Battle created");
       await loadBattles();
       setSelectedBattleId(created.id);
+      setViewMode("LOBBY");
       setDraft(initialDraft);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Failed to create battle");
@@ -285,113 +339,21 @@ export default function BattlesPage() {
     <div className="space-y-4">
       <h1 className="text-3xl font-bold text-white">Battles</h1>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card title="Create battle">
-          <div className="space-y-3 text-sm">
-            <div>
-              <label className="mb-1 block text-xs text-slate-300">Template</label>
-              <select
-                value={draft.template}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    template: event.target.value as BattleTemplate
-                  }))
-                }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-2 text-white"
-              >
-                {TEMPLATES.map((template) => (
-                  <option key={template.value} value={template.value}>
-                    {template.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {[
-                ["modeCrazy", "Crazy"],
-                ["modeGroup", "Group"],
-                ["modeJackpot", "Jackpot"],
-                ["modeTerminal", "Terminal"],
-                ["modePrivate", "Private"],
-                ["modeBorrow", "Borrow"]
-              ].map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(draft[key as keyof CreateDraft])}
-                    onChange={(event) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        [key]: event.target.checked
-                      }))
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-
-            {draft.modeBorrow ? (
-              <div>
-                <label className="mb-1 block text-xs text-slate-300">Creator borrow % (20-100)</label>
-                <input
-                  type="number"
-                  min={20}
-                  max={100}
-                  value={draft.borrowPercent}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      borrowPercent: Math.max(20, Math.min(100, Math.trunc(Number(event.target.value) || 100)))
-                    }))
-                  }
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-2 text-white"
-                />
-              </div>
-            ) : null}
-
-            <p className="text-xs text-slate-400">
-              Selected: {draft.caseIds.length}/50 • Cost per player: {fmtCoins(battleCaseCostAtomic)} COINS
-            </p>
-
-            <div className="max-h-64 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2">
-              {cases.map((c) => {
-                const selected = draft.caseIds.includes(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => toggleCaseInDraft(c.id)}
-                    className={`w-full rounded border px-2 py-1 text-left text-xs ${
-                      selected
-                        ? "border-indigo-400 bg-indigo-500/20 text-indigo-100"
-                        : "border-slate-700 bg-slate-950 text-slate-200 hover:border-slate-500"
-                    }`}
-                  >
-                    {c.title} • {fmtCoins(c.priceAtomic)}
-                  </button>
-                );
-              })}
-            </div>
-
+      {viewMode === "LOBBY" ? (
+        <Card title="Battles lobby">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm text-slate-300">Only active/pending battles are shown here.</p>
             <Button
-              onClick={() => {
-                void handleCreate();
-              }}
-              disabled={creating}
-              className="w-full bg-lime-500 text-black hover:bg-lime-400"
+              onClick={() => setViewMode("CREATOR")}
+              className="bg-lime-500 text-black hover:bg-lime-400"
             >
-              {creating ? "Creating..." : "Create battle"}
+              Create new battle
             </Button>
           </div>
-        </Card>
-
-        <div className="lg:col-span-2">
-          <Card title="Battles lobby">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {battles.map((battle) => (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {battles
+              .filter((battle) => battle.status === "OPEN" || battle.status === "RUNNING")
+              .map((battle) => (
                 <button
                   key={battle.id}
                   type="button"
@@ -414,11 +376,145 @@ export default function BattlesPage() {
                   </div>
                 </button>
               ))}
-              {!battles.length ? <p className="text-sm text-slate-400">No active battles yet.</p> : null}
+            {!battles.some((battle) => battle.status === "OPEN" || battle.status === "RUNNING") ? (
+              <p className="text-sm text-slate-400">No active battles yet.</p>
+            ) : null}
+          </div>
+        </Card>
+      ) : (
+        <Card title="Create battle">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm text-slate-300">Configure your battle and select up to 50 cases.</p>
+            <Button
+              variant="secondary"
+              onClick={() => setViewMode("LOBBY")}
+              className="px-3 py-1 text-xs"
+            >
+              Back to lobby
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="mb-1 block text-xs text-slate-300">Template</label>
+                <select
+                  value={draft.template}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      template: event.target.value as BattleTemplate
+                    }))
+                  }
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-2 text-white"
+                >
+                  {TEMPLATES.map((template) => (
+                    <option key={template.value} value={template.value}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  ["modeCrazy", "Crazy"],
+                  ["modeGroup", "Group"],
+                  ["modeJackpot", "Jackpot"],
+                  ["modeTerminal", "Terminal"],
+                  ["modePrivate", "Private"],
+                  ["modeBorrow", "Borrow"]
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft[key as keyof CreateDraft])}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          [key]: event.target.checked
+                        }))
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+
+              {draft.modeBorrow ? (
+                <div>
+                  <label className="mb-1 block text-xs text-slate-300">Creator borrow % (20-100)</label>
+                  <input
+                    type="number"
+                    min={20}
+                    max={100}
+                    value={draft.borrowPercent}
+                    onChange={(event) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        borrowPercent: Math.max(20, Math.min(100, Math.trunc(Number(event.target.value) || 100)))
+                      }))
+                    }
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-2 text-white"
+                  />
+                </div>
+              ) : null}
+
+              <p className="text-xs text-slate-400">
+                Selected: {draft.caseIds.length}/50 • Cost per player: {fmtCoins(battleCaseCostAtomic)} COINS
+              </p>
+
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2">
+                {draft.caseIds.map((caseId, idx) => {
+                  const c = cases.find((item) => item.id === caseId);
+                  if (!c) return null;
+                  return (
+                    <div key={`${caseId}-${idx}`} className="flex items-center justify-between rounded border border-slate-800 bg-slate-950 px-2 py-1 text-xs">
+                      <span className="text-slate-200">
+                        #{idx + 1} {c.title} • {fmtCoins(c.priceAtomic)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeDraftCaseAt(idx)}
+                        className="text-rose-300 hover:text-rose-200"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+                {!draft.caseIds.length ? <p className="text-xs text-slate-400">No cases selected yet.</p> : null}
+              </div>
+
+              <Button
+                onClick={() => {
+                  void handleCreate();
+                }}
+                disabled={creating}
+                className="w-full bg-lime-500 text-black hover:bg-lime-400"
+              >
+                {creating ? "Creating..." : "Create battle"}
+              </Button>
             </div>
-          </Card>
-        </div>
-      </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-white">Cases catalog</h3>
+              <div className="max-h-[440px] space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2">
+                {cases.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => addCaseToDraft(c.id)}
+                    className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-left text-xs text-slate-200 hover:border-slate-500"
+                  >
+                    + {c.title} • {fmtCoins(c.priceAtomic)}
+                  </button>
+                ))}
+                {!cases.length ? <p className="text-xs text-slate-400">No cases available.</p> : null}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {selectedBattle ? (
         <Card title={`Battle ${selectedBattle.id.slice(0, 10)}...`}>

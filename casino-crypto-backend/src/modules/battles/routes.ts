@@ -122,6 +122,7 @@ export const battlesRoutes: FastifyPluginAsync = async (fastify) => {
     const rows = await listBattles({
       userId: request.user.sub,
       includePrivate: query.includePrivate || request.user.role === "ADMIN",
+      status: query.status,
       limit: query.limit
     });
     return reply.send(rows.map(toBattleResponse));
@@ -141,6 +142,10 @@ export const battlesRoutes: FastifyPluginAsync = async (fastify) => {
       if ((body.currency as Currency) !== PLATFORM_INTERNAL_CURRENCY) {
         throw new AppError(`Only ${PLATFORM_INTERNAL_CURRENCY} is supported`, 400, "UNSUPPORTED_CURRENCY");
       }
+      const caseIds = body.caseIds.filter((value) => value && value.trim().length > 0);
+      if (!caseIds.length) {
+        throw new AppError("Select at least one case", 400, "BATTLE_CASES_REQUIRED");
+      }
       const createInput: BattleCreateInput = {
         userId: request.user.sub,
         template: body.template,
@@ -150,7 +155,7 @@ export const battlesRoutes: FastifyPluginAsync = async (fastify) => {
         modeTerminal: body.modeTerminal,
         modePrivate: body.modePrivate,
         modeBorrow: body.modeBorrow,
-        cases: body.caseIds,
+        cases: caseIds,
         creatorBorrowPercent: body.borrowPercent
       };
       const row = await createBattle(createInput);
