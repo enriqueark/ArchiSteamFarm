@@ -117,6 +117,29 @@ enum RouletteBetStatus {
   VOID
 }
 
+enum BattleTemplate {
+  ONE_VS_ONE
+  TWO_VS_TWO
+  ONE_VS_ONE_VS_ONE
+  ONE_VS_ONE_VS_ONE_VS_ONE
+  ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE
+  TWO_VS_TWO_VS_TWO
+  THREE_VS_THREE
+}
+
+enum BattleStatus {
+  OPEN
+  RUNNING
+  SETTLED
+  CANCELLED
+}
+
+enum BattleSlotState {
+  OPEN
+  JOINED
+  BOT_FILLED
+}
+
 enum CasinoBetStatus {
   PENDING
   WON
@@ -163,6 +186,9 @@ model User {
   createdCases Case[] @relation("CasesCreatedByUser")
   createdSkinCatalogEntries Cs2SkinCatalog[] @relation("Cs2SkinCatalogCreatedByUser")
   caseOpenings CaseOpening[]
+  battleSlots  BattleSlot[]
+  createdBattles Battle[]
+  wonBattles Battle[] @relation("BattleWinnerUser")
 
   @@map("users")
 }
@@ -180,6 +206,7 @@ model Case {
   createdByUser   User?       @relation("CasesCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
   items           CaseItem[]
   openings        CaseOpening[]
+  battleCases     BattleCase[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -200,6 +227,7 @@ model CaseItem {
   cs2Skin    Cs2SkinCatalog? @relation(fields: [cs2SkinId], references: [id], onDelete: SetNull)
   case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   openings   CaseOpening[]
+  battleItemDrops BattleItemDrop[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -255,6 +283,105 @@ model CaseOpening {
   @@index([userId, createdAt(sort: Desc)])
   @@index([caseId, createdAt(sort: Desc)])
   @@map("case_openings")
+}
+
+model Battle {
+  id               String        @id @default(cuid())
+  status           BattleStatus  @default(OPEN)
+  template         BattleTemplate
+  modeCrazy        Boolean       @default(false)
+  modeGroup        Boolean       @default(false)
+  modeJackpot      Boolean       @default(false)
+  modeTerminal     Boolean       @default(false)
+  modePrivate      Boolean       @default(false)
+  modeBorrow       Boolean       @default(false)
+  maxCases         Int           @default(50)
+  totalCostAtomic  BigInt        @default(0)
+  totalPayoutAtomic BigInt       @default(0)
+  winnerTeam       Int?
+  winnerUserId     String?
+  jackpotWinnerSlotId String?
+  jackpotSeed      String?
+  jackpotRoll      Float?
+  createdByUserId  String
+  createdAt        DateTime      @default(now())
+  startedAt        DateTime?
+  settledAt        DateTime?
+  updatedAt        DateTime      @updatedAt
+  createdByUser    User          @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  winnerUser       User?         @relation("BattleWinnerUser", fields: [winnerUserId], references: [id], onDelete: SetNull)
+  cases            BattleCase[]
+  slots            BattleSlot[]
+  itemDrops        BattleItemDrop[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([modePrivate, status, createdAt(sort: Desc)])
+  @@index([createdByUserId, createdAt(sort: Desc)])
+  @@map("battles")
+}
+
+model BattleCase {
+  id           String   @id @default(cuid())
+  battleId     String
+  caseId       String
+  orderIndex   Int
+  priceAtomic  BigInt
+  createdAt    DateTime @default(now())
+  battle       Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  itemDrops    BattleItemDrop[]
+
+  @@unique([battleId, orderIndex])
+  @@index([battleId])
+  @@map("battle_cases")
+}
+
+model BattleSlot {
+  id               String         @id @default(cuid())
+  battleId          String
+  seatIndex         Int
+  teamIndex         Int
+  state             BattleSlotState @default(OPEN)
+  userId            String?
+  displayName       String
+  isBot             Boolean        @default(false)
+  borrowPercent     Int            @default(100)
+  paidAmountAtomic  BigInt         @default(0)
+  payoutAtomic      BigInt         @default(0)
+  winWeightAtomic   BigInt         @default(0)
+  profitAtomic      BigInt         @default(0)
+  createdAt         DateTime       @default(now())
+  joinedAt          DateTime?
+  updatedAt         DateTime       @updatedAt
+  battle            Battle         @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user              User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  itemDrops         BattleItemDrop[]
+
+  @@unique([battleId, seatIndex])
+  @@index([battleId, teamIndex])
+  @@index([battleId, state])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("battle_slots")
+}
+
+model BattleItemDrop {
+  id               String   @id @default(cuid())
+  battleId          String
+  battleCaseId      String
+  battleSlotId      String
+  roundIndex        Int
+  orderIndex        Int
+  caseItemId        String
+  valueAtomic       BigInt
+  createdAt         DateTime @default(now())
+  battle            Battle    @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  battleCase        BattleCase @relation(fields: [battleCaseId], references: [id], onDelete: Cascade)
+  battleSlot        BattleSlot @relation(fields: [battleSlotId], references: [id], onDelete: Cascade)
+  caseItem          CaseItem   @relation(fields: [caseItemId], references: [id], onDelete: Restrict)
+
+  @@index([battleId, roundIndex, orderIndex])
+  @@index([battleSlotId, createdAt(sort: Desc)])
+  @@map("battle_item_drops")
 }
 
 model AffiliateCode {

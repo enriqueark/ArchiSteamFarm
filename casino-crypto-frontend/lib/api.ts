@@ -526,6 +526,170 @@ export async function getCases(): Promise<CaseListItem[]> {
   return request<CaseListItem[]>("/cases", {}, false);
 }
 
+export type BattleTemplate =
+  | "ONE_VS_ONE"
+  | "TWO_VS_TWO"
+  | "ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "TWO_VS_TWO_VS_TWO"
+  | "THREE_VS_THREE";
+
+export interface BattleCaseEntry {
+  id: string;
+  orderIndex: number;
+  caseId: string;
+  caseTitle: string;
+  caseSlug: string;
+  casePriceAtomic: string;
+}
+
+export interface BattleSlotEntry {
+  id: string;
+  seatIndex: number;
+  teamIndex: number;
+  state: "OPEN" | "JOINED" | "BOT_FILLED";
+  userId: string | null;
+  displayName: string;
+  isBot: boolean;
+  borrowPercent: number;
+  paidAmountAtomic: string;
+  payoutAtomic: string;
+  winWeightAtomic: string;
+  profitAtomic: string;
+}
+
+export interface BattleDropEntry {
+  id: string;
+  roundIndex: number;
+  orderIndex: number;
+  battleCaseId: string;
+  battleSlotId: string;
+  caseItemId: string;
+  caseItemName: string;
+  valueAtomic: string;
+}
+
+export interface BattleState {
+  id: string;
+  status: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  template: BattleTemplate;
+  modeCrazy: boolean;
+  modeGroup: boolean;
+  modeJackpot: boolean;
+  modeTerminal: boolean;
+  modePrivate: boolean;
+  modeBorrow: boolean;
+  totalCostAtomic: string;
+  totalPayoutAtomic: string;
+  winnerTeam: number | null;
+  winnerUserId: string | null;
+  jackpotRoll: number | null;
+  jackpotWinnerSlotId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  startedAt: string | null;
+  settledAt: string | null;
+  cases: BattleCaseEntry[];
+  slots: BattleSlotEntry[];
+  drops: BattleDropEntry[];
+}
+
+export async function listBattles(query?: {
+  includePrivate?: boolean;
+  status?: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  limit?: number;
+}): Promise<BattleState[]> {
+  const params = new URLSearchParams();
+  if (typeof query?.includePrivate === "boolean") params.set("includePrivate", String(query.includePrivate));
+  if (query?.status) params.set("status", query.status);
+  if (typeof query?.limit === "number") params.set("limit", String(query.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<BattleState[]>(`/battles${suffix}`);
+}
+
+export async function getBattle(battleId: string): Promise<BattleState> {
+  return request<BattleState>(`/battles/${battleId}`);
+}
+
+export async function createBattle(input: {
+  template: BattleTemplate;
+  caseIds: string[];
+  modeCrazy?: boolean;
+  modeGroup?: boolean;
+  modeJackpot?: boolean;
+  modeTerminal?: boolean;
+  modePrivate?: boolean;
+  modeBorrow?: boolean;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    "/battles",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function joinBattle(input: {
+  battleId: string;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        borrowPercent: input.borrowPercent ?? 100,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function callBattleBot(input: {
+  battleId: string;
+  seatIndex: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/call-bot`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        seatIndex: input.seatIndex,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function fillBattleBots(input: {
+  battleId: string;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/fill-bots`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
 export async function getCaseDetails(caseId: string): Promise<CaseDetails> {
   return request<CaseDetails>(`/cases/${caseId}`, {}, false);
 }
