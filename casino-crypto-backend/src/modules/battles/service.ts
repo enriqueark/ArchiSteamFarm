@@ -11,7 +11,7 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
 import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "../wallets/bet-reservation.service";
-import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 const BATTLE_BOT_POOL_SIZE = 100;
 const BATTLE_MIN_BORROW_PERCENT = 20;
@@ -174,6 +174,14 @@ type BattleDropView = {
   };
 };
 
+type JackpotChance = {
+  slotId: string;
+  seatIndex: number;
+  displayName: string;
+  chancePercent: number;
+  weightAtomic: bigint;
+};
+
 type BattleState = {
   id: string;
   status: BattleStatus;
@@ -192,6 +200,13 @@ type BattleState = {
   jackpotWinnerSlotId: string | null;
   jackpotSeed: string | null;
   jackpotRoll: number | null;
+  jackpotChances: Array<{
+    slotId: string;
+    seatIndex: number;
+    displayName: string;
+    chancePercent: number;
+    weightAtomic: bigint;
+  }> | null;
   createdByUserId: string;
   createdAt: Date;
   startedAt: Date | null;
@@ -304,6 +319,60 @@ const scaleByBorrow = (baseAtomic: bigint, borrowPercent: number): bigint =>
 
 const jackpotWeightFromValue = (valueAtomic: bigint): bigint => (valueAtomic > 0n ? valueAtomic : 1n);
 
+const buildJackpotChances = (
+  rows: Array<{
+    slotId: string;
+    seatIndex: number;
+    displayName: string;
+    jackpotWeight: bigint;
+  }>
+): JackpotChance[] => {
+  const totalWeight = rows.reduce((acc, row) => acc + row.jackpotWeight, 0n);
+  if (totalWeight <= 0n) {
+    return rows.map((row, idx) => ({
+      slotId: row.slotId,
+      seatIndex: row.seatIndex,
+      displayName: row.displayName,
+      chancePercent: idx === 0 ? 100 : 0,
+      weightAtomic: row.jackpotWeight
+    }));
+  }
+
+  const totalAsNumber = Number(totalWeight);
+  const raw = rows.map((row) => ({
+    slotId: row.slotId,
+    seatIndex: row.seatIndex,
+    displayName: row.displayName,
+    weightAtomic: row.jackpotWeight,
+    chanceRaw: (Number(row.jackpotWeight) / totalAsNumber) * 100
+  }));
+
+  let sum = 0;
+  const rounded = raw.map((row, idx) => {
+    if (idx === raw.length - 1) {
+      const last = Math.max(0, Number((100 - sum).toFixed(2)));
+      return {
+        slotId: row.slotId,
+        seatIndex: row.seatIndex,
+        displayName: row.displayName,
+        chancePercent: last,
+        weightAtomic: row.weightAtomic
+      };
+    }
+    const value = Number(row.chanceRaw.toFixed(2));
+    sum += value;
+    return {
+      slotId: row.slotId,
+      seatIndex: row.seatIndex,
+      displayName: row.displayName,
+      chancePercent: value,
+      weightAtomic: row.weightAtomic
+    };
+  });
+
+  return rounded;
+};
+
 const selectByWeight = <T>(rows: T[], weight: (item: T) => bigint, rollUnit: number): T => {
   const total = rows.reduce((acc, row) => acc + weight(row), 0n);
   if (total <= 0n) {
@@ -395,7 +464,8 @@ const getSlotOutcomeScore = (input: {
   return total > 0n ? 1_000_000_000_000_000n / total : 1_000_000_000_000_000n;
 };
 
-const toBattleState = (battle: {
+const toBattleState = (
+  battle: {
   id: string;
   status: BattleStatus;
   template: BattleTemplate;
@@ -453,7 +523,11 @@ const toBattleState = (battle: {
       valueAtomic: bigint;
     };
   }>;
-}): BattleState => ({
+  },
+  extra?: {
+    jackpotChances?: JackpotChance[];
+  }
+): BattleState => ({
   id: battle.id,
   status: battle.status,
   template: battle.template,
@@ -505,7 +579,8 @@ const toBattleState = (battle: {
     orderIndex: row.orderIndex,
     valueAtomic: row.valueAtomic,
     caseItem: row.caseItem
-  }))
+  })),
+  jackpotChances: extra?.jackpotChances ?? null
 });
 
 const ensureBattleJoinable = (battle: {
@@ -624,21 +699,33 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
     let winningTeam: number | null = null;
     let jackpotWinnerSlotId: string | null = null;
     let jackpotRoll: number | null = null;
+    let jackpotChances: JackpotChance[] | undefined;
 
     if (locked.modeGroup) {
       winnerSlots = slotScores;
     } else if (locked.modeJackpot) {
+      const seatMeta = new Map(locked.slots.map((row) => [row.id, row]));
       const jackpotRows = slotScores.map((slot) => ({
         ...slot,
+        seatIndex: seatMeta.get(slot.slotId)?.seatIndex ?? 0,
+        displayName: seatMeta.get(slot.slotId)?.displayName ?? "Player",
         jackpotWeight: locked.modeCrazy
           ? jackpotWeightFromValue(slot.scoreAtomic)
           : jackpotWeightFromValue(slot.valueAtomic)
       }));
+      jackpotChances = buildJackpotChances(
+        jackpotRows.map((row) => ({
+          slotId: row.slotId,
+          seatIndex: row.seatIndex,
+          displayName: row.displayName,
+          jackpotWeight: row.jackpotWeight
+        }))
+      );
       jackpotRoll = battleSeedRandom(seed, 999);
       const picked = selectByWeight(jackpotRows, (row) => row.jackpotWeight, jackpotRoll);
       jackpotWinnerSlotId = picked.slotId;
       winnerSlots = slotScores.filter((slot) => slot.slotId === picked.slotId);
-      winningTeam = picked.teamIndex;
+      winningTeam = null;
     } else {
       const byTeam = new Map<number, bigint>();
       for (const row of slotScores) {
@@ -658,7 +745,11 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
 
     const totalPotAtomic = locked.totalCostAtomic;
     const shareNumerator = TEAM_SHARE_NUMERATOR[locked.template] ?? 100n;
-    const totalWinnerPoolAtomic = locked.modeGroup ? totalPotAtomic : (totalPotAtomic * shareNumerator) / 100n;
+    const totalWinnerPoolAtomic = locked.modeGroup
+      ? totalPotAtomic
+      : locked.modeJackpot
+        ? totalPotAtomic
+        : (totalPotAtomic * shareNumerator) / 100n;
     const splitCount = BigInt(Math.max(1, winnerSlots.length));
     const perWinnerBaseAtomic = totalWinnerPoolAtomic / splitCount;
 
@@ -730,6 +821,26 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
         totalPayoutAtomic
       }
     });
+
+    if (jackpotChances && jackpotChances.length) {
+      await tx.battleSlot.updateMany({
+        where: {
+          battleId: locked.id
+        },
+        data: {
+          winWeightAtomic: 0n
+        }
+      });
+      for (const chance of jackpotChances) {
+        const scaledChance = BigInt(Math.round(chance.chancePercent * 100));
+        await tx.battleSlot.update({
+          where: { id: chance.slotId },
+          data: {
+            winWeightAtomic: scaledChance
+          }
+        });
+      }
+    }
   });
 };
 
@@ -773,9 +884,6 @@ export const createBattle = async (input: BattleCreateInput): Promise<BattleStat
   const totalCasePrice = selectedCases.reduce((acc, row) => acc + row.priceAtomic, 0n);
   if (totalCasePrice <= 0n) {
     throw new AppError("Total case price must be positive", 400, "BATTLE_TOTAL_PRICE_INVALID");
-  }
-  if (totalCasePrice > MAX_GAME_BET_ATOMIC) {
-    throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
   }
 
   const creatorBorrowPercent = normalizeBorrowPercent(input.creatorBorrowPercent, Boolean(input.modeBorrow));
@@ -939,9 +1047,6 @@ export const joinBattle = async (input: {
     );
     if (payAtomic <= 0n) {
       throw new AppError("Join amount must be positive", 400, "BATTLE_JOIN_AMOUNT_INVALID");
-    }
-    if (payAtomic > MAX_GAME_BET_ATOMIC) {
-      throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
     }
 
     const betReference = `battle:${battle.id}:seat:${seatIndex}`;
@@ -1230,7 +1335,7 @@ export const listBattles = async (input: BattleListInput): Promise<BattleState[]
       orderBy: [{ createdAt: "desc" }],
       take: limit
     });
-    return rows.map(toBattleState);
+    return rows.map((row) => toBattleState(row));
   } catch (error) {
     if (isMissingBattlesSchemaError(error)) {
       await ensureBattlesColumnsExistBestEffort();

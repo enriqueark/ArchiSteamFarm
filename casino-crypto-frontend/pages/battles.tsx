@@ -31,6 +31,9 @@ const fmtCoins = (atomic: string): string =>
     maximumFractionDigits: 2
   });
 
+const fmtPercent = (value: number): string =>
+  `${Number.isFinite(value) ? value.toFixed(2) : "0.00"}%`;
+
 const TEMPLATES: Array<{ value: BattleTemplate; label: string }> = [
   { value: "ONE_VS_ONE", label: "1v1" },
   { value: "TWO_VS_TWO", label: "2v2" },
@@ -629,6 +632,32 @@ export default function BattlesPage() {
                 {selectedBattle.modeJackpot && selectedBattle.jackpotRoll !== null ? (
                   <span> • Jackpot roll: {(selectedBattle.jackpotRoll * 100).toFixed(2)}%</span>
                 ) : null}
+              </div>
+            ) : null}
+
+            {selectedBattle.status === "SETTLED" && selectedBattle.modeJackpot && selectedBattle.jackpotChances?.length ? (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-white">Jackpot chances</h3>
+                <div className="space-y-1 rounded border border-slate-700 bg-slate-900 p-2 text-xs">
+                  {selectedBattle.jackpotChances
+                    .slice()
+                    .sort((a, b) => a.seatIndex - b.seatIndex)
+                    .map((chance) => (
+                      <div
+                        key={chance.slotId}
+                        className={`flex items-center justify-between rounded border px-2 py-1 ${
+                          selectedBattle.jackpotWinnerSlotId === chance.slotId
+                            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-100"
+                            : "border-slate-800 bg-slate-950 text-slate-200"
+                        }`}
+                      >
+                        <span>
+                          Seat {chance.seatIndex + 1} • {chance.displayName}
+                        </span>
+                        <span className="font-semibold">{chance.chancePercent.toFixed(2)}%</span>
+                      </div>
+                    ))}
+                </div>
               </div>
             ) : null}
 

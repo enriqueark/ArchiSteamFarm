@@ -586,6 +586,13 @@ export interface BattleState {
   winnerUserId: string | null;
   jackpotRoll: number | null;
   jackpotWinnerSlotId: string | null;
+  jackpotChances: Array<{
+    slotId: string;
+    seatIndex: number;
+    displayName: string;
+    chancePercent: number;
+    weightAtomic: string;
+  }> | null;
   createdByUserId: string;
   createdAt: string;
   startedAt: string | null;

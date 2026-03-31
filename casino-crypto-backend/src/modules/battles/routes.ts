@@ -78,6 +78,15 @@ const toBattleResponse = (battle: BattleDetails) => ({
   winnerUserId: battle.winnerUserId,
   jackpotRoll: battle.jackpotRoll,
   jackpotWinnerSlotId: battle.jackpotWinnerSlotId,
+  jackpotChances: battle.jackpotChances
+    ? battle.jackpotChances.map((row) => ({
+        slotId: row.slotId,
+        seatIndex: row.seatIndex,
+        displayName: row.displayName,
+        chancePercent: row.chancePercent,
+        weightAtomic: row.weightAtomic.toString()
+      }))
+    : null,
   createdByUserId: battle.createdByUserId,
   createdAt: battle.createdAt,
   startedAt: battle.startedAt,
