@@ -18,7 +18,7 @@ import {
 } from "./service";
 
 const battleIdParamsSchema = z.object({
-  battleId: z.string().cuid()
+  battleId: z.string().trim().min(1)
 });
 
 const listBattlesQuerySchema = z.object({

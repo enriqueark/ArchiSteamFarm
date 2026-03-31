@@ -10,7 +10,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
-import { holdFundsForBet, captureHeldFunds } from "../wallets/bet-reservation.service";
+import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "../wallets/bet-reservation.service";
 import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 const BATTLE_BOT_POOL_SIZE = 100;
@@ -42,6 +42,23 @@ const battlesNotReadyError = () =>
     503,
     "BATTLES_NOT_READY"
   );
+
+const ensureBattlesSchemaReady = async (): Promise<void> => {
+  try {
+    // Validate that core tables and columns required by create/join exist before charging users.
+    await prisma.$queryRaw<Array<{ id: string; modeBorrow: boolean }>>`
+      SELECT "id", "modeBorrow" FROM "battles" LIMIT 1
+    `;
+    await prisma.$queryRaw<Array<{ id: string; borrowPercent: number; paidAmountAtomic: bigint }>>`
+      SELECT "id", "borrowPercent", "paidAmountAtomic" FROM "battle_slots" LIMIT 1
+    `;
+  } catch (error) {
+    if (isMissingBattlesSchemaError(error)) {
+      throw battlesNotReadyError();
+    }
+    throw error;
+  }
+};
 
 type TemplateDefinition = {
   seats: number;
@@ -693,6 +710,8 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
 
 export const createBattle = async (input: BattleCreateInput): Promise<BattleState> => {
   try {
+    await ensureBattlesSchemaReady();
+
     const templateDef = battleTemplateSeats(input.template);
     validateModes(input.template, input);
 
@@ -737,99 +756,130 @@ export const createBattle = async (input: BattleCreateInput): Promise<BattleStat
   const creatorBorrowPercent = normalizeBorrowPercent(input.creatorBorrowPercent, Boolean(input.modeBorrow));
   const creatorPayAtomic = scaleByBorrow(totalCasePrice, creatorBorrowPercent);
 
-  const battleId = randomUUID();
-  const creatorSeat = 0;
-  const creatorBetReference = `battle:${battleId}:seat:${creatorSeat}`;
-  const hold = await holdFundsForBet({
-    actorUserId: input.userId,
-    userId: input.userId,
-    currency: PLATFORM_INTERNAL_CURRENCY,
-    betReference: creatorBetReference,
-    amountAtomic: creatorPayAtomic,
-    idempotencyKey: `battle-create:${battleId}:${input.userId}`,
-    metadata: {
-      game: "BATTLES",
-      operation: "BATTLE_JOIN",
-      battleId,
-      seatIndex: creatorSeat,
-      borrowPercent: creatorBorrowPercent
-    }
-  });
-
-  await captureHeldFunds({
-    actorUserId: input.userId,
-    userId: input.userId,
-    currency: PLATFORM_INTERNAL_CURRENCY,
-    betReference: creatorBetReference,
-    idempotencyKey: `battle-capture:${battleId}:${input.userId}`
-  });
-
-  const created = await prisma.$transaction(async (tx) => {
-    const battle = await tx.battle.create({
-      data: {
-        id: battleId,
-        template: input.template,
-        modeCrazy: Boolean(input.modeCrazy),
-        modeGroup: Boolean(input.modeGroup),
-        modeJackpot: Boolean(input.modeJackpot),
-        modeTerminal: Boolean(input.modeTerminal),
-        modePrivate: Boolean(input.modePrivate),
-        modeBorrow: Boolean(input.modeBorrow),
-        createdByUserId: input.userId,
-        maxCases: BATTLE_MAX_CASES,
-        totalCostAtomic: totalCasePrice * BigInt(templateDef.seats)
+    const createToken = randomUUID();
+    const creatorSeat = 0;
+    const creatorBetReference = `battle:create:${createToken}:seat:${creatorSeat}`;
+    const hold = await holdFundsForBet({
+      actorUserId: input.userId,
+      userId: input.userId,
+      currency: PLATFORM_INTERNAL_CURRENCY,
+      betReference: creatorBetReference,
+      amountAtomic: creatorPayAtomic,
+      idempotencyKey: `battle-create:${createToken}:${input.userId}`,
+      metadata: {
+        game: "BATTLES",
+        operation: "BATTLE_JOIN",
+        seatIndex: creatorSeat,
+        borrowPercent: creatorBorrowPercent
       }
     });
 
-    await tx.battleCase.createMany({
-      data: selectedCases.map((row, idx) => ({
-        battleId: battle.id,
-        caseId: row.id,
-        orderIndex: idx,
-        priceAtomic: row.priceAtomic
-      }))
-    });
+    let created: string | null = null;
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const battle = await tx.battle.create({
+          data: {
+            template: input.template,
+            modeCrazy: Boolean(input.modeCrazy),
+            modeGroup: Boolean(input.modeGroup),
+            modeJackpot: Boolean(input.modeJackpot),
+            modeTerminal: Boolean(input.modeTerminal),
+            modePrivate: Boolean(input.modePrivate),
+            modeBorrow: Boolean(input.modeBorrow),
+            createdByUserId: input.userId,
+            maxCases: BATTLE_MAX_CASES,
+            totalCostAtomic: totalCasePrice * BigInt(templateDef.seats)
+          }
+        });
 
-    const slots = Array.from({ length: templateDef.seats }, (_, seatIndex) => {
-      const teamIndex = computeSeatTeam(input.template, seatIndex);
-      if (seatIndex === creatorSeat) {
-        return {
-          battleId: battle.id,
-          seatIndex,
-          teamIndex,
-          state: BattleSlotState.JOINED,
+        await tx.battleCase.createMany({
+          data: selectedCases.map((row, idx) => ({
+            battleId: battle.id,
+            caseId: row.id,
+            orderIndex: idx,
+            priceAtomic: row.priceAtomic
+          }))
+        });
+
+        const slots = Array.from({ length: templateDef.seats }, (_, seatIndex) => {
+          const teamIndex = computeSeatTeam(input.template, seatIndex);
+          if (seatIndex === creatorSeat) {
+            return {
+              battleId: battle.id,
+              seatIndex,
+              teamIndex,
+              state: BattleSlotState.JOINED,
+              userId: input.userId,
+              displayName: `User #${input.userId.slice(0, 6)}`,
+              isBot: false,
+              borrowPercent: creatorBorrowPercent,
+              paidAmountAtomic: hold.reservation.amountAtomic
+            };
+          }
+          return {
+            battleId: battle.id,
+            seatIndex,
+            teamIndex,
+            state: BattleSlotState.OPEN,
+            userId: null,
+            displayName: "Waiting...",
+            isBot: false,
+            borrowPercent: 100,
+            paidAmountAtomic: 0n
+          };
+        });
+        await tx.battleSlot.createMany({ data: slots });
+        return battle.id;
+      });
+
+      // Read battle state before capture so any read-side schema errors
+      // are handled without charging the user.
+      const createdState = await getBattleById(created, input.userId);
+
+      await captureHeldFunds({
+        actorUserId: input.userId,
+        userId: input.userId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
+        betReference: creatorBetReference,
+        idempotencyKey: `battle-capture:${createToken}:${input.userId}`
+      });
+
+      try {
+        await addUserXpBestEffort(input.userId, hold.reservation.amountAtomic);
+      } catch {
+        // Best-effort only, never block battle creation.
+      }
+      void addAffiliateCommissionBestEffort(
+        input.userId,
+        hold.reservation.amountAtomic,
+        BATTLE_AFFILIATE_SOURCE,
+        `battle-aff:${createToken}:${input.userId}:create`
+      );
+
+      return createdState;
+    } catch (error) {
+      // If create/capture fails, do not leave user charged.
+      try {
+        await releaseHeldFunds({
+          actorUserId: input.userId,
           userId: input.userId,
-          displayName: `User #${input.userId.slice(0, 6)}`,
-          isBot: false,
-          borrowPercent: creatorBorrowPercent,
-          paidAmountAtomic: hold.reservation.amountAtomic
-        };
+          currency: PLATFORM_INTERNAL_CURRENCY,
+          betReference: creatorBetReference,
+          idempotencyKey: `battle-release:${createToken}:${input.userId}`
+        });
+      } catch {
+        // Ignore compensation failures; original error is surfaced.
       }
-      return {
-        battleId: battle.id,
-        seatIndex,
-        teamIndex,
-        state: BattleSlotState.OPEN,
-        userId: null,
-        displayName: "Waiting...",
-        isBot: false,
-        borrowPercent: 100,
-        paidAmountAtomic: 0n
-      };
-    });
-    await tx.battleSlot.createMany({ data: slots });
-    return battle.id;
-  });
 
-  await addUserXpBestEffort(input.userId, hold.reservation.amountAtomic);
-  void addAffiliateCommissionBestEffort(
-    input.userId,
-    hold.reservation.amountAtomic,
-    BATTLE_AFFILIATE_SOURCE,
-    `battle-aff:${battleId}:${input.userId}:create`
-  );
-
-    return getBattleById(created, input.userId);
+      if (created) {
+        try {
+          await prisma.battle.delete({ where: { id: created } });
+        } catch {
+          // Best-effort cleanup only.
+        }
+      }
+      throw error;
+    }
   } catch (error) {
     if (isMissingBattlesSchemaError(error)) {
       throw battlesNotReadyError();
@@ -845,76 +895,120 @@ export const joinBattle = async (input: {
   borrowPercent?: number;
 }): Promise<BattleState> => {
   try {
+    await ensureBattlesSchemaReady();
+
     const battle = await getBattleForAction(input.battleId);
     ensureBattleJoinable(battle);
     if (battle.slots.some((slot) => slot.userId === input.userId)) {
       throw new AppError("You are already in this battle", 409, "BATTLE_ALREADY_JOINED");
     }
-  const seatIndex = getOpenSlotBySeat(
-    battle.slots.map((slot) => ({ seatIndex: slot.seatIndex, state: slot.state })),
-    input.seatIndex
-  );
-  const borrowPercent = normalizeBorrowPercent(input.borrowPercent, battle.modeBorrow);
-  const payAtomic = scaleByBorrow(
-    battle.cases.reduce((acc, row) => acc + row.priceAtomic, 0n),
-    borrowPercent
-  );
-  if (payAtomic <= 0n) {
-    throw new AppError("Join amount must be positive", 400, "BATTLE_JOIN_AMOUNT_INVALID");
-  }
-  if (payAtomic > MAX_GAME_BET_ATOMIC) {
-    throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
-  }
 
-  const betReference = `battle:${battle.id}:seat:${seatIndex}`;
-  const hold = await holdFundsForBet({
-    actorUserId: input.userId,
-    userId: input.userId,
-    currency: PLATFORM_INTERNAL_CURRENCY,
-    betReference,
-    amountAtomic: payAtomic,
-    idempotencyKey: `battle-join:${battle.id}:${input.userId}:${seatIndex}`,
-    metadata: {
-      game: "BATTLES",
-      operation: "BATTLE_JOIN",
-      battleId: battle.id,
-      seatIndex,
+    const seatIndex = getOpenSlotBySeat(
+      battle.slots.map((slot) => ({ seatIndex: slot.seatIndex, state: slot.state })),
+      input.seatIndex
+    );
+    const borrowPercent = normalizeBorrowPercent(input.borrowPercent, battle.modeBorrow);
+    const payAtomic = scaleByBorrow(
+      battle.cases.reduce((acc, row) => acc + row.priceAtomic, 0n),
       borrowPercent
+    );
+    if (payAtomic <= 0n) {
+      throw new AppError("Join amount must be positive", 400, "BATTLE_JOIN_AMOUNT_INVALID");
     }
-  });
+    if (payAtomic > MAX_GAME_BET_ATOMIC) {
+      throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
+    }
 
-  await captureHeldFunds({
-    actorUserId: input.userId,
-    userId: input.userId,
-    currency: PLATFORM_INTERNAL_CURRENCY,
-    betReference,
-    idempotencyKey: `battle-capture:${battle.id}:${input.userId}:${seatIndex}`
-  });
-
-  await prisma.battleSlot.updateMany({
-    where: {
-      battleId: battle.id,
-      seatIndex,
-      state: BattleSlotState.OPEN
-    },
-    data: {
-      state: BattleSlotState.JOINED,
+    const betReference = `battle:${battle.id}:seat:${seatIndex}`;
+    const hold = await holdFundsForBet({
+      actorUserId: input.userId,
       userId: input.userId,
-      displayName: `User #${input.userId.slice(0, 6)}`,
-      isBot: false,
-      borrowPercent,
-      paidAmountAtomic: hold.reservation.amountAtomic,
-      joinedAt: new Date()
-    }
-  });
+      currency: PLATFORM_INTERNAL_CURRENCY,
+      betReference,
+      amountAtomic: payAtomic,
+      idempotencyKey: `battle-join:${battle.id}:${input.userId}:${seatIndex}`,
+      metadata: {
+        game: "BATTLES",
+        operation: "BATTLE_JOIN",
+        battleId: battle.id,
+        seatIndex,
+        borrowPercent
+      }
+    });
 
-  await addUserXpBestEffort(input.userId, hold.reservation.amountAtomic);
-  void addAffiliateCommissionBestEffort(
-    input.userId,
-    hold.reservation.amountAtomic,
-    BATTLE_AFFILIATE_SOURCE,
-    `battle-aff:${battle.id}:${input.userId}:join:${seatIndex}`
-  );
+    const claim = await prisma.battleSlot.updateMany({
+      where: {
+        battleId: battle.id,
+        seatIndex,
+        state: BattleSlotState.OPEN
+      },
+      data: {
+        state: BattleSlotState.JOINED,
+        userId: input.userId,
+        displayName: `User #${input.userId.slice(0, 6)}`,
+        isBot: false,
+        borrowPercent,
+        paidAmountAtomic: hold.reservation.amountAtomic,
+        joinedAt: new Date()
+      }
+    });
+    if (claim.count === 0) {
+      await releaseHeldFunds({
+        actorUserId: input.userId,
+        userId: input.userId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
+        betReference,
+        idempotencyKey: `battle-join-release:${battle.id}:${input.userId}:${seatIndex}`
+      });
+      throw new AppError("Selected seat is not available", 409, "BATTLE_SEAT_UNAVAILABLE");
+    }
+
+    try {
+      await captureHeldFunds({
+        actorUserId: input.userId,
+        userId: input.userId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
+        betReference,
+        idempotencyKey: `battle-capture:${battle.id}:${input.userId}:${seatIndex}`
+      });
+    } catch (captureError) {
+      await prisma.battleSlot.updateMany({
+        where: {
+          battleId: battle.id,
+          seatIndex,
+          userId: input.userId
+        },
+        data: {
+          state: BattleSlotState.OPEN,
+          userId: null,
+          displayName: "Waiting...",
+          isBot: false,
+          borrowPercent: 100,
+          paidAmountAtomic: 0n,
+          joinedAt: null
+        }
+      });
+      try {
+        await releaseHeldFunds({
+          actorUserId: input.userId,
+          userId: input.userId,
+          currency: PLATFORM_INTERNAL_CURRENCY,
+          betReference,
+          idempotencyKey: `battle-capture-release:${battle.id}:${input.userId}:${seatIndex}`
+        });
+      } catch {
+        // Best-effort compensation only.
+      }
+      throw captureError;
+    }
+
+    await addUserXpBestEffort(input.userId, hold.reservation.amountAtomic);
+    void addAffiliateCommissionBestEffort(
+      input.userId,
+      hold.reservation.amountAtomic,
+      BATTLE_AFFILIATE_SOURCE,
+      `battle-aff:${battle.id}:${input.userId}:join:${seatIndex}`
+    );
 
     await maybeSettleBattle(battle.id);
     return getBattleById(battle.id, input.userId);
