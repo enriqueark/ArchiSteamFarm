@@ -43,6 +43,31 @@ const battlesNotReadyError = () =>
     "BATTLES_NOT_READY"
   );
 
+const ensureBattlesColumnsExistBestEffort = async (): Promise<void> => {
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battles" ADD COLUMN IF NOT EXISTS "modeBorrow" BOOLEAN NOT NULL DEFAULT false`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "borrowPercent" INTEGER NOT NULL DEFAULT 100`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "paidAmountAtomic" BIGINT NOT NULL DEFAULT 0`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "payoutAtomic" BIGINT NOT NULL DEFAULT 0`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "winWeightAtomic" BIGINT NOT NULL DEFAULT 0`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "profitAtomic" BIGINT NOT NULL DEFAULT 0`
+    );
+  } catch {
+    // Best-effort self-heal only.
+  }
+};
+
 const ensureBattlesSchemaReady = async (): Promise<void> => {
   try {
     // Validate that core tables and columns required by create/join exist before charging users.
@@ -1051,6 +1076,7 @@ export const callBotForSeat = async (input: {
   seatIndex: number;
 }): Promise<BattleState> => {
   try {
+    await ensureBattlesSchemaReady();
     const battle = await getBattleForAction(input.battleId);
     ensureBattleJoinable(battle);
     if (!battle.slots.some((slot) => slot.userId === input.userId)) {
@@ -1069,6 +1095,7 @@ export const callBotForSeat = async (input: {
 
 export const fillBots = async (input: { userId: string; battleId: string }): Promise<BattleState> => {
   try {
+    await ensureBattlesSchemaReady();
     const battle = await getBattleForAction(input.battleId);
     ensureBattleJoinable(battle);
     if (!battle.slots.some((slot) => slot.userId === input.userId)) {
@@ -1094,6 +1121,7 @@ export const getBattleById = async (
   isAdmin = false
 ): Promise<BattleState> => {
   try {
+    await ensureBattlesSchemaReady();
     const battle = await prisma.battle.findUnique({
       where: { id: battleId },
       include: {
@@ -1157,6 +1185,7 @@ export type BattleListInput = {
 
 export const listBattles = async (input: BattleListInput): Promise<BattleState[]> => {
   try {
+    await ensureBattlesSchemaReady();
     const limit = Math.max(1, Math.min(100, Math.trunc(input.limit ?? 30)));
     const rows = await prisma.battle.findMany({
       where: {
@@ -1204,6 +1233,7 @@ export const listBattles = async (input: BattleListInput): Promise<BattleState[]
     return rows.map(toBattleState);
   } catch (error) {
     if (isMissingBattlesSchemaError(error)) {
+      await ensureBattlesColumnsExistBestEffort();
       return [];
     }
     throw error;
