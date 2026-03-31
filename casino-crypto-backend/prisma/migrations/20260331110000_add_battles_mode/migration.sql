@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS "battles" (
   "modeJackpot" BOOLEAN NOT NULL DEFAULT false,
   "modeTerminal" BOOLEAN NOT NULL DEFAULT false,
   "modePrivate" BOOLEAN NOT NULL DEFAULT false,
+  "modeBorrow" BOOLEAN NOT NULL DEFAULT false,
   "maxCases" INTEGER NOT NULL DEFAULT 50,
   "totalCostAtomic" BIGINT NOT NULL DEFAULT 0,
   "totalPayoutAtomic" BIGINT NOT NULL DEFAULT 0,
@@ -51,6 +52,9 @@ CREATE TABLE IF NOT EXISTS "battles" (
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "battles_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE "battles"
+  ADD COLUMN IF NOT EXISTS "modeBorrow" BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS "battle_cases" (
   "id" TEXT NOT NULL,
