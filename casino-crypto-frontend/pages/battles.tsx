@@ -154,8 +154,29 @@ export default function BattlesPage() {
   };
 
   const loadAll = async () => {
-    const [casesRows] = await Promise.all([getCases(), loadBattles()]);
-    setCases(casesRows);
+    try {
+      const casesRows = await getCases();
+      setCases(casesRows);
+    } catch (error) {
+      setCases([]);
+      showError(error instanceof Error ? error.message : "Failed to load cases");
+    }
+
+    if (!authed) {
+      setBattles([]);
+      setSelectedBattleId(null);
+      setSelectedBattle(null);
+      return;
+    }
+
+    try {
+      await loadBattles();
+    } catch (error) {
+      setBattles([]);
+      setSelectedBattleId(null);
+      setSelectedBattle(null);
+      showError(error instanceof Error ? error.message : "Failed to load battles");
+    }
   };
 
   useEffect(() => {
@@ -176,7 +197,7 @@ export default function BattlesPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authed]);
 
   useEffect(() => {
     if (!selectedBattleId) {

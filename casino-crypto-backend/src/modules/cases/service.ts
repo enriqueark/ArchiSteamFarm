@@ -813,6 +813,68 @@ const getCaseForOpen = async (caseId: string): Promise<CaseForOpen> => {
 };
 
 export const listCases = async (): Promise<CaseListItem[]> => {
+  const listCasesLegacyFallback = async (): Promise<CaseListItem[]> => {
+    try {
+      const rows = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          slug: string;
+          title: string;
+          description: string | null;
+          priceAtomic: bigint;
+          currency: Currency;
+          isActive: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+          itemCount: bigint;
+        }>
+      >`
+        SELECT
+          c.id,
+          c.slug,
+          c.title,
+          c.description,
+          c."priceAtomic" AS "priceAtomic",
+          c.currency,
+          c."isActive" AS "isActive",
+          c."createdAt" AS "createdAt",
+          c."updatedAt" AS "updatedAt",
+          COALESCE(ci."itemCount", 0)::bigint AS "itemCount"
+        FROM "cases" c
+        LEFT JOIN (
+          SELECT "caseId", COUNT(*) AS "itemCount"
+          FROM "case_items"
+          WHERE "isActive" = true
+          GROUP BY "caseId"
+        ) ci ON ci."caseId" = c.id
+        WHERE c."isActive" = true
+          AND c.currency = ${PLATFORM_INTERNAL_CURRENCY}
+        ORDER BY c."createdAt" DESC
+      `;
+
+      return rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        description: row.description,
+        logoUrl: null,
+        priceAtomic: row.priceAtomic,
+        currency: row.currency,
+        isActive: row.isActive,
+        volatilityIndex: 0,
+        volatilityTier: "L" as const,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        itemCount: Number(row.itemCount)
+      }));
+    } catch (error) {
+      if (isMissingCasesSchemaError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  };
+
   const rows = await prisma.case
     .findMany({
       where: {
@@ -833,12 +895,15 @@ export const listCases = async (): Promise<CaseListItem[]> => {
         }
       }
     })
-    .catch((error) => {
+    .catch(async (error) => {
       if (isMissingCasesSchemaError(error)) {
-        return [];
+        return null;
       }
       throw error;
     });
+  if (!rows) {
+    return listCasesLegacyFallback();
+  }
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
