@@ -250,6 +250,16 @@ export const createCashierWithdrawal = async (input: {
     throw new AppError("Cashier service is disabled", 503, "CASHIER_DISABLED");
   }
 
+  const userFlags = await prisma.user
+    .findUnique({
+      where: { id: input.userId },
+      select: { canWithdraw: true }
+    })
+    .catch(() => null);
+  if (userFlags && userFlags.canWithdraw === false) {
+    throw new AppError("Withdrawals are disabled for this account", 403, "WITHDRAWALS_DISABLED_FOR_USER");
+  }
+
   const method = getMethodOrThrow(input.asset, input.network);
   const coinsAtomic = BigInt(input.amountAtomic);
   if (coinsAtomic <= 0n) {

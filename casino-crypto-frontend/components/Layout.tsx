@@ -13,6 +13,9 @@ const links = [
   { href: "/battles", label: "Battles" },
   { href: "/cases", label: "Cases" },
   { href: "/mines", label: "Mines" },
+  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/terms", label: "Terms" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

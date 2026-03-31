@@ -27,6 +27,7 @@ export default function AuthGate({
   const [modeState, setModeState] = useState<"login" | "register">(mode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function AuthGate({
       if (modeState === "register") {
         await register(email, password);
       } else {
-        await login(email, password);
+        await login(email, password, twoFactorCode.trim() || undefined);
       }
       onAuth();
       onClose?.();
@@ -67,6 +68,15 @@ export default function AuthGate({
           onChange={(e) => setPassword(e.target.value)}
           placeholder="min 8 characters"
         />
+        {modeState === "login" ? (
+          <Input
+            label="2FA Code (if enabled)"
+            value={twoFactorCode}
+            onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            placeholder="123456"
+            inputMode="numeric"
+          />
+        ) : null}
         <Button
           variant={modeState === "register" ? "danger" : "primary"}
           onClick={submit}

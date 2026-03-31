@@ -42,7 +42,9 @@ const userDetailQuerySchema = z.object({
 
 const updateUserStatusSchema = z.object({
   status: z.nativeEnum(UserStatus),
-  role: z.nativeEnum(UserRole).optional()
+  role: z.nativeEnum(UserRole).optional(),
+  canWithdraw: z.boolean().optional(),
+  canTip: z.boolean().optional()
 });
 
 const adjustByAdminSchema = z
@@ -966,12 +968,12 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         await openUserDetails(detailState.userId, detailState.email);
       });
 
-      const setUserAccess = async (userId, status, role, msgEl) => {
+      const setUserAccess = async (userId, status, role, msgEl, extra = {}) => {
         try {
           const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/access", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status, role })
+            body: JSON.stringify({ status, role, ...extra })
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -980,7 +982,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             return;
           }
           msgEl.className = "mono ok";
-          msgEl.textContent = "Updated: role=" + data.user.role + " status=" + data.user.status;
+          const canWithdrawLabel = typeof data.user.canWithdraw === "boolean" ? " canWithdraw=" + data.user.canWithdraw : "";
+          const canTipLabel = typeof data.user.canTip === "boolean" ? " canTip=" + data.user.canTip : "";
+          msgEl.textContent = "Updated: role=" + data.user.role + " status=" + data.user.status + canWithdrawLabel + canTipLabel;
           document.getElementById("searchBtn").click();
         } catch (error) {
           msgEl.className = "mono err";
@@ -1006,6 +1010,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div><strong>\${user.email}</strong></div>
               <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
+              <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
               <div class="mono">level=\${user.level} xpAtomic=\${user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
               \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
@@ -1021,6 +1026,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="actions">
                 <button class="approve success">Approve (PLAYER+ACTIVE)</button>
                 <button class="suspend danger">Suspend</button>
+                <button class="withdraw-toggle warn">\${user.canWithdraw === false ? "Enable withdraw" : "Disable withdraw"}</button>
+                <button class="tip-toggle warn">\${user.canTip === false ? "Enable tip" : "Disable tip"}</button>
                 <button class="details">View details</button>
               </div>
               <div class="mono msg"></div>
@@ -1068,6 +1075,12 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           tr.querySelector(".debit").addEventListener("click", () => void doAdjust("-"));
           tr.querySelector(".approve").addEventListener("click", () => void setUserAccess(user.id, "ACTIVE", "PLAYER", msgEl));
           tr.querySelector(".suspend").addEventListener("click", () => void setUserAccess(user.id, "SUSPENDED", user.role, msgEl));
+          tr.querySelector(".withdraw-toggle").addEventListener("click", () =>
+            void setUserAccess(user.id, user.status, user.role, msgEl, { canWithdraw: user.canWithdraw === false })
+          );
+          tr.querySelector(".tip-toggle").addEventListener("click", () =>
+            void setUserAccess(user.id, user.status, user.role, msgEl, { canTip: user.canTip === false })
+          );
           tr.querySelector(".details").addEventListener("click", () => void openUserDetails(user.id, user.email));
           usersTbody.appendChild(tr);
         }
@@ -1308,6 +1321,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           email: true,
           role: true,
           status: true,
+          canWithdraw: true,
+          canTip: true,
           createdAt: true,
           updatedAt: true,
           levelXpAtomic: true,
@@ -1340,6 +1355,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             email: true,
             role: true,
             status: true,
+            canWithdraw: true,
+            canTip: true,
             createdAt: true,
             updatedAt: true,
             wallets: {
@@ -1373,6 +1390,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           email: user.email,
           role: user.role,
           status: user.status,
+          canWithdraw: "canWithdraw" in user ? user.canWithdraw : true,
+          canTip: "canTip" in user ? user.canTip : true,
           level: getLevelFromXp(user.levelXpAtomic),
           levelXpAtomic: user.levelXpAtomic.toString(),
           createdAt: user.createdAt,
@@ -1403,7 +1422,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: params.userId },
         data: {
           status: body.status,
-          ...(body.role ? { role: body.role } : {})
+          ...(body.role ? { role: body.role } : {}),
+          ...(typeof body.canWithdraw === "boolean" ? { canWithdraw: body.canWithdraw } : {}),
+          ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {})
         },
         select: {
           id: true,
@@ -1411,6 +1432,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           email: true,
           role: true,
           status: true,
+          canWithdraw: true,
+          canTip: true,
           updatedAt: true
         }
       });
@@ -1421,6 +1444,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           email: updated.email,
           role: updated.role,
           status: updated.status,
+          canWithdraw: updated.canWithdraw,
+          canTip: updated.canTip,
           updatedAt: updated.updatedAt
         }
       });

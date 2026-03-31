@@ -10,6 +10,7 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { ensureUserDepositAddresses, isCashierEnabled } from "../cashier/service";
 import { getLevelFromXp } from "../progression/service";
 import { createDefaultWallets } from "../wallets/service";
+import { verifyTwoFactorCode } from "../security-2fa/service";
 
 type AuthUser = {
   id: string;
@@ -342,7 +343,13 @@ export const register = async (
 
 export const login = async (
   fastify: FastifyInstance,
-  input: { email: string; password: string; userAgent?: string; ipAddress?: string }
+  input: {
+    email: string;
+    password: string;
+    twoFactorCode?: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }
 ) => {
   const email = normalizeEmail(input.email);
   const rows = await prisma.$queryRaw<
@@ -352,6 +359,7 @@ export const login = async (
       passwordHash: string;
       role: "PLAYER" | "ADMIN" | "SUPPORT";
       status: "ACTIVE" | "SUSPENDED";
+      twoFactorEnabled: boolean;
     }>
   >`
     SELECT
@@ -359,7 +367,8 @@ export const login = async (
       email,
       "passwordHash",
       role,
-      status
+      status,
+      COALESCE("twoFactorEnabled", false) AS "twoFactorEnabled"
     FROM "users"
     WHERE email = ${email}
     LIMIT 1
@@ -377,6 +386,17 @@ export const login = async (
 
   if (user.status !== "ACTIVE") {
     throw new AppError("User is not active", 403, "USER_NOT_ACTIVE");
+  }
+
+  if (user.twoFactorEnabled) {
+    const code = typeof input.twoFactorCode === "string" ? input.twoFactorCode.trim() : "";
+    if (!code) {
+      throw new AppError("Two-factor code is required", 401, "TWO_FACTOR_REQUIRED");
+    }
+    const valid = await verifyTwoFactorCode(user.id, code);
+    if (!valid) {
+      throw new AppError("Invalid two-factor code", 401, "INVALID_TWO_FACTOR_CODE");
+    }
   }
 
   const sanitizedUser = await enrichUserWithProgression({

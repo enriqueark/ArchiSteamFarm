@@ -36,6 +36,11 @@ enum LedgerReason {
   WITHDRAWAL
   WITHDRAWAL_FEE
   BONUS
+  VAULT_DEPOSIT
+  VAULT_WITHDRAW
+  USER_TIP
+  RAIN_TIP
+  RAIN_PAYOUT
   BET_HOLD
   BET_RELEASE
   BET_CAPTURE
@@ -158,6 +163,11 @@ model User {
   passwordHash String
   role         UserRole   @default(PLAYER)
   status       UserStatus @default(ACTIVE)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  twoFactorTempSecret String?
+  canWithdraw  Boolean    @default(true)
+  canTip       Boolean    @default(true)
   profileVisible Boolean  @default(true)
   levelXpAtomic BigInt    @default(0)
   levelCurrent  Int       @default(1)
@@ -189,6 +199,11 @@ model User {
   battleSlots  BattleSlot[]
   createdBattles Battle[]
   wonBattles Battle[] @relation("BattleWinnerUser")
+  vaultAccount VaultAccount?
+  rainJoins    RainJoin[]
+  rainTips     RainTip[]
+  tipsSent     UserTip[] @relation("UserTipSender")
+  tipsReceived UserTip[] @relation("UserTipRecipient")
 
   @@map("users")
 }
@@ -293,6 +308,7 @@ model Battle {
   modeGroup        Boolean       @default(false)
   modeJackpot      Boolean       @default(false)
   modeTerminal     Boolean       @default(false)
+  modeFast         Boolean       @default(false)
   modePrivate      Boolean       @default(false)
   modeBorrow       Boolean       @default(false)
   maxCases         Int           @default(50)
@@ -891,6 +907,89 @@ model ChatMessage {
   @@index([channel, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("chat_messages")
+}
+
+model VaultAccount {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  balanceAtomic BigInt @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locks       VaultLock[]
+
+  @@index([updatedAt(sort: Desc)])
+  @@map("vault_accounts")
+}
+
+model VaultLock {
+  id          String   @id @default(cuid())
+  vaultId     String
+  amountAtomic BigInt
+  unlockAt    DateTime
+  createdAt   DateTime @default(now())
+  vault       VaultAccount @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+
+  @@index([vaultId, unlockAt(sort: Desc)])
+  @@map("vault_locks")
+}
+
+model RainRound {
+  id               String   @id @default(cuid())
+  startsAt         DateTime
+  endsAt           DateTime
+  baseAmountAtomic BigInt   @default(0)
+  tippedAmountAtomic BigInt @default(0)
+  settledAt        DateTime?
+  createdAt        DateTime @default(now())
+  joins            RainJoin[]
+  tips             RainTip[]
+
+  @@unique([startsAt, endsAt])
+  @@index([endsAt, settledAt])
+  @@map("rain_rounds")
+}
+
+model RainJoin {
+  id        String   @id @default(cuid())
+  roundId   String
+  userId    String
+  createdAt DateTime @default(now())
+  round     RainRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("rain_joins")
+}
+
+model RainTip {
+  id          String   @id @default(cuid())
+  roundId     String
+  userId      String
+  amountAtomic BigInt
+  createdAt   DateTime @default(now())
+  round       RainRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("rain_tips")
+}
+
+model UserTip {
+  id           String   @id @default(cuid())
+  fromUserId   String
+  toUserId     String
+  amountAtomic BigInt
+  message      String?
+  createdAt    DateTime @default(now())
+  fromUser     User     @relation("UserTipSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser       User     @relation("UserTipRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId, createdAt(sort: Desc)])
+  @@index([toUserId, createdAt(sort: Desc)])
+  @@map("user_tips")
 }
 
 model OutboxEvent {

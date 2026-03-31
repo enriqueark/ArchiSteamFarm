@@ -21,13 +21,17 @@ import { blackjackRoutes } from "./modules/blackjack/routes";
 import { battlesRoutes } from "./modules/battles/routes";
 import { casesRoutes } from "./modules/cases/routes";
 import { chatRoutes } from "./modules/chat/routes";
+import { chatTipsRainRoutes } from "./modules/chat-tips-rain/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { ledgerRoutes } from "./modules/ledger/routes";
+import { leaderboardRoutes } from "./modules/leaderboard/routes";
 import { minesRoutes } from "./modules/mines/routes";
 import { pricingRoutes } from "./modules/pricing/routes";
 import { rouletteRoutes } from "./modules/roulette/routes";
 import { cashierRoutes } from "./modules/cashier/routes";
+import { securityTwoFactorRoutes } from "./modules/security-2fa/routes";
 import { userRoutes } from "./modules/users/routes";
+import { vaultRoutes } from "./modules/vault/routes";
 import { walletRoutes } from "./modules/wallets/routes";
 
 export const buildApp = (): FastifyInstance => {
@@ -104,11 +108,14 @@ export const buildApp = (): FastifyInstance => {
         { name: "battles", description: "Case battles game mode" },
         { name: "cases", description: "Cases game mode and case openings" },
         { name: "chat", description: "Realtime public chat messages" },
+        { name: "chat-rain", description: "Rain pool and chat tipping" },
         { name: "wallets", description: "Wallet management and bet reservations" },
+        { name: "vault", description: "Vault storage and time-locked funds" },
         { name: "pricing", description: "Market FX rates and COINS conversion quotes" },
         { name: "ledger", description: "Ledger accounting entries" },
         { name: "mines", description: "Mines game with provably fair backend generation" },
         { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
+        { name: "security", description: "Google 2FA security controls" },
         { name: "users", description: "User profile" },
         { name: "affiliates", description: "Affiliate system, profile summary and fairness controls" },
         { name: "cashier", description: "Crypto deposit and withdraw via OxaPay" }
@@ -128,7 +135,11 @@ export const buildApp = (): FastifyInstance => {
   app.register(battlesRoutes, { prefix: "/api/v1/battles" });
   app.register(casesRoutes, { prefix: "/api/v1/cases" });
   app.register(chatRoutes, { prefix: "/api/v1/chat" });
+  app.register(chatTipsRainRoutes, { prefix: "/api/v1/chat" });
   app.register(userRoutes, { prefix: "/api/v1/users" });
+  app.register(vaultRoutes, { prefix: "/api/v1/vault" });
+  app.register(securityTwoFactorRoutes, { prefix: "/api/v1/security/2fa" });
+  app.register(leaderboardRoutes, { prefix: "/api/v1/leaderboard" });
   app.register(affiliatesRoutes, { prefix: "/api/v1" });
   app.register(walletRoutes, { prefix: "/api/v1/wallets" });
   app.register(pricingRoutes, { prefix: "/api/v1/pricing" });

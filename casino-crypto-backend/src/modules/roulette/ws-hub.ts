@@ -84,6 +84,57 @@ type RouletteRealtimeEvent =
         reason: "ADMIN_COMMAND" | "HOURLY_RESET";
         clearedAt: string;
       };
+    }
+  | {
+      type: "rain.state";
+      data: {
+        roundId: string;
+        startsAt: string;
+        endsAt: string;
+        baseAmountAtomic: string;
+        tippedAmountAtomic: string;
+        totalAmountAtomic: string;
+        joinedCount: number;
+      };
+    }
+  | {
+      type: "rain.joined";
+      data: {
+        roundId: string;
+        userId: string;
+        joinedCount: number;
+      };
+    }
+  | {
+      type: "rain.tipped";
+      data: {
+        roundId: string;
+        userId: string;
+        amountAtomic: string;
+        tippedAmountAtomic: string;
+        totalAmountAtomic: string;
+      };
+    }
+  | {
+      type: "rain.payout";
+      data: {
+        roundId: string;
+        userId: string;
+        payoutAtomic: string;
+      };
+    }
+  | {
+      type: "chat.userTip";
+      data: {
+        id: string;
+        fromUserId: string;
+        fromUserLabel: string;
+        toUserId: string;
+        toUserLabel: string;
+        amountAtomic: string;
+        message: string | null;
+        createdAt: string;
+      };
     };
 
 type ClientConnection = {

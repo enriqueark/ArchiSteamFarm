@@ -2,6 +2,7 @@ type ExternalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
 
 const COINS_ATOMIC_DECIMALS = 8;
 const RATES_TTL_MS = 60_000;
+const USD_PER_COIN = 0.7;
 
 const ASSET_TO_COINGECKO_ID: Record<ExternalAsset, string> = {
   BTC: "bitcoin",
@@ -78,7 +79,7 @@ export const quoteDepositToCoins = async (asset: ExternalAsset, amountAtomic: bi
   const { rates, fetchedAt } = await getUsdRates();
   const assetAmount = toDecimalAmount(amountAtomic, ASSET_ATOMIC_DECIMALS[asset]);
   const usdValue = assetAmount * rates[asset];
-  const coinsAtomic = toAtomic(usdValue, COINS_ATOMIC_DECIMALS);
+  const coinsAtomic = toAtomic(usdValue / USD_PER_COIN, COINS_ATOMIC_DECIMALS);
 
   return {
     asset,
@@ -98,14 +99,15 @@ export const quoteWithdrawFromCoins = async (asset: ExternalAsset, coinsAtomic: 
   }
 
   const { rates, fetchedAt } = await getUsdRates();
-  const usdValue = toDecimalAmount(coinsAtomic, COINS_ATOMIC_DECIMALS);
+  const coinAmount = toDecimalAmount(coinsAtomic, COINS_ATOMIC_DECIMALS);
+  const usdValue = coinAmount * USD_PER_COIN;
   const amountAsset = usdValue / rates[asset];
   const amountAtomic = toAtomic(amountAsset, ASSET_ATOMIC_DECIMALS[asset]);
 
   return {
     asset,
     coinsAtomic,
-    coins: usdValue,
+    coins: coinAmount,
     usdValue,
     usdRate: rates[asset],
     amountAtomic,

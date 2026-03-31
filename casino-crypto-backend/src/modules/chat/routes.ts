@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { MAX_CHAT_MESSAGE_LENGTH, clearAllChatMessages, listRecentChatMessages, postChatMessage } from "./service";
+import { settleEndedRainRounds } from "../chat-tips-rain/service";
 import { getRouletteBroadcaster } from "../roulette/service";
 
 const listQuerySchema = z.object({
@@ -19,6 +20,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
   const HOURLY_CLEAR_MS = 60 * 60 * 1000;
   const maybeRunHourlyClear = async (): Promise<void> => {
     const now = Date.now();
+    await settleEndedRainRounds();
     if (now - lastHourlyClearAt < HOURLY_CLEAR_MS) {
       return;
     }

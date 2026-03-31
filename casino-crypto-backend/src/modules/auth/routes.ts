@@ -13,7 +13,8 @@ const registerSchema = z.object({
 
 const loginSchema = z.object({
   email: z.string().trim().email(),
-  password: z.string().min(1).max(128)
+  password: z.string().min(1).max(128),
+  twoFactorCode: z.string().trim().regex(/^\d{6}$/).optional()
 });
 
 const refreshSchema = z.object({

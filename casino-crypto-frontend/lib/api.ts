@@ -192,10 +192,23 @@ export async function register(email: string, password: string): Promise<AuthRes
   return data;
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(
+  email: string,
+  password: string,
+  twoFactorCode?: string
+): Promise<AuthResponse> {
   const data = await request<AuthResponse>(
     "/auth/login",
-    { method: "POST", body: JSON.stringify({ email, password }) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        password,
+        ...(typeof twoFactorCode === "string" && twoFactorCode.trim().length > 0
+          ? { twoFactorCode: twoFactorCode.trim() }
+          : {})
+      })
+    },
     false
   );
   setAccessToken(data.tokens.accessToken);
@@ -1002,6 +1015,203 @@ export interface ProfileSummary {
 
 export async function getProfileSummary(): Promise<ProfileSummary> {
   return request<ProfileSummary>("/profile/summary");
+}
+
+export type TwoFactorState = {
+  enabled: boolean;
+  setupPending: boolean;
+};
+
+export async function getTwoFactorState(): Promise<TwoFactorState> {
+  return request<TwoFactorState>("/security/2fa");
+}
+
+export async function beginTwoFactorSetup(): Promise<{
+  secret: string;
+  otpauthUrl: string;
+  qrDataUrl: string;
+}> {
+  return request<{ secret: string; otpauthUrl: string; qrDataUrl: string }>(
+    "/security/2fa/setup",
+    { method: "POST" },
+    true,
+    true
+  );
+}
+
+export async function verifyTwoFactorSetup(code: string): Promise<{ enabled: true }> {
+  return request<{ enabled: true }>(
+    "/security/2fa/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ code })
+    },
+    true,
+    true
+  );
+}
+
+export async function disableTwoFactor(code: string): Promise<{ enabled: false }> {
+  return request<{ enabled: false }>(
+    "/security/2fa/disable",
+    {
+      method: "POST",
+      body: JSON.stringify({ code })
+    },
+    true,
+    true
+  );
+}
+
+export type VaultState = {
+  vaultId: string;
+  balanceAtomic: string;
+  availableAtomic: string;
+  lockedAtomic: string;
+  releasableAtomic: string;
+  locks: Array<{
+    id: string;
+    amountAtomic: string;
+    unlockAt: string;
+    createdAt: string;
+  }>;
+};
+
+export async function getVaultState(): Promise<VaultState> {
+  return request<VaultState>("/vault");
+}
+
+export async function depositToVault(input: {
+  amountCoins: number;
+  lockDuration?: "1H" | "1D" | "3D" | "7D";
+}): Promise<{ ok: true; amountAtomic: string; walletBalanceAtomic: string }> {
+  return request<{ ok: true; amountAtomic: string; walletBalanceAtomic: string }>(
+    "/vault/deposit",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function withdrawFromVault(input: {
+  amountCoins: number;
+}): Promise<{ ok: true; amountAtomic: string; walletBalanceAtomic: string }> {
+  return request<{ ok: true; amountAtomic: string; walletBalanceAtomic: string }>(
+    "/vault/withdraw",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export type RainState = {
+  roundId: string;
+  startsAt: string;
+  endsAt: string;
+  baseAmountAtomic: string;
+  tippedAmountAtomic: string;
+  totalAmountAtomic: string;
+  joinedCount: number;
+  hasJoined: boolean;
+};
+
+export async function getCurrentRain(): Promise<RainState> {
+  return request<RainState>("/chat/rain/current");
+}
+
+export async function joinRain(): Promise<RainState> {
+  return request<RainState>(
+    "/chat/rain/join",
+    {
+      method: "POST"
+    },
+    true,
+    true
+  );
+}
+
+export async function tipRain(amountCoins: number): Promise<{
+  rain: RainState;
+  tip: {
+    id: string;
+    amountAtomic: string;
+    createdAt: string;
+  };
+}> {
+  return request<{
+    rain: RainState;
+    tip: {
+      id: string;
+      amountAtomic: string;
+      createdAt: string;
+    };
+  }>(
+    "/chat/rain/tip",
+    {
+      method: "POST",
+      body: JSON.stringify({ amountCoins })
+    },
+    true,
+    true
+  );
+}
+
+export async function tipUser(input: {
+  toUserPublicId: number;
+  amountCoins: number;
+  message?: string;
+}): Promise<{
+  id: string;
+  fromUserId: string;
+  fromUserLabel: string;
+  toUserId: string;
+  toUserLabel: string;
+  amountAtomic: string;
+  message: string | null;
+  createdAt: string;
+}> {
+  return request<{
+    id: string;
+    fromUserId: string;
+    fromUserLabel: string;
+    toUserId: string;
+    toUserLabel: string;
+    amountAtomic: string;
+    message: string | null;
+    createdAt: string;
+  }>(
+    "/chat/tips",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  publicId: number | null;
+  userLabel: string;
+  level: number;
+  levelXpAtomic: string;
+  balanceAtomic: string;
+  createdAt: string;
+}
+
+export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+  const payload = await request<{ rows: LeaderboardEntry[] }>(
+    `/leaderboard?limit=${Math.max(1, Math.min(100, Math.trunc(limit)))}`
+  );
+  return payload.rows;
 }
 
 export async function setProfileVisibility(profileVisible: boolean): Promise<{ profileVisible: boolean; updatedAt: string }> {

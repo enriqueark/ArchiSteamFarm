@@ -49,6 +49,9 @@ const ensureBattlesColumnsExistBestEffort = async (): Promise<void> => {
       `ALTER TABLE "battles" ADD COLUMN IF NOT EXISTS "modeBorrow" BOOLEAN NOT NULL DEFAULT false`
     );
     await prisma.$executeRawUnsafe(
+      `ALTER TABLE "battles" ADD COLUMN IF NOT EXISTS "modeFast" BOOLEAN NOT NULL DEFAULT false`
+    );
+    await prisma.$executeRawUnsafe(
       `ALTER TABLE "battle_slots" ADD COLUMN IF NOT EXISTS "borrowPercent" INTEGER NOT NULL DEFAULT 100`
     );
     await prisma.$executeRawUnsafe(
@@ -69,6 +72,7 @@ const ensureBattlesColumnsExistBestEffort = async (): Promise<void> => {
 };
 
 const ensureBattlesSchemaReady = async (): Promise<void> => {
+  await ensureBattlesColumnsExistBestEffort();
   try {
     // Validate that core tables and columns required by create/join exist before charging users.
     await prisma.$queryRaw<Array<{ id: string; modeBorrow: boolean }>>`
@@ -125,6 +129,7 @@ export type BattleCreateInput = {
   modeGroup?: boolean;
   modeJackpot?: boolean;
   modeTerminal?: boolean;
+  modeFast?: boolean;
   modePrivate?: boolean;
   modeBorrow?: boolean;
   cases: string[];
@@ -190,6 +195,7 @@ type BattleState = {
   modeGroup: boolean;
   modeJackpot: boolean;
   modeTerminal: boolean;
+  modeFast: boolean;
   modePrivate: boolean;
   modeBorrow: boolean;
   maxCases: number;
@@ -257,6 +263,11 @@ const validateModes = (template: BattleTemplate, input: BattleCreateInput): void
   }
 };
 
+const getTeamSlotIds = (
+  allSlots: Array<{ slotId: string; teamIndex: number }>,
+  teamIndex: number
+): string[] => allSlots.filter((slot) => slot.teamIndex === teamIndex).map((slot) => slot.slotId);
+
 const computeSeatTeam = (template: BattleTemplate, seatIndex: number): number => {
   const def = battleTemplateSeats(template);
   if (def.seatsPerTeam <= 1) {
@@ -273,6 +284,7 @@ const getBattleForAction = async (battleId: string): Promise<{
   modeGroup: boolean;
   modeJackpot: boolean;
   modeTerminal: boolean;
+  modeFast: boolean;
   modePrivate: boolean;
   modeBorrow: boolean;
   totalCostAtomic: bigint;
@@ -473,6 +485,7 @@ const toBattleState = (
   modeGroup: boolean;
   modeJackpot: boolean;
   modeTerminal: boolean;
+  modeFast: boolean;
   modePrivate: boolean;
   modeBorrow: boolean;
   maxCases: number;
@@ -535,6 +548,7 @@ const toBattleState = (
   modeGroup: battle.modeGroup,
   modeJackpot: battle.modeJackpot,
   modeTerminal: battle.modeTerminal,
+  modeFast: battle.modeFast,
   modePrivate: battle.modePrivate,
   modeBorrow: battle.modeBorrow,
   maxCases: battle.maxCases,
@@ -750,13 +764,27 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
       : locked.modeJackpot
         ? totalPotAtomic
         : (totalPotAtomic * shareNumerator) / 100n;
-    const splitCount = BigInt(Math.max(1, winnerSlots.length));
-    const perWinnerBaseAtomic = totalWinnerPoolAtomic / splitCount;
+    const winnerSlotIdSet = new Set(winnerSlots.map((row) => row.slotId));
+    const teamSlotIdSet =
+      locked.modeJackpot && jackpotWinnerSlotId
+        ? new Set(
+            getTeamSlotIds(
+              slotScores.map((row) => ({ slotId: row.slotId, teamIndex: row.teamIndex })),
+              slotScores.find((row) => row.slotId === jackpotWinnerSlotId)?.teamIndex ?? -1
+            )
+          )
+        : winnerSlotIdSet;
+    const payoutRecipients =
+      locked.modeGroup || !locked.modeJackpot
+        ? slotScores.filter((slot) => winnerSlotIdSet.has(slot.slotId))
+        : slotScores.filter((slot) => teamSlotIdSet.has(slot.slotId));
+    const payoutRecipientCount = BigInt(Math.max(1, payoutRecipients.length));
+    const perWinnerBaseAtomic = totalWinnerPoolAtomic / payoutRecipientCount;
 
     for (const slot of slotScores) {
-      const isWinner = winnerSlots.some((row) => row.slotId === slot.slotId);
-      const payoutBeforeBorrow = isWinner ? perWinnerBaseAtomic : 0n;
-      const payoutAtomic = isWinner ? scaleByBorrow(payoutBeforeBorrow, slot.borrowPercent) : 0n;
+      const isPayoutRecipient = payoutRecipients.some((row) => row.slotId === slot.slotId);
+      const payoutBeforeBorrow = isPayoutRecipient ? perWinnerBaseAtomic : 0n;
+      const payoutAtomic = isPayoutRecipient ? scaleByBorrow(payoutBeforeBorrow, slot.borrowPercent) : 0n;
       const profitAtomic = payoutAtomic - slot.paidAmountAtomic;
       await tx.battleSlot.update({
         where: { id: slot.slotId },
@@ -817,7 +845,7 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
         jackpotRoll: locked.modeJackpot ? jackpotRoll : null,
         jackpotWinnerSlotId,
         winnerTeam: winningTeam,
-        winnerUserId: winnerSlots.find((row) => !row.isBot)?.userId ?? null,
+        winnerUserId: payoutRecipients.find((row) => !row.isBot)?.userId ?? null,
         totalPayoutAtomic
       }
     });
@@ -917,6 +945,7 @@ export const createBattle = async (input: BattleCreateInput): Promise<BattleStat
             modeGroup: Boolean(input.modeGroup),
             modeJackpot: Boolean(input.modeJackpot),
             modeTerminal: Boolean(input.modeTerminal),
+            modeFast: Boolean(input.modeFast),
             modePrivate: Boolean(input.modePrivate),
             modeBorrow: Boolean(input.modeBorrow),
             createdByUserId: input.userId,
