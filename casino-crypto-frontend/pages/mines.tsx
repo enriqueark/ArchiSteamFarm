@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -31,6 +32,7 @@ export default function MinesPage() {
   const [loading, setLoading] = useState(false);
   const [lastReveal, setLastReveal] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [response, setResponse] = useState<string>("");
+  const [hideExampleData, setHideExampleData] = useState(true);
 
   const resetBoard = () => {
     setCells(Array(BOARD_SIZE).fill("hidden"));
@@ -166,142 +168,160 @@ export default function MinesPage() {
   };
 
   const isActive = game?.status === "ACTIVE";
+  const sampleMessages = [
+    "oh wow",
+    "hola",
+    "lets go",
+    "nice pull",
+    "gg",
+    "crazy round"
+  ];
+  const boardCells = useMemo(
+    () =>
+      cells.map((state, idx) => {
+        if (hideExampleData) {
+          return { idx, state };
+        }
+        if (state !== "hidden") {
+          return { idx, state };
+        }
+        if (idx % 11 === 0) return { idx, state: "mine" as CellState };
+        if (idx % 5 === 2) return { idx, state: "safe" as CellState };
+        return { idx, state };
+      }),
+    [cells, hideExampleData]
+  );
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Mines</h1>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[250px_minmax(0,1fr)]">
+        <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
+          <p className="mb-3 text-xs uppercase tracking-[0.2em] text-gray-500">Games</p>
+          <nav className="space-y-1 text-sm">
+            <Link href="/cases" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
+              Cases
+            </Link>
+            <Link href="/roulette" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
+              Roulette
+            </Link>
+            <span className="block rounded border border-red-500/40 bg-red-500/10 px-2 py-2 font-semibold text-red-200">
+              Mines
+            </span>
+            <Link href="/blackjack" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
+              Blackjack
+            </Link>
+          </nav>
+        </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
-          <Card title="New Game">
-            <div className="space-y-3">
-              <div className="flex gap-2 items-end">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
+              <h1 className="text-xl font-bold text-white">Mines</h1>
+              <p className="mt-1 text-xs text-gray-500">Figma-style UI + real game logic</p>
+
+              <div className="mt-3 space-y-2">
                 <Input
                   label={`Bet (${VIRTUAL_CURRENCY_LABEL})`}
                   value={betCoins}
                   onChange={(e) => setBetCoins(e.target.value)}
                   disabled={isActive}
+                  className="bg-[#101420] border-[#283247]"
                 />
                 <Input
                   label="Mines (1-24)"
                   value={mineCount}
                   onChange={(e) => setMineCount(e.target.value)}
                   disabled={isActive}
+                  className="bg-[#101420] border-[#283247]"
                 />
               </div>
-              <div className="flex gap-2">
-                <Button onClick={handleStart} disabled={loading || isActive}>
-                  {loading && !game ? "Starting..." : "Start Game"}
+
+              <div className="mt-3 flex gap-2">
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-500"
+                  onClick={handleStart}
+                  disabled={loading || isActive}
+                >
+                  {loading && !game ? "Starting..." : "Bet"}
                 </Button>
                 {isActive && (
-                  <Button variant="success" onClick={handleCashout} disabled={loading}>
-                    {loading ? "..." : "CASHOUT"}
+                  <Button variant="success" className="flex-1" onClick={handleCashout} disabled={loading}>
+                    {loading ? "..." : "Cashout"}
                   </Button>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setHideExampleData((prev) => !prev)}
+                className="mt-3 text-xs text-gray-400 underline underline-offset-2"
+              >
+                {hideExampleData ? "Show example board highlights" : "Hide example board highlights"}
+              </button>
+
+              {game && (
+                <div className="mt-3 rounded border border-[#283247] bg-[#101420] p-2 text-xs text-gray-300">
+                  <p>Game ID: {game.gameId.slice(0, 10)}...</p>
+                  <p>Status: {game.status}</p>
+                  <p>Multiplier: {game.currentMultiplier}x</p>
+                  <p>
+                    Potential: {atomicToCoins(game.potentialPayoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
+                  </p>
+                  {lastReveal ? (
+                    <p className={lastReveal.hitMine ? "text-red-300" : "text-green-300"}>
+                      Last: cell {lastReveal.cellIndex} {lastReveal.hitMine ? "MINE" : "SAFE"}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </Card>
+
+            <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
+              <div className="grid grid-cols-5 gap-2">
+                {boardCells.map(({ state, idx }) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleReveal(idx)}
+                    disabled={state !== "hidden" || !isActive || loading}
+                    className={`aspect-square rounded-md border text-sm font-bold transition ${
+                      state === "hidden"
+                        ? isActive
+                          ? "border-[#2b3446] bg-[#111723] text-gray-300 hover:border-red-400/40 hover:bg-[#171f2d]"
+                          : "border-[#222b3a] bg-[#0f1520] text-gray-600"
+                        : state === "safe"
+                          ? "border-green-500/50 bg-green-500/20 text-green-200"
+                          : "border-red-500/50 bg-red-500/20 text-red-200"
+                    }`}
+                  >
+                    {state === "hidden" ? "?" : state === "safe" ? "🍀" : "💣"}
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Chat example panel</h2>
+              <span className="text-xs text-gray-500">UI preview style</span>
+            </div>
+            <div className="mt-2 grid gap-1 rounded border border-[#283247] bg-[#101420] p-2 text-xs">
+              {sampleMessages.map((msg, i) => (
+                <p key={i} className="text-gray-300">
+                  <span className="mr-1 text-red-300">user{i + 1}:</span>
+                  {msg}
+                </p>
+              ))}
             </div>
           </Card>
 
-          {game && (
-            <Card title="Game Info">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Game ID</span>
-                  <span className="font-mono text-xs">{game.gameId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Status</span>
-                  <span
-                    className={`font-medium ${
-                      game.status === "ACTIVE"
-                        ? "text-green-400"
-                        : game.status === "CASHED_OUT"
-                          ? "text-indigo-400"
-                          : "text-red-400"
-                    }`}
-                  >
-                    {game.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Bet</span>
-                  <span className="font-mono">
-                    {atomicToCoins(game.betAtomic)} {VIRTUAL_CURRENCY_LABEL}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Mines</span>
-                  <span>{game.mineCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Safe Reveals</span>
-                  <span>{game.safeReveals}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Multiplier</span>
-                  <span className="text-yellow-300 font-mono">{game.currentMultiplier}x</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Potential Payout</span>
-                  <span className="font-mono">
-                    {atomicToCoins(game.potentialPayoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
-                  </span>
-                </div>
-                {game.payoutAtomic && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Final Payout</span>
-                    <span className="font-mono text-green-400">
-                      {atomicToCoins(game.payoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
-                    </span>
-                  </div>
-                )}
-                {lastReveal && (
-                  <div className="mt-2 pt-2 border-t border-gray-800">
-                    <p className="text-gray-400 text-xs">Last reveal:</p>
-                    <p className="text-xs">
-                      Cell {lastReveal.cellIndex} —{" "}
-                      <span className={lastReveal.hitMine ? "text-red-400" : "text-green-400"}>
-                        {lastReveal.hitMine ? "MINE!" : "Safe"}
-                      </span>
-                    </p>
-                  </div>
-                )}
-              </div>
+          {response && (
+            <Card title="API Response (debug)" className="border-[#1f2535] bg-[#0b0e14]">
+              <pre className="max-h-60 overflow-auto rounded bg-[#101420] p-3 text-xs text-gray-300">{response}</pre>
             </Card>
           )}
         </div>
-
-        <Card title="Board (5x5)">
-          <div className="grid grid-cols-5 gap-2">
-            {cells.map((state, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleReveal(idx)}
-                disabled={state !== "hidden" || !isActive || loading}
-                className={`aspect-square rounded flex items-center justify-center text-lg font-bold transition-all ${
-                  state === "hidden"
-                    ? isActive
-                      ? "bg-gray-700 hover:bg-gray-600 cursor-pointer"
-                      : "bg-gray-800 cursor-not-allowed"
-                    : state === "safe"
-                      ? "bg-green-800 text-green-200"
-                      : "bg-red-800 text-red-200"
-                }`}
-              >
-                {state === "hidden" ? "?" : state === "safe" ? "OK" : "X"}
-              </button>
-            ))}
-          </div>
-        </Card>
       </div>
-
-      {response && (
-        <Card title="API Response">
-          <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-800 p-3 rounded">
-            {response}
-          </pre>
-        </Card>
-      )}
     </div>
   );
 }

@@ -1,202 +1,168 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import Card from "@/components/Card";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import Button from "@/components/Button";
-import {
-  getHealthLive,
-  getHealthReady,
-  getMe,
-  logout,
-  getApiUrl,
-  getWsUrl,
-  type HealthLive,
-  type HealthReady,
-  type User,
-} from "@/lib/api";
-import { CasinoSocket, type SocketEvent } from "@/lib/socket";
-import { useToast } from "@/lib/toast";
+import Card from "@/components/Card";
+import { getLeaderboard, type LeaderboardEntry } from "@/lib/api";
+import { useAuthUI } from "@/lib/auth-ui";
 
-export default function Dashboard() {
-  const { showError } = useToast();
-  const [live, setLive] = useState<HealthLive | null>(null);
-  const [ready, setReady] = useState<HealthReady | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [wsStatus, setWsStatus] = useState("disconnected");
-  const [events, setEvents] = useState<string[]>([]);
-  const socketRef = useRef<CasinoSocket | null>(null);
+const gameCards: Array<{ title: string; href: string; accent: string; icon: string }> = [
+  { title: "Cases", href: "/cases", accent: "from-red-700 to-red-950", icon: "🗃️" },
+  { title: "Case Battles", href: "/battles", accent: "from-rose-700 to-rose-950", icon: "⚔️" },
+  { title: "Roulette", href: "/roulette", accent: "from-red-600 to-zinc-900", icon: "🎡" },
+  { title: "Mines", href: "/mines", accent: "from-red-500 to-zinc-900", icon: "💣" },
+  { title: "Blackjack", href: "/blackjack", accent: "from-red-800 to-zinc-950", icon: "🂡" }
+];
 
-  const addEvent = (msg: string) => {
-    setEvents((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
-  };
+const toCoins = (atomic: string): string => {
+  const value = Number(atomic);
+  if (!Number.isFinite(value)) {
+    return "0.00";
+  }
+  return (value / 1e8).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
-  const checkHealth = useCallback(async () => {
-    try {
-      const l = await getHealthLive();
-      setLive(l);
-      addEvent(`Health live: ${l.status}`);
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : "Health check failed");
-    }
-    try {
-      const r = await getHealthReady();
-      setReady(r);
-      addEvent(`Health ready: ${r.status} (pg=${r.checks.postgres}, redis=${r.checks.redis})`);
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : "Ready check failed");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showError]);
+export default function HomePage() {
+  const { authed, openAuth } = useAuthUI();
+  const [rows, setRows] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkHealth();
-    getMe().then(setUser).catch(() => {});
+    let cancelled = false;
+    setLoading(true);
+    getLeaderboard(8)
+      .then((data) => {
+        if (!cancelled) {
+          setRows(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRows([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    const sock = new CasinoSocket("USDT");
-    socketRef.current = sock;
-
-    sock.subscribe((ev: SocketEvent) => {
-      switch (ev.type) {
-        case "open":
-          setWsStatus("connected");
-          addEvent("WebSocket connected");
-          break;
-        case "close":
-          setWsStatus("disconnected");
-          addEvent("WebSocket disconnected");
-          break;
-        case "error":
-          setWsStatus("error");
-          addEvent("WebSocket error");
-          break;
-        case "roulette.round":
-          addEvent(`Round #${ev.data.roundNumber} — ${ev.data.status}`);
-          break;
-        case "roulette.betTotals":
-          addEvent(`Bet totals update for round ${ev.data.roundId}`);
-          break;
-        case "pong":
-          addEvent("pong received");
-          break;
-      }
-    });
-
-    sock.connect();
-    return () => sock.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkHealth]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // ignore
-    }
-    window.location.reload();
-  };
+  const highlights = useMemo(() => rows.slice(0, 6), [rows]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-3">
-          {user && <span className="text-sm text-gray-400">{user.email}</span>}
-          <Button variant="secondary" onClick={handleLogout}>
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card title="Connection Status">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">API URL</span>
-              <span className="font-mono text-xs">{getApiUrl()}</span>
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-red-500/25 bg-gradient-to-r from-zinc-900 via-zinc-900 to-red-950/50">
+          <div className="flex h-full min-h-[120px] items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-red-300">Banner 1</p>
+              <h1 className="mt-2 text-2xl font-extrabold text-white">Redwater Casino Experience</h1>
+              <p className="mt-1 text-sm text-zinc-300">Premium UI concept, provably fair games and social features.</p>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">WS URL</span>
-              <span className="font-mono text-xs">{getWsUrl()}</span>
+            <div className="h-14 w-14 rounded-full bg-red-500/20 text-3xl flex items-center justify-center">♦</div>
+          </div>
+        </Card>
+        <Card className="border-red-500/25 bg-gradient-to-br from-zinc-900 to-red-950/40">
+          <div className="flex h-full min-h-[120px] flex-col justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-red-300">Banner 2</p>
+              <p className="mt-2 text-sm text-zinc-300">Join rain every hour and track your progression leaderboard.</p>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">WebSocket</span>
-              <span
-                className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  wsStatus === "connected"
-                    ? "bg-green-900 text-green-300"
-                    : wsStatus === "error"
-                      ? "bg-red-900 text-red-300"
-                      : "bg-gray-800 text-gray-400"
-                }`}
+            {authed ? (
+              <Link href="/leaderboard" className="mt-2 text-sm font-semibold text-red-300 hover:text-red-200">
+                Open leaderboard →
+              </Link>
+            ) : (
+              <Button
+                className="mt-2 w-full bg-red-600 hover:bg-red-500"
+                onClick={() => {
+                  openAuth("login");
+                }}
               >
-                {wsStatus}
-              </span>
-            </div>
+                Sign in
+              </Button>
+            )}
           </div>
         </Card>
+      </section>
 
-        <Card title="API Health">
-          <div className="space-y-2 text-sm">
-            {live && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Live</span>
-                <span className="text-green-400">{live.status}</span>
+      <section>
+        <p className="mb-2 text-xs uppercase tracking-[0.24em] text-zinc-500">Games</p>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+          {gameCards.map((game) => (
+            <Link
+              key={game.href}
+              href={game.href}
+              className={`group rounded-lg border border-red-500/20 bg-gradient-to-br ${game.accent} p-3 transition hover:-translate-y-0.5 hover:border-red-400/40`}
+            >
+              <div className="flex h-full min-h-[88px] flex-col justify-between">
+                <span className="text-2xl">{game.icon}</span>
+                <span className="text-sm font-semibold text-white group-hover:text-red-100">{game.title}</span>
               </div>
-            )}
-            {ready && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Ready</span>
-                  <span className={ready.status === "ready" ? "text-green-400" : "text-yellow-400"}>
-                    {ready.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Postgres</span>
-                  <span>{ready.checks.postgres ? "OK" : "DOWN"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Redis</span>
-                  <span>{ready.checks.redis ? "OK" : "DOWN"}</span>
-                </div>
-              </>
-            )}
-            <Button variant="secondary" className="w-full mt-2" onClick={checkHealth}>
-              Refresh
-            </Button>
-          </div>
-        </Card>
-
-        <Card title="User Info">
-          {user ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">ID</span>
-                <span className="font-mono text-xs">{user.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Role</span>
-                <span>{user.role}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Status</span>
-                <span>{user.status}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">Loading...</p>
-          )}
-        </Card>
-      </div>
-
-      <Card title="Latest Events">
-        <div className="max-h-80 overflow-y-auto space-y-1 font-mono text-xs">
-          {events.length === 0 && <p className="text-gray-500">No events yet...</p>}
-          {events.map((e, i) => (
-            <div key={i} className="text-gray-400 border-b border-gray-800 py-1">
-              {e}
-            </div>
+            </Link>
           ))}
         </div>
-      </Card>
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-zinc-800 bg-zinc-950/80">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-200">Highlights</h2>
+            <div className="text-xs text-zinc-500">{loading ? "Loading..." : `${highlights.length} players`}</div>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-zinc-500">
+                  <th className="py-2 pr-4">Username</th>
+                  <th className="py-2 pr-4">Amount</th>
+                  <th className="py-2 pr-4">Rank</th>
+                  <th className="py-2">Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {highlights.length ? (
+                  highlights.map((row) => (
+                    <tr key={row.userId} className="border-t border-zinc-900">
+                      <td className="py-2 pr-4 text-zinc-200">{row.userLabel}</td>
+                      <td className="py-2 pr-4 text-amber-300">{toCoins(row.balanceAtomic)}</td>
+                      <td className="py-2 pr-4 text-zinc-300">#{row.rank}</td>
+                      <td className="py-2 text-zinc-200">{row.level}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr className="border-t border-zinc-900">
+                    <td colSpan={4} className="py-5 text-center text-zinc-500">
+                      No entries yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="border-zinc-800 bg-zinc-950/80">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-200">Quick access</h2>
+          <div className="mt-3 space-y-2 text-sm">
+            <Link href="/profile" className="block rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-200 hover:border-red-500/30">
+              Profile & Vault
+            </Link>
+            <Link href="/fairness" className="block rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-200 hover:border-red-500/30">
+              Provably Fair
+            </Link>
+            <Link href="/affiliates" className="block rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-200 hover:border-red-500/30">
+              Affiliates
+            </Link>
+            <Link href="/support" className="block rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-200 hover:border-red-500/30">
+              Support
+            </Link>
+          </div>
+        </Card>
+      </section>
     </div>
   );
 }
