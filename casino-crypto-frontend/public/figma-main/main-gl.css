@@ -6343,44 +6343,45 @@
   justify-content: flex-start;
 }
 
-/* Layout hardening for exported main page:
-   keep exact visual sections in 3 columns (left menu / content / right chat). */
+/* Layout anchoring for the exported desktop frame:
+   preserve original fixed geometry (1920px canvas) with chat on the right. */
 #n343.main-gl-frame-main-gl {
   position: relative;
-  display: grid;
-  grid-template-columns: 62px 1521px 297px;
-  grid-template-rows: auto 1fr;
-  column-gap: 20px;
-  row-gap: 20px;
+  display: block;
   width: 1920px;
   max-width: 1920px;
   min-height: 2191px;
   margin: 0 auto;
-  padding: 20px;
   box-sizing: border-box;
 }
 
 #n382.main-gl-frame-head0m {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  width: 100%;
-  max-width: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  max-width: 1920px;
   margin: 0;
 }
 
 #n27669.main-gl-frame-left-menu17 {
-  grid-column: 1;
-  grid-row: 2;
+  position: absolute;
+  top: 114px;
+  left: 20px;
 }
 
 #n19376.main-gl-frame-content59 {
-  grid-column: 2;
-  grid-row: 2;
+  position: absolute;
+  top: 114px;
+  left: 102px;
+  width: 1481px;
+  max-width: 1481px;
 }
 
 #n12149.main-gl-frame-chat-no {
-  grid-column: 3;
-  grid-row: 2;
+  position: absolute;
+  top: 114px;
+  left: 1603px;
 }
 
 /* Keep rain card inside the right chat column, not floating in viewport space. */
