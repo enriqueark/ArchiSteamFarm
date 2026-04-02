@@ -51,6 +51,8 @@ export default function HomePage() {
           title="Figma main export"
           src="/figma-main/main-gl.html"
           className="h-full w-full border-0"
+          allow="clipboard-read; clipboard-write"
+          loading="eager"
         />
       </div>
     </>

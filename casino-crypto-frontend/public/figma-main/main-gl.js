@@ -1,10 +1,21 @@
 (() => {
   const ORIGIN = window.location.origin;
   const resolveBaseUrl = () => {
-    const ownRuntime = window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL;
+    const ownRuntime =
+      window.__RUNTIME_CONFIG__ && typeof window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL === "string"
+        ? window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL
+        : "";
     const parentRuntime = (() => {
       try {
-        return window.parent?.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL;
+        if (
+          window.parent &&
+          window.parent !== window &&
+          window.parent.__RUNTIME_CONFIG__ &&
+          typeof window.parent.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL === "string"
+        ) {
+          return window.parent.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL;
+        }
+        return "";
       } catch {
         return "";
       }
@@ -29,7 +40,7 @@
   const BASE_URL = resolveBaseUrl();
   const API_BASE = `${BASE_URL}/api/v1`;
   const WS_URL = `${BASE_URL.replace(/^http/, "ws")}/api/v1/roulette/ws?currency=USDT`;
-  const ATOMIC_FACTOR = 100000000n;
+  const ATOMIC_FACTOR = 100000000;
 
   const state = {
     authed: false,
@@ -78,14 +89,17 @@
 
   const formatUsdFromAtomic = (atomic) => {
     try {
-      const value = typeof atomic === "bigint" ? atomic : BigInt(String(atomic || "0"));
-      const whole = value / ATOMIC_FACTOR;
-      const frac = value % ATOMIC_FACTOR;
-      const cents = Number((frac * 100n) / ATOMIC_FACTOR);
-      const sign = value < 0n ? "-" : "";
-      const wholeAbs = whole < 0n ? -whole : whole;
-      const wholeText = wholeAbs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-      return `${sign}$${wholeText}.${String(Math.abs(cents)).padStart(2, "0")}`;
+      const value = Number(atomic || 0);
+      if (!Number.isFinite(value)) {
+        return "$0.00";
+      }
+      const normalized = value / ATOMIC_FACTOR;
+      const sign = normalized < 0 ? "-" : "";
+      const abs = Math.abs(normalized);
+      const whole = Math.floor(abs);
+      const cents = Math.floor((abs - whole) * 100);
+      const wholeText = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return `${sign}$${wholeText}.${String(cents).padStart(2, "0")}`;
     } catch {
       return "$0.00";
     }
@@ -93,8 +107,11 @@
 
   const atomicToNumber = (atomic) => {
     try {
-      const value = typeof atomic === "bigint" ? atomic : BigInt(String(atomic || "0"));
-      return Number(value) / Number(ATOMIC_FACTOR);
+      const value = Number(atomic || 0);
+      if (!Number.isFinite(value)) {
+        return 0;
+      }
+      return value / ATOMIC_FACTOR;
     } catch {
       return 0;
     }
@@ -432,7 +449,7 @@
 
   const buildAllFeed = async () => {
     const rows = await request("/leaderboard?limit=20", { needsAuth: false });
-    const list = Array.isArray(rows?.rows) ? rows.rows : [];
+    const list = Array.isArray(rows && rows.rows) ? rows.rows : [];
     const games = ["Roulette", "Cases", "Mines", "Blackjack", "Case Battles"];
     return list.map((entry, idx) => ({
       game: games[idx % games.length],
@@ -449,13 +466,13 @@
     }
     const summary = await request("/profile/summary");
     const rows = [];
-    const perGame = summary?.perGame || {};
+    const perGame = (summary && summary.perGame) || {};
     const addGame = (name, data) => {
-      const wagered = atomicToNumber(data?.wageredAtomic || "0");
-      const payout = atomicToNumber(data?.payoutAtomic || "0");
+      const wagered = atomicToNumber((data && data.wageredAtomic) || "0");
+      const payout = atomicToNumber((data && data.payoutAtomic) || "0");
       rows.push({
         game: name,
-        player: state.user?.email?.split("@")[0] || "You",
+        player: state.user && state.user.email ? state.user.email.split("@")[0] || "You" : "You",
         amount: `$${wagered.toFixed(2)}`,
         multi: wagered > 0 ? `${(payout / wagered).toFixed(2)}x` : "0.00x",
         payout: `$${payout.toFixed(2)}`

@@ -39,6 +39,8 @@ export default function App({ Component, pageProps }: AppProps) {
     setAuthOpen(false);
   };
 
+  const isHomeRoute = Component === (require("./index").default as AppProps["Component"]);
+
   return (
     <AuthUIProvider
       value={{
@@ -52,7 +54,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <Layout>
           <Component {...pageProps} />
         </Layout>
-        <GlobalChatDrawer />
+        {!isHomeRoute && <GlobalChatDrawer />}
         {authOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <button
