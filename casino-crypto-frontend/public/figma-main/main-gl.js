@@ -1,7 +1,34 @@
 (() => {
   const ORIGIN = window.location.origin;
-  const API_BASE = `${ORIGIN}/api/v1`;
-  const WS_URL = `${ORIGIN.replace(/^http/, "ws")}/api/v1/roulette/ws?currency=USDT`;
+  const resolveBaseUrl = () => {
+    const ownRuntime = window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL;
+    const parentRuntime = (() => {
+      try {
+        return window.parent?.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL;
+      } catch {
+        return "";
+      }
+    })();
+    const configured = String(parentRuntime || ownRuntime || "").trim();
+    if (!configured) {
+      return ORIGIN;
+    }
+    let normalized = configured;
+    if (normalized.startsWith("/")) {
+      normalized = `${ORIGIN}${normalized}`;
+    }
+    // Avoid mixed content and local-only misconfigurations in production.
+    if (
+      window.location.protocol === "https:" &&
+      (normalized.startsWith("http://") || /\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(normalized))
+    ) {
+      return ORIGIN;
+    }
+    return normalized.replace(/\/$/, "");
+  };
+  const BASE_URL = resolveBaseUrl();
+  const API_BASE = `${BASE_URL}/api/v1`;
+  const WS_URL = `${BASE_URL.replace(/^http/, "ws")}/api/v1/roulette/ws?currency=USDT`;
   const ATOMIC_FACTOR = 100000000n;
 
   const state = {
@@ -250,7 +277,7 @@
   };
 
   const normalizeChatMessage = (raw) => ({
-    id: raw.id || crypto.randomUUID(),
+    id: raw.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     userId: raw.userId || "unknown",
     userLabel: raw.userLabel || raw.username || "Player",
     userLevel: raw.userLevel || raw.level || 1,
@@ -622,6 +649,7 @@
       state.authed = false;
       state.user = null;
       refreshAuthButtons();
+      void loadRainState();
       return;
     }
     try {
@@ -629,10 +657,13 @@
       state.authed = true;
       state.user = me;
       refreshAuthButtons();
+      void loadRainState();
     } catch {
       state.authed = false;
       state.user = null;
       refreshAuthButtons();
+      state.rain = null;
+      renderRain();
     }
   };
 
