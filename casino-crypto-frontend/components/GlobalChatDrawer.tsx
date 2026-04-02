@@ -271,37 +271,37 @@ export default function GlobalChatDrawer() {
   }, [rainState?.endsAt]);
 
   return (
-    <div className="fixed bottom-0 right-0 top-[72px] z-40 pointer-events-none">
+    <div className="fixed bottom-0 right-0 top-[98px] z-40 pointer-events-none">
       <aside
-        className={`pointer-events-auto relative h-full w-[270px] md:w-[290px] border-l border-cyan-500/40 bg-gray-950/95 shadow-[-20px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ${
+        className={`pointer-events-auto relative h-full w-[276px] rounded-l-lg border border-[#171c28] bg-[#0b0f17]/95 shadow-[-20px_0_40px_rgba(0,0,0,0.45)] transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 rounded-l-xl border border-r-0 border-cyan-500/40 bg-gray-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 shadow-[0_10px_22px_rgba(0,0,0,0.35)]"
+          className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-l-lg border border-r-0 border-[#222b3a] bg-[#131a26] px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-300 shadow-[0_10px_22px_rgba(0,0,0,0.35)]"
         >
           {toggleLabel}
         </button>
 
         <div className="flex h-full flex-col">
-          <div className="border-b border-gray-800 px-3 py-3">
+          <div className="border-b border-[#171c28] px-3 py-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-100">Live chat</h3>
-              <span className="text-[11px] text-gray-500">{messages.length} msgs</span>
+              <h3 className="text-sm font-semibold text-gray-100">💬 Chat</h3>
+              <span className="rounded bg-[#151b27] px-2 py-0.5 text-[11px] text-green-300">130</span>
             </div>
-            <div className="mt-2 rounded border border-cyan-500/30 bg-cyan-950/20 px-2 py-2 text-[11px]">
-              <p className="text-cyan-200">
-                Rain pot: <span className="font-semibold">{rainPotCoins.toFixed(2)} COINS</span>
+            <div className="mt-2 rounded border border-[#2c2418] bg-[#1b1711] px-2 py-2 text-[11px]">
+              <p className="text-amber-200">
+                ☁ Live Rain: <span className="font-semibold">${rainPotCoins.toFixed(2)}</span>
               </p>
-              <p className="text-gray-400">Ends at: {rainEndsAtLabel}</p>
-              <p className="text-gray-400">
+              <p className="text-gray-500">ends at {rainEndsAtLabel}</p>
+              <p className="text-gray-500">
                 Joined: {rainState?.joinedCount ?? 0} {rainState?.hasJoined ? "• You are in" : ""}
               </p>
               <div className="mt-2 flex items-center gap-1">
                 <Button
-                  className="px-2 py-1 text-[10px]"
+                  className="px-2 py-1 text-[10px] bg-[#202838] hover:bg-[#2a3449]"
                   disabled={!authed || rainBusy !== "idle" || Boolean(rainState?.hasJoined)}
                   onClick={() => {
                     void handleJoinRain();
@@ -310,14 +310,13 @@ export default function GlobalChatDrawer() {
                   {rainBusy === "join" ? "Joining..." : rainState?.hasJoined ? "Joined" : "Join"}
                 </Button>
                 <input
-                  className="w-14 rounded border border-gray-700 bg-gray-900 px-1.5 py-1 text-[10px] text-gray-100"
+                  className="w-14 rounded border border-[#283247] bg-[#111824] px-1.5 py-1 text-[10px] text-gray-100"
                   value={rainTipAmount}
                   onChange={(event) => setRainTipAmount(event.target.value)}
                   placeholder="1"
                 />
                 <Button
-                  variant="secondary"
-                  className="px-2 py-1 text-[10px]"
+                  className="px-2 py-1 text-[10px] bg-[#e3424b] text-white hover:bg-[#f04f58]"
                   disabled={!authed || rainBusy !== "idle"}
                   onClick={() => {
                     void handleTipRain();
@@ -329,10 +328,10 @@ export default function GlobalChatDrawer() {
             </div>
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+          <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
             {messages.map((entry) => (
-              <div key={entry.id} className="rounded-md border border-gray-800 bg-gray-900/70 px-2 py-1.5">
-                <div className="flex items-center gap-2 text-[11px] text-gray-400">
+              <div key={entry.id} className="rounded-md border border-[#1e2431] bg-[#0f131c] px-2 py-1.5">
+                <div className="flex items-center gap-2 text-[11px] text-gray-500">
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-gray-200">
                     {entry.avatarUrl ? (
                       <img src={entry.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
@@ -341,9 +340,10 @@ export default function GlobalChatDrawer() {
                     )}
                   </span>
                   <span className="max-w-[140px] truncate font-semibold text-gray-200">{entry.userLabel}</span>
-                  <span className="rounded bg-indigo-900/60 px-1.5 py-0.5 text-[10px] text-indigo-200">
+                  <span className="rounded bg-[#172238] px-1.5 py-0.5 text-[10px] text-indigo-200">
                     LVL {entry.userLevel}
                   </span>
+                  <span className="ml-auto text-[10px] text-gray-600">1 min ago</span>
                 </div>
                 <p className="mt-1 break-words text-xs text-gray-200">{entry.message}</p>
               </div>
@@ -352,26 +352,25 @@ export default function GlobalChatDrawer() {
             {messages.length === 0 ? <p className="text-xs text-gray-500">No messages yet.</p> : null}
           </div>
 
-          <div className="border-t border-gray-800 px-3 py-3">
+          <div className="border-t border-[#171c28] px-3 py-3">
             <div className="space-y-2">
-              <div className="rounded border border-gray-800 bg-gray-900/60 p-2">
-                <p className="text-[11px] text-gray-400">Tip user by public ID</p>
+              <div className="rounded border border-[#171c28] bg-[#10141d] p-2">
+                <p className="text-[11px] text-gray-500">Tip user by public ID</p>
                 <div className="mt-1 grid grid-cols-3 gap-1">
                   <input
-                    className="rounded border border-gray-700 bg-gray-900 px-1.5 py-1 text-[11px] text-gray-100"
+                    className="rounded border border-[#283247] bg-[#111824] px-1.5 py-1 text-[11px] text-gray-100"
                     placeholder="User ID"
                     value={tipTargetPublicId}
                     onChange={(event) => setTipTargetPublicId(event.target.value.replace(/\D/g, ""))}
                   />
                   <input
-                    className="rounded border border-gray-700 bg-gray-900 px-1.5 py-1 text-[11px] text-gray-100"
+                    className="rounded border border-[#283247] bg-[#111824] px-1.5 py-1 text-[11px] text-gray-100"
                     placeholder="Coins"
                     value={tipAmount}
                     onChange={(event) => setTipAmount(event.target.value)}
                   />
                   <Button
-                    variant="secondary"
-                    className="px-1 py-1 text-[10px]"
+                    className="px-1 py-1 text-[10px] bg-[#e3424b] text-white hover:bg-[#f04f58]"
                     disabled={!authed || tipBusy}
                     onClick={() => {
                       void handleTipUser();
@@ -381,7 +380,7 @@ export default function GlobalChatDrawer() {
                   </Button>
                 </div>
                 <input
-                  className="mt-1 w-full rounded border border-gray-700 bg-gray-900 px-1.5 py-1 text-[11px] text-gray-100"
+                  className="mt-1 w-full rounded border border-[#283247] bg-[#111824] px-1.5 py-1 text-[11px] text-gray-100"
                   placeholder="Message (optional)"
                   value={tipMessage}
                   maxLength={120}
@@ -390,7 +389,7 @@ export default function GlobalChatDrawer() {
               </div>
 
               <Input
-                label="Message"
+                label="Write message..."
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -406,12 +405,12 @@ export default function GlobalChatDrawer() {
                 placeholder="Write message..."
                 maxLength={CHAT_MAX_LENGTH}
               />
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
+              <div className="flex items-center justify-between text-[11px] text-gray-600">
                 <span>Max 300 chars</span>
                 <span>{chatInput.length}/{CHAT_MAX_LENGTH}</span>
               </div>
               <Button
-                className="w-full"
+                className="w-full bg-[#e3424b] text-white hover:bg-[#f04f58]"
                 onClick={() => void sendChatMessage()}
                 disabled={chatLoading || chatInput.trim().length === 0}
               >

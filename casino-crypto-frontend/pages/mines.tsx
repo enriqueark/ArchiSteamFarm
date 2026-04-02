@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import {
@@ -32,7 +31,6 @@ export default function MinesPage() {
   const [loading, setLoading] = useState(false);
   const [lastReveal, setLastReveal] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [response, setResponse] = useState<string>("");
-  const [hideExampleData, setHideExampleData] = useState(true);
 
   const resetBoard = () => {
     setCells(Array(BOARD_SIZE).fill("hidden"));
@@ -168,116 +166,100 @@ export default function MinesPage() {
   };
 
   const isActive = game?.status === "ACTIVE";
-  const sampleMessages = [
-    "oh wow",
-    "hola",
-    "lets go",
-    "nice pull",
-    "gg",
-    "crazy round"
-  ];
   const boardCells = useMemo(
     () =>
       cells.map((state, idx) => {
-        if (hideExampleData) {
-          return { idx, state };
-        }
         if (state !== "hidden") {
           return { idx, state };
         }
-        if (idx % 11 === 0) return { idx, state: "mine" as CellState };
-        if (idx % 5 === 2) return { idx, state: "safe" as CellState };
         return { idx, state };
       }),
-    [cells, hideExampleData]
+    [cells]
   );
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[250px_minmax(0,1fr)]">
-        <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
-          <p className="mb-3 text-xs uppercase tracking-[0.2em] text-gray-500">Games</p>
+    <div className="space-y-3">
+      <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3">
+        <aside className="rounded-lg border border-[#171c28] bg-[#090d14] p-3">
           <nav className="space-y-1 text-sm">
             <Link href="/cases" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
-              Cases
+              CASES
+            </Link>
+            <Link href="/battles" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
+              CASE BATTLE
             </Link>
             <Link href="/roulette" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
-              Roulette
+              ROULETTE
             </Link>
-            <span className="block rounded border border-red-500/40 bg-red-500/10 px-2 py-2 font-semibold text-red-200">
-              Mines
-            </span>
+            <span className="block rounded border border-red-500/40 bg-red-500/15 px-2 py-2 font-semibold text-red-200">MINES</span>
             <Link href="/blackjack" className="block rounded px-2 py-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
-              Blackjack
+              BLACKJACK
             </Link>
           </nav>
-        </Card>
+        </aside>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
-              <h1 className="text-xl font-bold text-white">Mines</h1>
-              <p className="mt-1 text-xs text-gray-500">Figma-style UI + real game logic</p>
-
-              <div className="mt-3 space-y-2">
+        <div className="space-y-3">
+          <div className="grid grid-cols-[214px_minmax(0,1fr)] gap-3">
+            <section className="rounded-lg border border-[#171c28] bg-[#0a0f17] p-3">
+              <p className="text-[11px] text-gray-500">Bet amount</p>
+              <div className="mt-1 flex items-center gap-1">
                 <Input
-                  label={`Bet (${VIRTUAL_CURRENCY_LABEL})`}
                   value={betCoins}
                   onChange={(e) => setBetCoins(e.target.value)}
                   disabled={isActive}
-                  className="bg-[#101420] border-[#283247]"
+                  className="h-8 border-[#1f2634] bg-[#111824] text-sm"
                 />
-                <Input
-                  label="Mines (1-24)"
-                  value={mineCount}
-                  onChange={(e) => setMineCount(e.target.value)}
-                  disabled={isActive}
-                  className="bg-[#101420] border-[#283247]"
-                />
+                <button className="h-8 rounded bg-[#171e2a] px-2 text-xs text-gray-300">1/2</button>
+                <button className="h-8 rounded bg-[#171e2a] px-2 text-xs text-gray-300">Max</button>
+              </div>
+              <div className="mt-2 h-1.5 rounded bg-[#2a2f3d]">
+                <div className="h-1.5 w-[92%] rounded bg-[#e34a52]" />
               </div>
 
-              <div className="mt-3 flex gap-2">
-                <Button
-                  className="flex-1 bg-red-600 hover:bg-red-500"
-                  onClick={handleStart}
-                  disabled={loading || isActive}
-                >
-                  {loading && !game ? "Starting..." : "Bet"}
-                </Button>
-                {isActive && (
-                  <Button variant="success" className="flex-1" onClick={handleCashout} disabled={loading}>
-                    {loading ? "..." : "Cashout"}
-                  </Button>
-                )}
+              <p className="mt-3 text-[11px] text-gray-500">Number of mines</p>
+              <Input
+                value={mineCount}
+                onChange={(e) => setMineCount(e.target.value)}
+                disabled={isActive}
+                className="mt-1 h-8 border-[#1f2634] bg-[#111824] text-sm"
+              />
+              <div className="mt-2 grid grid-cols-5 gap-1">
+                {[1, 3, 5, 10, 24].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    className={`h-7 rounded text-xs ${Number(mineCount) === count ? "bg-[#262f40] text-white" : "bg-[#141b27] text-gray-400"}`}
+                    onClick={() => setMineCount(String(count))}
+                    disabled={isActive}
+                  >
+                    {count}
+                  </button>
+                ))}
               </div>
 
-              <button
-                type="button"
-                onClick={() => setHideExampleData((prev) => !prev)}
-                className="mt-3 text-xs text-gray-400 underline underline-offset-2"
-              >
-                {hideExampleData ? "Show example board highlights" : "Hide example board highlights"}
-              </button>
-
-              {game && (
-                <div className="mt-3 rounded border border-[#283247] bg-[#101420] p-2 text-xs text-gray-300">
-                  <p>Game ID: {game.gameId.slice(0, 10)}...</p>
-                  <p>Status: {game.status}</p>
-                  <p>Multiplier: {game.currentMultiplier}x</p>
-                  <p>
-                    Potential: {atomicToCoins(game.potentialPayoutAtomic)} {VIRTUAL_CURRENCY_LABEL}
-                  </p>
-                  {lastReveal ? (
-                    <p className={lastReveal.hitMine ? "text-red-300" : "text-green-300"}>
-                      Last: cell {lastReveal.cellIndex} {lastReveal.hitMine ? "MINE" : "SAFE"}
-                    </p>
-                  ) : null}
+              <div className="mt-3 rounded border border-[#30212b] bg-gradient-to-b from-[#1a1016] to-[#0f121a] p-2">
+                <div className="flex h-[130px] items-center justify-center rounded border border-red-500/20 bg-[#101722] text-7xl">🧿</div>
+                <div className="mt-2 inline-flex rounded bg-red-500/90 px-2 py-0.5 text-xs font-semibold text-white">
+                  x{game?.currentMultiplier ?? "0.92"}
                 </div>
-              )}
-            </Card>
+              </div>
 
-            <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
-              <div className="grid grid-cols-5 gap-2">
+              <button className="mt-2 h-9 w-full rounded bg-[#171e2a] text-sm font-medium text-gray-400">Pick random tile</button>
+              <button
+                className="mt-2 h-9 w-full rounded bg-gradient-to-r from-[#e4414b] to-[#ff5963] text-sm font-semibold text-white"
+                onClick={isActive ? handleCashout : handleStart}
+                disabled={loading}
+              >
+                {isActive
+                  ? `Cashout $${atomicToCoins(game?.potentialPayoutAtomic ?? "0")}`
+                  : loading
+                  ? "Starting..."
+                  : "Start"}
+              </button>
+            </section>
+
+            <section className="rounded-lg border border-[#171c28] bg-[#0a0f17] p-4">
+              <div className="mx-auto grid max-w-[520px] grid-cols-5 gap-2.5">
                 {boardCells.map(({ state, idx }) => (
                   <button
                     key={idx}
@@ -286,42 +268,77 @@ export default function MinesPage() {
                     className={`aspect-square rounded-md border text-sm font-bold transition ${
                       state === "hidden"
                         ? isActive
-                          ? "border-[#2b3446] bg-[#111723] text-gray-300 hover:border-red-400/40 hover:bg-[#171f2d]"
-                          : "border-[#222b3a] bg-[#0f1520] text-gray-600"
+                          ? "border-[#2b3446] bg-[#121823] text-gray-300 hover:border-red-400/40 hover:bg-[#171f2d]"
+                          : "border-[#222b3a] bg-[#101721] text-gray-600"
                         : state === "safe"
-                          ? "border-green-500/50 bg-green-500/20 text-green-200"
-                          : "border-red-500/50 bg-red-500/20 text-red-200"
+                        ? "border-green-500/40 bg-[#3ed156] text-[#0b2612]"
+                        : "border-red-500/40 bg-[#e2464f] text-[#3c0e12]"
                     }`}
                   >
-                    {state === "hidden" ? "?" : state === "safe" ? "🍀" : "💣"}
+                    {state === "hidden" ? "✹" : state === "safe" ? "◈" : "☀"}
                   </button>
                 ))}
               </div>
-            </Card>
+            </section>
           </div>
 
-          <Card className="border-[#1f2535] bg-[#0b0e14] p-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Chat example panel</h2>
-              <span className="text-xs text-gray-500">UI preview style</span>
+          <footer className="rounded-lg border border-[#171c28] bg-[#080b12] px-4 py-5">
+            <div className="grid grid-cols-5 gap-6">
+              <div>
+                <p className="text-3xl font-black italic text-white">REDWATER</p>
+                <p className="mt-2 text-xs text-gray-500">© All rights reserved 2026</p>
+                <p className="mt-2 text-xs text-gray-600">support: support@redwater.gg</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Games</p>
+                <ul className="mt-2 space-y-1 text-sm text-gray-500">
+                  <li>Cases</li>
+                  <li>Case Battles</li>
+                  <li>Roulette</li>
+                  <li>Mines</li>
+                  <li>BlackJack</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Platform</p>
+                <ul className="mt-2 space-y-1 text-sm text-gray-500">
+                  <li>Rewards</li>
+                  <li>Affiliates</li>
+                  <li>Blog</li>
+                  <li>Support</li>
+                  <li>FAQ</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">About us</p>
+                <ul className="mt-2 space-y-1 text-sm text-gray-500">
+                  <li>Terms of Service</li>
+                  <li>Privacy Policy</li>
+                  <li>AML Policy</li>
+                  <li>Cookies Policy</li>
+                  <li>Fairness</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Community</p>
+                <ul className="mt-2 space-y-1 text-sm text-gray-500">
+                  <li>Twitter</li>
+                  <li>Discord</li>
+                  <li>Telegram</li>
+                  <li>Kick</li>
+                </ul>
+              </div>
             </div>
-            <div className="mt-2 grid gap-1 rounded border border-[#283247] bg-[#101420] p-2 text-xs">
-              {sampleMessages.map((msg, i) => (
-                <p key={i} className="text-gray-300">
-                  <span className="mr-1 text-red-300">user{i + 1}:</span>
-                  {msg}
-                </p>
-              ))}
-            </div>
-          </Card>
-
-          {response && (
-            <Card title="API Response (debug)" className="border-[#1f2535] bg-[#0b0e14]">
-              <pre className="max-h-60 overflow-auto rounded bg-[#101420] p-3 text-xs text-gray-300">{response}</pre>
-            </Card>
-          )}
+          </footer>
         </div>
       </div>
+
+      {response && (
+        <details className="rounded border border-[#171c28] bg-[#0a0f17] p-3 text-xs text-gray-400">
+          <summary className="cursor-pointer select-none">API response (debug)</summary>
+          <pre className="mt-2 max-h-60 overflow-auto rounded bg-[#101420] p-3 text-xs text-gray-300">{response}</pre>
+        </details>
+      )}
     </div>
   );
 }
