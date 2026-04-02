@@ -317,15 +317,6 @@
   const setupChatComposer = () => {
     const inputHost = byId("n12276");
     if (!inputHost) return;
-
-    const placeholderWrap = byId("n12276");
-    if (placeholderWrap && placeholderWrap.parentElement) {
-      const row = placeholderWrap.parentElement;
-      const placeholderNode = row.querySelector("#n12276");
-      if (placeholderNode) {
-        placeholderNode.remove();
-      }
-    }
     inputHost.innerHTML = "";
     const input = document.createElement("input");
     input.type = "text";
@@ -340,15 +331,6 @@
     input.style.fontSize = "16px";
     input.style.fontWeight = "500";
     inputHost.appendChild(input);
-
-    const rainCard = byId("n12232");
-    if (rainCard && !byId("figma-rain-card-moved")) {
-      const marker = document.createElement("div");
-      marker.id = "figma-rain-card-moved";
-      marker.style.display = "none";
-      inputHost.insertAdjacentElement("afterend", marker);
-      inputHost.insertAdjacentElement("afterend", rainCard);
-    }
 
     const send = async () => {
       const message = input.value.trim();
