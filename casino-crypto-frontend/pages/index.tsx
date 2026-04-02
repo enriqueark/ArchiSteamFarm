@@ -61,141 +61,183 @@ export default function HomePage() {
   }, [rows]);
 
   return (
-    <div className="grid grid-cols-[34px_minmax(0,1fr)] gap-3">
-      <aside className="rounded-md border border-[#171c28] bg-[#0b0f17] py-3">
-        <div className="space-y-2">
-          {sideIcons.map((icon) => (
-            <button
-              key={icon}
-              type="button"
-              className="mx-auto flex h-7 w-7 items-center justify-center rounded text-[11px] text-gray-400 transition hover:bg-white/5 hover:text-white"
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <div className="space-y-3">
-        <section className="grid grid-cols-12 gap-2">
-          <div className="col-span-8 flex h-[150px] items-center justify-center rounded-lg border border-[#1a2030] bg-[#12161f]">
-            <span className="text-4xl font-extrabold italic tracking-wide text-white/20">BANNER 1</span>
-          </div>
-          <div className="col-span-4 flex h-[150px] items-center justify-center rounded-lg border border-[#1a2030] bg-[#12161f]">
-            <span className="text-4xl font-extrabold italic tracking-wide text-white/20">BANNER 2</span>
-          </div>
-        </section>
-
-        <section>
-          <p className="mb-2 text-sm font-semibold text-white">🎮 Games</p>
-          <div className="grid grid-cols-5 gap-2">
-            {gameCards.map((game) => (
-              <Link
-                key={game.href}
-                href={game.href}
-                className={`h-[158px] rounded-lg border border-[#2a1d23] bg-gradient-to-b ${game.accent} p-3 transition hover:-translate-y-0.5`}
+    <div className="mx-auto w-full max-w-[1481px] font-sans">
+      <div className="grid grid-cols-[62px_minmax(0,1fr)] gap-3">
+        <aside className="rounded-[18px] bg-[#0d0d0d] py-2">
+          <div className="space-y-1.5">
+            {sideIcons.map((icon) => (
+              <button
+                key={icon}
+                type="button"
+                className="mx-auto flex h-[42px] w-[42px] items-center justify-center rounded-lg bg-[#161616] text-sm text-gray-400 shadow-[inset_0_1px_0_0_rgba(37,37,37,0.34),inset_0_-1px_0_0_rgba(36,36,36,0.39)]"
               >
-                <p className="text-xs font-bold tracking-wide text-white">{game.title}</p>
-                <div className="mt-6 flex h-[98px] items-end justify-center text-6xl">{game.icon}</div>
-              </Link>
+                {icon}
+              </button>
             ))}
           </div>
-        </section>
+        </aside>
 
-        <section className="rounded-lg border border-[#171c28] bg-[#090d14] p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-lg font-semibold text-white">✨ Highlights</p>
-              <div className="mt-2 flex gap-2 text-xs">
-                <button className="rounded-md bg-[#1a202d] px-3 py-1.5 text-white">All Games</button>
-                <button className="rounded-md bg-[#121722] px-3 py-1.5 text-gray-400">Big wins</button>
-                <button className="rounded-md bg-[#121722] px-3 py-1.5 text-gray-400">My Games</button>
+        <div className="space-y-4">
+          <section className="grid grid-cols-[981px_480px] gap-5 max-[1600px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="flex h-[328px] items-center justify-center rounded-2xl bg-[#1a1a1a]">
+              <span className="text-[42px] font-medium italic leading-[43px] text-white/20">BANNER 1</span>
+            </div>
+            <div className="flex h-[328px] items-center justify-center rounded-2xl bg-[#1a1a1a]">
+              <span className="text-[42px] font-medium italic leading-[43px] text-white/20">BANNER 2</span>
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-2xl text-red-400">✦</span>
+              <p className="text-2xl font-bold text-white">Games</p>
+            </div>
+            <div className="grid grid-cols-5 gap-5 max-[1600px]:grid-cols-3">
+              {gameCards.map((game) => (
+                <Link
+                  key={game.href}
+                  href={game.href}
+                  className={`h-[347px] rounded-2xl border border-[#2a1d23] bg-gradient-to-b ${game.accent} p-5 transition hover:-translate-y-0.5`}
+                >
+                  <p className="text-[20px] font-bold uppercase leading-5 text-white">{game.title}</p>
+                  <div className="mt-10 flex h-[220px] items-end justify-center text-8xl">{game.icon}</div>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl text-red-400">✦</span>
+                <p className="text-2xl font-bold text-white">Highlights</p>
+              </div>
+              <button className="rounded-xl bg-[#1a1a1a] px-9 py-4 text-[18px] font-medium text-white shadow-[inset_0_1px_0_0_#252525,inset_0_-1px_0_0_#242424]">
+                View All
+              </button>
+            </div>
+
+            <div className="mb-2 flex items-center gap-1 rounded-[18px] bg-[#060606] p-1.5">
+              <button className="rounded-xl bg-[#1a1a1a] px-9 py-4 text-[18px] font-medium text-white shadow-[inset_0_1px_0_0_#252525,inset_0_-1px_0_0_#242424]">
+                All Games
+              </button>
+              <button className="rounded-xl px-9 py-4 text-[18px] font-medium text-white">Big wins</button>
+              <button className="rounded-xl px-9 py-4 text-[18px] font-medium text-white">My Games</button>
+            </div>
+
+            <div className="overflow-hidden rounded-[18px] border border-[#1b1b1b]">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gradient-to-b from-[#282828] to-[#1a1a1a] text-[14px] text-[#828282]">
+                  <tr>
+                    <th className="px-4 py-5 text-left font-medium">Game</th>
+                    <th className="px-4 py-5 text-left font-medium">Player</th>
+                    <th className="px-4 py-5 text-left font-medium">Amount</th>
+                    <th className="px-4 py-5 text-left font-medium">Multi</th>
+                    <th className="px-4 py-5 text-left font-medium">Payout</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {highlights.map((row, idx) => (
+                    <tr key={`${row.userLabel}-${idx}`} className="border-t border-[#161616] bg-[#0d0d0d] text-gray-300">
+                      <td className="px-4 py-5 text-[#b2b2b2]">{row.game}</td>
+                      <td className="px-4 py-5 font-medium text-white">{row.userLabel}</td>
+                      <td className="px-4 py-5 text-[#ffc353]">{row.amount}</td>
+                      <td className="px-4 py-5 text-[#828282]">{row.multi}</td>
+                      <td className="px-4 py-5 text-[#ffc353]">{row.payout}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <footer className="rounded-[18px] bg-[#090909] px-5 py-8">
+            <div className="grid grid-cols-[302px_minmax(0,1fr)] gap-14">
+              <div>
+                <p className="text-[42px] font-medium italic leading-[43px] text-white">REDWATER</p>
+                <p className="mt-3 text-[16px] font-medium leading-[26px] text-[#828282]">© All rights reserved 2026</p>
+                <p className="mt-1 text-[16px] font-medium leading-[26px] text-[#828282]">
+                  Upgrader is operated by Innospace LTD,<br />
+                  Organization number 646564, Voukourestiou, 25<br />
+                  Neptune House, 1st Floor, Office 11, Zakaki, 3045,<br />
+                  Limassol, Cyprus.
+                </p>
+                <div className="mt-3 flex gap-14 text-[16px] leading-[26px]">
+                  <div>
+                    <p className="text-[#828282]">Support:</p>
+                    <p className="font-medium text-white">support@redwater.gg</p>
+                  </div>
+                  <div>
+                    <p className="text-[#828282]">Partners:</p>
+                    <p className="font-medium text-white">partners@redwater.gg</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-14">
+                <div>
+                  <p className="text-[18px] font-medium text-white">Games</p>
+                  <ul className="mt-4 space-y-4 text-[18px] font-medium text-[#828282]">
+                    <li>Cases</li>
+                    <li>Case Battles</li>
+                    <li>Roulette</li>
+                    <li>Mines</li>
+                    <li>BlackJack</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[18px] font-medium text-white">Platform</p>
+                  <ul className="mt-4 space-y-4 text-[18px] font-medium text-[#828282]">
+                    <li>Rewards</li>
+                    <li>Affiliates</li>
+                    <li>Blog</li>
+                    <li>Support</li>
+                    <li>FAQ</li>
+                    <li>Partnerships</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[18px] font-medium text-white">About us</p>
+                  <ul className="mt-4 space-y-4 text-[18px] font-medium text-[#828282]">
+                    <li>Tearms of Service</li>
+                    <li>Privacy Policy</li>
+                    <li>AML Policy</li>
+                    <li>Cookies Policy</li>
+                    <li>Self-Exclusion</li>
+                    <li>Fairness</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[18px] font-medium text-white">Community</p>
+                  <ul className="mt-4 space-y-4 text-[18px] font-medium text-[#828282]">
+                    <li>Twitter</li>
+                    <li>Discord</li>
+                    <li>Telegram</li>
+                    <li>Kick</li>
+                  </ul>
+                </div>
               </div>
             </div>
-            <button className="rounded-md bg-[#1a202d] px-3 py-1.5 text-xs font-semibold text-gray-300">View All</button>
-          </div>
 
-          <div className="overflow-hidden rounded-lg border border-[#171c28]">
-            <table className="min-w-full text-sm">
-              <thead className="bg-[#0d1119] text-[11px] text-gray-500">
-                <tr>
-                  <th className="px-4 py-2 text-left">Game</th>
-                  <th className="px-4 py-2 text-left">Player</th>
-                  <th className="px-4 py-2 text-left">Amount</th>
-                  <th className="px-4 py-2 text-left">Multi</th>
-                  <th className="px-4 py-2 text-left">Payout</th>
-                </tr>
-              </thead>
-              <tbody>
-                {highlights.map((row, idx) => (
-                  <tr key={`${row.userLabel}-${idx}`} className="border-t border-[#161b28] bg-[#0a0f17] text-gray-300">
-                    <td className="px-4 py-3 text-gray-400">{row.game}</td>
-                    <td className="px-4 py-3 font-semibold">{row.userLabel}</td>
-                    <td className="px-4 py-3 text-amber-300">{row.amount}</td>
-                    <td className="px-4 py-3 text-gray-500">{row.multi}</td>
-                    <td className="px-4 py-3 text-amber-300">{row.payout}</td>
-                  </tr>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-5">
+                <span className="inline-flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-[#f34950] text-[16px] text-[#f34950]">
+                  18+
+                </span>
+                <p className="max-w-[278px] text-[16px] leading-[26px] text-[#828282]">
+                  By accessing this site, you confirm that you are over 18 years old.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {["VISA", "MC", "PP", "GPay", "Apple", "BTC", "ETH", "USDT", "SOL", "Alipay"].map((x) => (
+                  <span key={x} className="rounded bg-[#111623] px-2 py-1 text-[10px] text-gray-500">
+                    {x}
+                  </span>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <footer className="rounded-lg border border-[#171c28] bg-[#080b12] px-4 py-5">
-          <div className="grid grid-cols-5 gap-6">
-            <div>
-              <p className="text-3xl font-black italic text-white">REDWATER</p>
-              <p className="mt-2 text-xs text-gray-500">© All rights reserved 2026</p>
-              <p className="mt-2 text-xs text-gray-600">support: support@redwater.gg</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Games</p>
-              <ul className="mt-2 space-y-1 text-sm text-gray-500">
-                <li>Cases</li>
-                <li>Case Battles</li>
-                <li>Roulette</li>
-                <li>Mines</li>
-                <li>BlackJack</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Platform</p>
-              <ul className="mt-2 space-y-1 text-sm text-gray-500">
-                <li>Rewards</li>
-                <li>Affiliates</li>
-                <li>Blog</li>
-                <li>Support</li>
-                <li>FAQ</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">About us</p>
-              <ul className="mt-2 space-y-1 text-sm text-gray-500">
-                <li>Terms of Service</li>
-                <li>Privacy Policy</li>
-                <li>AML Policy</li>
-                <li>Cookies Policy</li>
-                <li>Fairness</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Community</p>
-              <ul className="mt-2 space-y-1 text-sm text-gray-500">
-                <li>Twitter</li>
-                <li>Discord</li>
-                <li>Telegram</li>
-                <li>Kick</li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            {["VISA", "MC", "GPay", "Apple", "USDT", "BTC", "ETH"].map((x) => (
-              <span key={x} className="rounded bg-[#111623] px-2 py-1 text-[10px] text-gray-500">
-                {x}
-              </span>
-            ))}
-          </div>
-        </footer>
+          </footer>
+        </div>
       </div>
     </div>
   );
