@@ -51,7 +51,11 @@ export default function HomePage() {
 
   useEffect(() => {
     const updateScale = () => {
-      const nextScale = Math.min(1, window.innerWidth / FIGMA_MAIN_WIDTH);
+      const nextScale = Math.min(
+        1,
+        window.innerWidth / FIGMA_MAIN_WIDTH,
+        window.innerHeight / FIGMA_MAIN_HEIGHT
+      );
       setScale(nextScale > 0 ? nextScale : 1);
     };
     updateScale();
@@ -64,9 +68,9 @@ export default function HomePage() {
       <Head>
         <title>REDWATER</title>
       </Head>
-      <div className="w-full overflow-x-hidden bg-[#090909]">
+      <div className="h-screen w-full overflow-hidden bg-[#090909] flex items-start justify-center">
         <div
-          className="mx-auto relative"
+          className="relative"
           style={{
             width: `${Math.round(FIGMA_MAIN_WIDTH * scale)}px`,
             height: `${Math.round(FIGMA_MAIN_HEIGHT * scale)}px`
