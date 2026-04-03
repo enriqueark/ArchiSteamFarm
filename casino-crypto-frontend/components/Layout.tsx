@@ -5,12 +5,14 @@ import ChatPanel from "./ChatPanel";
 import { getWallets, type Wallet } from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
-const sideIcons = [
-  { href: "/", src: "/assets/976039a8dadda2c262ac3ebbbd8ca834.svg", alt: "Home" },
-  { href: "/roulette", src: "/assets/138b5ed291793fe7e3a99f5ebfe8d972.svg", alt: "Roulette" },
-  { href: "/mines", src: "/assets/fc114122ca6a2b7db5205fd3c5a1cb2c.svg", alt: "Mines" },
-  { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", alt: "Wallet" },
-  { href: "#", src: "/assets/b12fc678f16ee563f84635f59fbeb5f2.svg", alt: "More" },
+const sideLinks = [
+  { href: "/", src: "/assets/976039a8dadda2c262ac3ebbbd8ca834.svg", label: "Home" },
+  { href: "/cases", src: "/assets/098fe17d7ecd701c12a38a0cadfb52c7.svg", label: "Cases" },
+  { href: "/case-battles", src: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg", label: "Case Battle" },
+  { href: "/roulette", src: "/assets/30f1deaab44de7043abb1842bd019412.svg", label: "Roulette" },
+  { href: "/mines", src: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg", label: "Mines" },
+  { href: "#", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
+  { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Wallet" },
 ];
 
 function formatAtomic(val: string, decimals = 6): string {
@@ -26,6 +28,7 @@ interface Props {
 
 export default function Layout({ children, onLogout, userEmail }: Props) {
   const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<RouletteRoundEvent[]>([]);
@@ -55,28 +58,40 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
 
   return (
     <div className="min-h-screen flex bg-page">
-      {/* Left sidebar */}
-      <aside className="w-[62px] bg-chrome rounded-panel flex flex-col items-center py-2.5 gap-1 shrink-0">
-        {sideIcons.map((item) => (
-          <Link
-            key={item.alt}
-            href={item.href}
-            title={item.alt}
-            className={`w-[42px] h-[42px] flex items-center justify-center rounded-btn transition-all ${
-              router.pathname === item.href ? "bg-[#1a1a1a]" : "hover:bg-[#161616]"
-            }`}
-          >
-            <img src={item.src} alt={item.alt} width={24} height={24} />
-          </Link>
-        ))}
+      {/* Left sidebar — expandable */}
+      <aside
+        className={`bg-chrome flex flex-col py-2.5 shrink-0 transition-all duration-200 overflow-hidden ${
+          sidebarOpen ? "w-[200px]" : "w-[62px]"
+        }`}
+      >
+        {sideLinks.map((item) => {
+          const active = router.pathname === item.href;
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`flex items-center gap-3 mx-2 px-2.5 h-[42px] rounded-btn transition-all shrink-0 ${
+                active ? "bg-[#1a1a1a] text-white" : "text-muted hover:bg-[#161616] hover:text-white"
+              }`}
+            >
+              <img src={item.src} alt={item.label} className="w-6 h-6 shrink-0" />
+              {sidebarOpen && (
+                <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+              )}
+            </Link>
+          );
+        })}
       </aside>
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top nav */}
-        <header className="bg-chrome px-5 py-4 flex items-center justify-between shrink-0">
+        <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
-            <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6 opacity-60" />
+            {/* Hamburger toggles sidebar */}
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:opacity-100 opacity-60 transition-opacity">
+              <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6" />
+            </button>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
@@ -84,15 +99,15 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
 
           <div className="flex items-center gap-6">
-            <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
+            <Link href="#" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/9c5bb018d55a11c0b094ee2c9833d52f.svg" alt="" className="w-5 h-5" />
               <span>Rewards</span>
             </Link>
-            <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
+            <Link href="#" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/83d81222ca9a94fcdf1e086fa398eed1.svg" alt="" className="w-5 h-5" />
               <span>Affiliates</span>
             </Link>
-            <div className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2 cursor-pointer">
               <img src="/assets/d9129866945bfa6765d5ea9981de3f1c.png" alt="" className="w-8 h-8" />
               <div className="leading-tight">
                 <p className="text-xs font-bold text-[#382400]">WEEKLY</p>
@@ -102,7 +117,6 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Balance display */}
             {primaryWallet && (
               <Link
                 href="/wallet"
@@ -128,7 +142,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
         </header>
 
-        {/* Live ticker - roulette results */}
+        {/* Live ticker */}
         <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden">
           <div className={`flex items-center gap-1.5 py-1.5 px-1.5 ${tickerEvents.length > 5 ? "ticker-scroll" : ""}`}>
             {(tickerEvents.length > 0 ? [...tickerEvents, ...tickerEvents] : Array.from({ length: 10 })).map((ev, i) => {
@@ -174,6 +188,14 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
             {children}
           </main>
           {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+          {!chatOpen && (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="fixed bottom-4 right-4 w-12 h-12 rounded-full bg-accent-red flex items-center justify-center text-white shadow-lg z-50 hover:bg-[#f75154] transition-colors"
+            >
+              💬
+            </button>
+          )}
         </div>
       </div>
     </div>

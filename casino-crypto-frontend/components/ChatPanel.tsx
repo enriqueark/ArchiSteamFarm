@@ -32,17 +32,13 @@ export default function ChatPanel({ onClose }: Props) {
             <span className="text-sm font-medium text-accent-red">Chat</span>
           </div>
           <div className="flex items-center gap-1.5 bg-[#161616] rounded-md px-2 py-1">
-            <span className="text-[9px] text-[#555]">PREVIEW</span>
+            <img src="/assets/7633b71f35a53e0231fddc5fed059472.svg" alt="" className="w-3.5 h-3.5" />
+            <span className="text-xs text-muted">130</span>
           </div>
         </div>
         <button onClick={onClose}>
-          <img src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg" alt="close" className="w-5 h-5 opacity-60" />
+          <img src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg" alt="close" className="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity" />
         </button>
-      </div>
-
-      {/* No backend chat API notice */}
-      <div className="mx-3 my-2 rounded-btn bg-[#1a1a1a] border border-[#252525] px-3 py-2">
-        <p className="text-[10px] text-[#555] text-center">Chat requires backend API (not yet implemented)</p>
       </div>
 
       {/* Live Rain card */}
@@ -92,8 +88,8 @@ export default function ChatPanel({ onClose }: Props) {
             placeholder="Write message..."
             className="flex-1 bg-transparent text-sm text-white placeholder-muted outline-none"
           />
-          <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="w-5 h-5 opacity-50 cursor-pointer" />
-          <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="w-5 h-5 opacity-50 cursor-pointer" />
+          <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="w-5 h-5 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" />
+          <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="w-5 h-5 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" />
         </div>
       </div>
     </aside>
