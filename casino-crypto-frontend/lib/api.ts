@@ -223,8 +223,25 @@ export async function placeRouletteBet(
   );
 }
 
-export async function getMyRouletteBets(limit = 50) {
-  return request<unknown[]>(`/roulette/bets/me?limit=${limit}`);
+export interface RouletteBet {
+  id: string;
+  roundId: string;
+  currency: string;
+  betType: string;
+  betValue: string | null;
+  stakeAtomic: string;
+  payoutAtomic: string | null;
+  status: string;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+export async function getMyRouletteBets(limit = 50): Promise<RouletteBet[]> {
+  return request<RouletteBet[]>(`/roulette/bets/me?limit=${limit}`);
+}
+
+export async function getLedgerEntries(currency: string, limit = 50) {
+  return request<unknown[]>(`/wallets/${currency}/entries?limit=${limit}`);
 }
 
 // ── Mines ───────────────────────────────────────────────────────────────
