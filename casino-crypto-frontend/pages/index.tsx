@@ -23,11 +23,36 @@ const paymentIcons = [
   "/assets/35903d683ebe29f6d6e095f24da6013e.svg",
 ];
 
-const footerLinks: Record<string, string[]> = {
-  Games: ["Cases", "Case Battles", "Roulette", "Mines", "BlackJack"],
-  Platform: ["Rewards", "Affiliates", "Blog", "Support", "FAQ", "Partnerships"],
-  "About us": ["Terms of Service", "Privacy Policy", "AML Policy", "Cookies Policy", "Self-Exclusion", "Fairness"],
-  Community: ["Twitter", "Discord", "Telegram", "Kick"],
+const footerLinks: Record<string, Array<{ label: string; href: string }>> = {
+  Games: [
+    { label: "Cases", href: "/cases" },
+    { label: "Case Battles", href: "/case-battles" },
+    { label: "Roulette", href: "/roulette" },
+    { label: "Mines", href: "/mines" },
+    { label: "BlackJack", href: "/mines" }
+  ],
+  Platform: [
+    { label: "Rewards", href: "/roulette" },
+    { label: "Affiliates", href: "/wallet" },
+    { label: "Blog", href: "/" },
+    { label: "Support", href: "/wallet" },
+    { label: "FAQ", href: "/" },
+    { label: "Partnerships", href: "/" }
+  ],
+  "About us": [
+    { label: "Terms of Service", href: "/" },
+    { label: "Privacy Policy", href: "/" },
+    { label: "AML Policy", href: "/" },
+    { label: "Cookies Policy", href: "/" },
+    { label: "Self-Exclusion", href: "/" },
+    { label: "Fairness", href: "/" }
+  ],
+  Community: [
+    { label: "Twitter", href: "/" },
+    { label: "Discord", href: "/" },
+    { label: "Telegram", href: "/" },
+    { label: "Kick", href: "/" }
+  ]
 };
 
 function formatAtomic(val: string, decimals = 6): string {
@@ -189,8 +214,8 @@ export default function HomePage() {
                 <h3 className="text-sm font-semibold text-white mb-4">{title}</h3>
                 <ul className="space-y-2.5">
                   {links.map((l) => (
-                    <li key={l}>
-                      <Link href="#" className="text-sm text-muted hover:text-white transition-colors">{l}</Link>
+                    <li key={l.label}>
+                      <Link href={l.href} className="text-sm text-muted hover:text-white transition-colors">{l.label}</Link>
                     </li>
                   ))}
                 </ul>

@@ -314,6 +314,58 @@ export async function cashoutMines(gameId: string): Promise<MinesGame> {
   );
 }
 
+// ── Chat / Rain ──────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  userLevel: number;
+  avatarUrl: string | null;
+  message: string;
+  createdAt: string;
+}
+
+export async function getChatMessages(limit = 60): Promise<ChatMessage[]> {
+  return request<ChatMessage[]>(`/chat/messages?limit=${limit}`, {}, false);
+}
+
+export async function sendChatMessage(message: string): Promise<ChatMessage> {
+  return request<ChatMessage>(
+    "/chat/messages",
+    { method: "POST", body: JSON.stringify({ message }) },
+    true
+  );
+}
+
+export interface RainState {
+  roundId: string;
+  startsAt: string;
+  endsAt: string;
+  baseAmountAtomic: string;
+  tippedAmountAtomic: string;
+  totalAmountAtomic: string;
+  joinedCount: number;
+  hasJoined: boolean;
+}
+
+export async function getRainState(): Promise<RainState> {
+  return request<RainState>("/chat/rain/current");
+}
+
+export async function joinRain(): Promise<RainState> {
+  return request<RainState>("/chat/rain/join", { method: "POST" }, true, true);
+}
+
+export async function tipRain(amountCoins: number): Promise<{ rain: RainState }> {
+  return request<{ rain: RainState }>(
+    "/chat/rain/tip",
+    { method: "POST", body: JSON.stringify({ amountCoins }) },
+    true,
+    true
+  );
+}
+
 // ── User ────────────────────────────────────────────────────────────────
 
 export interface User {

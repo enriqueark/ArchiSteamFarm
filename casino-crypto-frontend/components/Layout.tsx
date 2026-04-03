@@ -11,7 +11,7 @@ const sideLinks = [
   { href: "/case-battles", src: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg", label: "Case Battle" },
   { href: "/roulette", src: "/assets/30f1deaab44de7043abb1842bd019412.svg", label: "Roulette" },
   { href: "/mines", src: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg", label: "Mines" },
-  { href: "#", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
+  { href: "/cases", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
   { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Wallet" },
 ];
 
@@ -99,11 +99,11 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
 
           <div className="flex items-center gap-6">
-            <Link href="#" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
+            <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/9c5bb018d55a11c0b094ee2c9833d52f.svg" alt="" className="w-5 h-5" />
               <span>Rewards</span>
             </Link>
-            <Link href="#" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
+            <Link href="/cases" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/83d81222ca9a94fcdf1e086fa398eed1.svg" alt="" className="w-5 h-5" />
               <span>Affiliates</span>
             </Link>
