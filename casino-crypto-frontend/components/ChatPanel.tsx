@@ -206,7 +206,7 @@ export default function ChatPanel({ onClose }: Props) {
 
   return (
     <aside
-      className="w-[297px] shrink-0 rounded-card flex flex-col overflow-hidden"
+      className="sticky top-0 h-[100vh] w-[297px] shrink-0 rounded-card flex flex-col overflow-hidden"
       style={{ background: "linear-gradient(180deg, #121212 0%, #0d0d0d 100%)" }}
     >
       {/* Header */}
@@ -258,7 +258,7 @@ export default function ChatPanel({ onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2 space-y-4">
         {messages.map((m, i) => (
           <div key={m.id || i} className="flex items-start gap-2.5">
             {m.avatarUrl ? (

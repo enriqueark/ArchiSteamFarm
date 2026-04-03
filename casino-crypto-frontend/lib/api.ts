@@ -244,6 +244,360 @@ export async function getLedgerEntries(currency: string, limit = 50) {
   return request<unknown[]>(`/wallets/${currency}/entries?limit=${limit}`);
 }
 
+// ── Cases ────────────────────────────────────────────────────────────────
+
+export interface CaseListItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  logoUrl: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+}
+
+export interface CaseItem {
+  id: string;
+  name: string;
+  valueAtomic: string;
+  dropRate: string;
+  imageUrl: string | null;
+  cs2SkinId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface CaseDetails {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  logoUrl: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
+  createdAt: string;
+  updatedAt: string;
+  items: CaseItem[];
+}
+
+export interface CaseOpeningResult {
+  openingId: string;
+  caseId: string;
+  caseSlug: string;
+  caseTitle: string;
+  item: CaseItem;
+  topTierEligible: boolean;
+  topTierItems: CaseItem[];
+  roll: number;
+  payoutAtomic: string;
+  profitAtomic: string;
+  priceAtomic: string;
+  currency: string;
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
+  wallet: {
+    walletId: string;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+  };
+  createdAt: string;
+}
+
+export async function getCases(): Promise<CaseListItem[]> {
+  return request<CaseListItem[]>("/cases", {}, false);
+}
+
+export async function getCaseDetails(caseId: string): Promise<CaseDetails> {
+  return request<CaseDetails>(`/cases/${caseId}`, {}, false);
+}
+
+export async function openCase(caseId: string): Promise<CaseOpeningResult> {
+  return request<CaseOpeningResult>(
+    `/cases/${caseId}/open`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    },
+    true,
+    true
+  );
+}
+
+export async function getMyCaseOpenings(limit = 30): Promise<CaseOpeningResult[]> {
+  return request<CaseOpeningResult[]>(`/cases/openings/me?limit=${limit}`);
+}
+
+// ── Battles ──────────────────────────────────────────────────────────────
+
+export type BattleTemplate =
+  | "ONE_VS_ONE"
+  | "TWO_VS_TWO"
+  | "ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "TWO_VS_TWO_VS_TWO"
+  | "THREE_VS_THREE";
+
+export interface BattleCaseEntry {
+  id: string;
+  orderIndex: number;
+  caseId: string;
+  caseTitle: string;
+  caseSlug: string;
+  casePriceAtomic: string;
+}
+
+export interface BattleSlotEntry {
+  id: string;
+  seatIndex: number;
+  teamIndex: number;
+  state: "OPEN" | "JOINED" | "BOT_FILLED";
+  userId: string | null;
+  displayName: string;
+  isBot: boolean;
+  borrowPercent: number;
+  paidAmountAtomic: string;
+  payoutAtomic: string;
+  winWeightAtomic: string;
+  profitAtomic: string;
+}
+
+export interface BattleDropEntry {
+  id: string;
+  roundIndex: number;
+  orderIndex: number;
+  battleCaseId: string;
+  battleSlotId: string;
+  caseItemId: string;
+  caseItemName: string;
+  valueAtomic: string;
+}
+
+export interface BattleState {
+  id: string;
+  status: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  template: BattleTemplate;
+  modeCrazy: boolean;
+  modeGroup: boolean;
+  modeJackpot: boolean;
+  modeTerminal: boolean;
+  modeFast: boolean;
+  modePrivate: boolean;
+  modeBorrow: boolean;
+  totalCostAtomic: string;
+  totalPayoutAtomic: string;
+  winnerTeam: number | null;
+  winnerUserId: string | null;
+  jackpotRoll: number | null;
+  jackpotWinnerSlotId: string | null;
+  jackpotChances: Array<{
+    slotId: string;
+    seatIndex: number;
+    displayName: string;
+    chancePercent: number;
+    weightAtomic: string;
+  }> | null;
+  createdByUserId: string;
+  createdAt: string;
+  startedAt: string | null;
+  settledAt: string | null;
+  cases: BattleCaseEntry[];
+  slots: BattleSlotEntry[];
+  drops: BattleDropEntry[];
+}
+
+export async function listBattles(query?: {
+  includePrivate?: boolean;
+  status?: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  limit?: number;
+}): Promise<BattleState[]> {
+  const params = new URLSearchParams();
+  if (typeof query?.includePrivate === "boolean") params.set("includePrivate", String(query.includePrivate));
+  if (query?.status) params.set("status", query.status);
+  if (typeof query?.limit === "number") params.set("limit", String(query.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<BattleState[]>(`/battles${suffix}`);
+}
+
+export async function getBattle(battleId: string): Promise<BattleState> {
+  return request<BattleState>(`/battles/${battleId}`);
+}
+
+export async function createBattle(input: {
+  template: BattleTemplate;
+  caseIds: string[];
+  modeCrazy?: boolean;
+  modeGroup?: boolean;
+  modeJackpot?: boolean;
+  modeTerminal?: boolean;
+  modeFast?: boolean;
+  modePrivate?: boolean;
+  modeBorrow?: boolean;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    "/battles",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function joinBattle(input: {
+  battleId: string;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        borrowPercent: input.borrowPercent ?? 100,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function callBattleBot(input: {
+  battleId: string;
+  seatIndex: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/call-bot`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        seatIndex: input.seatIndex,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function fillBattleBots(input: {
+  battleId: string;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/fill-bots`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+// ── Blackjack ─────────────────────────────────────────────────────────────
+
+export type BlackjackAction = "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE";
+
+export interface BlackjackHandState {
+  cards: string[];
+  stakeAtomic: string;
+  doubled: boolean;
+  stood: boolean;
+  busted: boolean;
+  blackjack: boolean;
+  value: number;
+}
+
+export interface BlackjackGame {
+  gameId: string;
+  status: "ACTIVE" | "WON" | "LOST" | "PUSH" | "CANCELLED";
+  currency: string;
+  initialBetAtomic: string;
+  mainBetAtomic: string;
+  sideBetPairsAtomic: string;
+  sideBet21Plus3Atomic: string;
+  insuranceBetAtomic: string | null;
+  canSplit: boolean;
+  canInsurance: boolean;
+  activeHandIndex: number;
+  dealerRevealed: boolean;
+  playerHands: BlackjackHandState[];
+  dealerCards: string[];
+  dealerVisibleCards: string[];
+  paytable: {
+    pairsMultiplier: number;
+    plus3Multiplier: number;
+  };
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
+  payoutAtomic: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  wallet: {
+    walletId: string;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+  };
+}
+
+export async function startBlackjackGame(input: {
+  currency: string;
+  betAtomic: string;
+  sideBetPairsAtomic?: string;
+  sideBet21Plus3Atomic?: string;
+}): Promise<BlackjackGame> {
+  return request<BlackjackGame>(
+    "/blackjack/games",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function getActiveBlackjackGame(currency = "USDT"): Promise<BlackjackGame | null> {
+  return request<BlackjackGame | null>(`/blackjack/games/active?currency=${currency}`, {}, true);
+}
+
+export async function actBlackjack(gameId: string, action: BlackjackAction): Promise<BlackjackGame> {
+  return request<BlackjackGame>(
+    `/blackjack/games/${gameId}/action`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action })
+    },
+    true,
+    true
+  );
+}
+
 // ── Mines ───────────────────────────────────────────────────────────────
 
 export interface MinesGame {

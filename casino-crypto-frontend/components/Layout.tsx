@@ -11,7 +11,7 @@ const sideLinks = [
   { href: "/case-battles", src: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg", label: "Case Battle" },
   { href: "/roulette", src: "/assets/30f1deaab44de7043abb1842bd019412.svg", label: "Roulette" },
   { href: "/mines", src: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg", label: "Mines" },
-  { href: "/cases", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
+  { href: "/blackjack", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
   { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Wallet" },
 ];
 
@@ -57,7 +57,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
   const primaryWallet = wallets.find((w) => w.currency === "USDT") || wallets[0];
 
   return (
-    <div className="min-h-screen flex bg-page">
+    <div className="h-screen flex overflow-hidden bg-page">
       {/* Left sidebar — expandable */}
       <aside
         className={`bg-chrome flex flex-col py-2.5 shrink-0 transition-all duration-200 overflow-hidden ${
@@ -84,7 +84,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
       </aside>
 
       {/* Main column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex min-h-0 flex-col min-w-0">
         {/* Top nav */}
         <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
@@ -183,8 +183,8 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         </div>
 
         {/* Content + Chat */}
-        <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
             {children}
           </main>
           {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
