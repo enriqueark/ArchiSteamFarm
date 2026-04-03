@@ -73,6 +73,14 @@ function TopTierReveal({ opening, onClose }: TopTierRevealProps) {
                     : "border-slate-700 bg-slate-900 text-slate-300"
                 }`}
               >
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="mb-2 h-14 w-full rounded border border-slate-700 object-contain bg-slate-950"
+                  />
+                ) : null}
                 <div className="font-semibold">{item.name}</div>
                 <div className="opacity-80">{fmtCoins(item.valueAtomic)} COINS</div>
               </div>
@@ -252,6 +260,14 @@ export default function CasesPage() {
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
             {selectedCase.items.map((item) => (
               <div key={item.id} className="rounded border border-slate-700 bg-slate-900 p-2 text-sm">
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="mb-2 h-20 w-full rounded border border-slate-700 object-contain bg-slate-950"
+                  />
+                ) : null}
                 <div className="font-semibold text-white">{item.name}</div>
                 <div className="text-slate-300">
                   {fmtCoins(item.valueAtomic)} COINS • {Number(item.dropRate).toFixed(2)}%
@@ -279,6 +295,14 @@ export default function CasesPage() {
           {myOpenings.length ? (
             myOpenings.map((row) => (
               <div key={row.openingId} className="rounded border border-slate-700 bg-slate-900 p-2 text-sm">
+                {row.item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={row.item.imageUrl}
+                    alt={row.item.name}
+                    className="mb-2 h-16 w-full rounded border border-slate-700 object-contain bg-slate-950"
+                  />
+                ) : null}
                 <div className="font-semibold text-white">
                   {row.caseTitle} → {row.item.name}
                 </div>

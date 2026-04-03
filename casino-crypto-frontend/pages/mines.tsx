@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  startMinesGame, revealMine, cashoutMines, getWallets,
+  startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic,
   type MinesGame, type MinesRevealResponse,
 } from "@/lib/api";
 
@@ -36,6 +36,12 @@ export default function MinesPage() {
   const [err, setErr] = useState<string | null>(null);
   const [, setLR] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [maxBal, setMaxBal] = useState(5000);
+  const [skinPreview, setSkinPreview] = useState<{
+    id: string;
+    name: string;
+    valueAtomic: string;
+    imageUrl: string | null;
+  } | null>(null);
 
   useEffect(() => {
     getWallets().then((w) => {
@@ -47,12 +53,25 @@ export default function MinesPage() {
   const act = game?.status === "ACTIVE";
   const lost = game?.status === "LOST";
   const ba = String(Math.round(parseFloat(bet || "0") * 1e6));
+  const refreshSkinPreview = async (amountAtomic: string | null | undefined) => {
+    if (!amountAtomic) {
+      setSkinPreview(null);
+      return;
+    }
+    try {
+      const quote = await getSkinPreviewByAmountAtomic(amountAtomic);
+      setSkinPreview(quote.preview);
+    } catch {
+      setSkinPreview(null);
+    }
+  };
 
-  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); };
+  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); setSkinPreview(null); };
   const start = async () => {
     setErr(null); setLd(true); reset();
     try { const g = await startMinesGame(cur, ba, mc); setGame(g);
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
+      await refreshSkinPreview(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const reveal = async (idx: number) => {
@@ -61,11 +80,16 @@ export default function MinesPage() {
     try { const r = await revealMine(game.gameId, idx); setGame(r); setLR(r.reveal);
       const n = [...cells]; n[idx] = r.reveal.hitMine ? "mine" : "safe";
       r.revealedCells?.forEach((i) => { if (n[i] === "hidden") n[i] = "safe"; }); setCells(n);
+      if (r.status === "ACTIVE") {
+        await refreshSkinPreview(r.potentialPayoutAtomic);
+      } else {
+        setSkinPreview(null);
+      }
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try { setGame(await cashoutMines(game.gameId)); setSkinPreview(null); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const pickR = () => { if (!act) return; const h = cells.map((s, i) => s === "hidden" ? i : -1).filter((i) => i >= 0); if (h.length) reveal(h[Math.floor(Math.random() * h.length)]); };
 
@@ -149,6 +173,34 @@ export default function MinesPage() {
 
           {/* Error */}
           {err && <p style={{ color: "#f34950", fontSize: 12, margin: 0 }}>{err}</p>}
+
+          {/* Visual cashout skin preview */}
+          {act && skinPreview ? (
+            <div style={{ width: "100%", border: "1px solid #2b2b2b", borderRadius: 12, background: "#111", padding: 8, boxSizing: "border-box" }}>
+              <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: 0.6, fontFamily: '"Gotham",sans-serif' }}>
+                Visual cashout skin
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {skinPreview.imageUrl ? (
+                  <img
+                    src={skinPreview.imageUrl}
+                    alt={skinPreview.name}
+                    style={{ width: 80, height: 56, objectFit: "contain", background: "#0b0b0b", border: "1px solid #2b2b2b", borderRadius: 8 }}
+                  />
+                ) : (
+                  <div style={{ width: 80, height: 56, background: "#0b0b0b", border: "1px solid #2b2b2b", borderRadius: 8 }} />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ color: "#fff", fontSize: 12, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: '"Gotham",sans-serif', fontWeight: 500 }}>
+                    {skinPreview.name}
+                  </p>
+                  <p style={{ color: "#828282", fontSize: 11, margin: "3px 0 0 0", fontFamily: '"Gotham",sans-serif' }}>
+                    Approx. ${f(skinPreview.valueAtomic)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Action buttons */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>

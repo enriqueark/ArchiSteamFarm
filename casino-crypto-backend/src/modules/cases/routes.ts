@@ -8,6 +8,7 @@ import { requireIdempotencyKey } from "../../core/idempotency";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 import {
   getCaseById,
+  findClosestCatalogSkinByValueAtomic,
   importRainCasesIntoSkinCatalogByAdmin,
   listCs2SkinCatalogByAdmin,
   listCases,
@@ -76,6 +77,14 @@ const adminCatalogQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(5000).default(2000),
   sourceCaseSlug: z.string().trim().max(120).optional()
+});
+
+const skinPreviewQuoteQuerySchema = z.object({
+  amountAtomic: z
+    .string()
+    .regex(/^\d+$/, "amountAtomic must be an integer string")
+    .transform((value) => BigInt(value))
+    .refine((value) => value > 0n, "amountAtomic must be greater than 0")
 });
 
 const ensureIdempotencyKey = (request: { idempotencyKey?: string }): string => {
@@ -202,6 +211,24 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         updatedAt: row.updatedAt
       }))
     );
+  });
+
+  fastify.get("/catalog/skin-preview", async (request, reply) => {
+    const query = skinPreviewQuoteQuerySchema.parse(request.query);
+    const preview = await findClosestCatalogSkinByValueAtomic({
+      valueAtomic: query.amountAtomic
+    });
+    if (!preview) {
+      return reply.send({ preview: null });
+    }
+    return reply.send({
+      preview: {
+        id: preview.id,
+        name: preview.name,
+        valueAtomic: preview.valueAtomic.toString(),
+        imageUrl: preview.imageUrl
+      }
+    });
   });
 
   fastify.post(

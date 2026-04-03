@@ -277,6 +277,15 @@ export interface CaseItem {
   isActive: boolean;
 }
 
+export interface SkinPreviewQuote {
+  preview: {
+    id: string;
+    name: string;
+    valueAtomic: string;
+    imageUrl: string | null;
+  } | null;
+}
+
 export interface CaseDetails {
   id: string;
   slug: string;
@@ -344,6 +353,10 @@ export async function getMyCaseOpenings(limit = 30): Promise<CaseOpeningResult[]
   return request<CaseOpeningResult[]>(`/cases/openings/me?limit=${limit}`);
 }
 
+export async function getSkinPreviewByAmountAtomic(amountAtomic: string): Promise<SkinPreviewQuote> {
+  return request<SkinPreviewQuote>(`/cases/catalog/skin-preview?amountAtomic=${encodeURIComponent(amountAtomic)}`, {}, false);
+}
+
 // ── Battles ──────────────────────────────────────────────────────────────
 
 export type BattleTemplate =
@@ -387,6 +400,7 @@ export interface BattleDropEntry {
   battleSlotId: string;
   caseItemId: string;
   caseItemName: string;
+  caseItemImageUrl?: string | null;
   valueAtomic: string;
 }
 

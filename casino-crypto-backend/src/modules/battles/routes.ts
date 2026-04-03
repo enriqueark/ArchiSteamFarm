@@ -123,6 +123,7 @@ const toBattleResponse = (battle: BattleDetails) => ({
     battleSlotId: drop.battleSlotId,
     caseItemId: drop.caseItem.id,
     caseItemName: drop.caseItem.name,
+    caseItemImageUrl: drop.caseItem.imageUrl,
     valueAtomic: drop.valueAtomic.toString()
   }))
 });

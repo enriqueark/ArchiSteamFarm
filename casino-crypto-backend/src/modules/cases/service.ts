@@ -26,6 +26,8 @@ const CASE_VOLATILITY_MAX = 100;
 const RAIN_FETCH_TIMEOUT_MS = 12_000;
 const RAIN_FETCH_ATTEMPTS = 3;
 const RAIN_MAX_CASES_PER_PAGE = 50;
+const SKIN_WIKI_BASE_URL = "https://wiki.skin.club/en";
+const CATALOG_IMAGE_BACKFILL_LIMIT = 150;
 
 export type VolatilityTier = "L" | "M" | "H" | "I";
 
@@ -40,6 +42,13 @@ export type Cs2SkinCatalogItem = {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type Cs2SkinPreview = {
+  id: string;
+  name: string;
+  valueAtomic: bigint;
+  imageUrl: string | null;
 };
 
 type RainCaseCard = {
@@ -181,6 +190,95 @@ const buildFallbackImageUrlFromName = (name: string): string => {
 };
 
 const buildJinaMirrorUrl = (url: string): string => `https://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;
+
+const normalizeSkinSearchQuery = (name: string): string =>
+  name
+    .replace(/^stattrak™\s*/i, "")
+    .replace(/^souvenir\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractSkinClubImageCandidates = (markdown: string): string[] => {
+  const urls = new Set<string>();
+  const regex = /!\[[^\]]*]\((https?:\/\/(?:cfdn\.wiki\.skin\.club|cfdn\.skin\.club)\/[^)\s]+)\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(markdown))) {
+    urls.add(match[1]);
+  }
+  return Array.from(urls);
+};
+
+const scoreSkinImageCandidate = (url: string): number => {
+  let score = 0;
+  if (url.includes("cfdn.wiki.skin.club")) {
+    score += 3;
+  }
+  if (url.toLowerCase().includes("policy=skin-list")) {
+    score += 2;
+  }
+  if (url.toLowerCase().includes("policy=skin-main")) {
+    score += 1;
+  }
+  if (url.toLowerCase().includes(".png")) {
+    score += 2;
+  }
+  if (url.toLowerCase().includes(".webp")) {
+    score += 1;
+  }
+  return score;
+};
+
+const fetchSkinWikiImageUrlByName = async (name: string): Promise<string | null> => {
+  const query = normalizeSkinSearchQuery(name);
+  if (!query) {
+    return null;
+  }
+  try {
+    const markdown = await fetchMarkdownViaJina(
+      `${SKIN_WIKI_BASE_URL}/search?search=${encodeURIComponent(query)}`
+    );
+    const candidates = extractSkinClubImageCandidates(markdown);
+    if (!candidates.length) {
+      return null;
+    }
+    candidates.sort((a, b) => scoreSkinImageCandidate(b) - scoreSkinImageCandidate(a));
+    return candidates[0];
+  } catch {
+    return null;
+  }
+};
+
+const backfillMissingCatalogImageUrlsFromWiki = async (limit = CATALOG_IMAGE_BACKFILL_LIMIT): Promise<number> => {
+  const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
+  const rows = await prisma.cs2SkinCatalog.findMany({
+    where: {
+      OR: [{ imageUrl: null }, { imageUrl: "" }]
+    },
+    orderBy: [{ updatedAt: "asc" }],
+    take: safeLimit,
+    select: {
+      id: true,
+      name: true
+    }
+  });
+  let updated = 0;
+  for (const row of rows) {
+    const wikiImageUrl = await fetchSkinWikiImageUrlByName(row.name);
+    const nextImageUrl = wikiImageUrl ?? buildFallbackImageUrlFromName(row.name);
+    if (!nextImageUrl) {
+      continue;
+    }
+    await prisma.cs2SkinCatalog.update({
+      where: { id: row.id },
+      data: {
+        imageUrl: nextImageUrl
+      }
+    });
+    updated += 1;
+    await sleep(35);
+  }
+  return updated;
+};
 
 
 const sleep = async (ms: number): Promise<void> =>
@@ -410,6 +508,10 @@ export const importRainCasesIntoSkinCatalogByAdmin = async (
   } else {
     summary.failureSamples.push(`Catalog preloaded successfully (${summary.totalCatalogSkins} skins).`);
   }
+  const backfilled = await backfillMissingCatalogImageUrlsFromWiki(CATALOG_IMAGE_BACKFILL_LIMIT);
+  if (backfilled > 0) {
+    summary.failureSamples.push(`Backfilled ${backfilled} skin image URLs from wiki.skin.club.`);
+  }
   summary.failureSamples.push(
     `Live Rain sync disabled for stability. Request params ignored: pages=${safePages}, caseLimit=${safeCaseLimit}.`
   );
@@ -457,6 +559,65 @@ export const listCs2SkinCatalogByAdmin = async (input: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }));
+};
+
+export const findClosestCatalogSkinByValueAtomic = async (input: {
+  valueAtomic: bigint;
+  actorUserId?: string | null;
+}): Promise<Cs2SkinPreview | null> => {
+  if (input.valueAtomic <= 0n) {
+    return null;
+  }
+  await ensureCs2SkinCatalogPreloaded(input.actorUserId ?? null);
+  const [high, low] = await Promise.all([
+    prisma.cs2SkinCatalog.findFirst({
+      where: {
+        valueAtomic: {
+          gte: input.valueAtomic
+        },
+        isActive: true
+      },
+      orderBy: [{ valueAtomic: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        valueAtomic: true,
+        imageUrl: true
+      }
+    }),
+    prisma.cs2SkinCatalog.findFirst({
+      where: {
+        valueAtomic: {
+          lte: input.valueAtomic
+        },
+        isActive: true
+      },
+      orderBy: [{ valueAtomic: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        valueAtomic: true,
+        imageUrl: true
+      }
+    })
+  ]);
+  const pick = (() => {
+    if (high && low) {
+      const highDelta = high.valueAtomic - input.valueAtomic;
+      const lowDelta = input.valueAtomic - low.valueAtomic;
+      return highDelta <= lowDelta ? high : low;
+    }
+    return high ?? low ?? null;
+  })();
+  if (!pick) {
+    return null;
+  }
+  return {
+    id: pick.id,
+    name: pick.name,
+    valueAtomic: pick.valueAtomic,
+    imageUrl: pick.imageUrl || buildFallbackImageUrlFromName(pick.name)
+  };
 };
 
 const generateServerSeed = (): string => randomBytes(32).toString("hex");
@@ -648,7 +809,7 @@ const asItemState = (item: {
   name: item.name,
   valueAtomic: item.valueAtomic,
   dropRate: item.dropRate.toFixed(8),
-  imageUrl: item.imageUrl,
+  imageUrl: item.imageUrl ?? buildFallbackImageUrlFromName(item.name),
   cs2SkinId: item.cs2SkinId ?? null,
   sortOrder: item.sortOrder,
   isActive: item.isActive
@@ -1347,13 +1508,25 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
         .filter((value): value is string => Boolean(value))
     )
   );
+  const catalogSkinById = new Map<string, { id: string; imageUrl: string | null; name: string }>();
   if (referencedSkinIds.length) {
     const existing = await prisma.cs2SkinCatalog.findMany({
       where: { id: { in: referencedSkinIds } },
-      select: { id: true }
+      select: {
+        id: true,
+        imageUrl: true,
+        name: true
+      }
     });
     if (existing.length !== referencedSkinIds.length) {
       throw new AppError("One or more selected CS2 skins do not exist", 400, "CS2_SKIN_NOT_FOUND");
+    }
+    for (const row of existing) {
+      catalogSkinById.set(row.id, {
+        id: row.id,
+        imageUrl: row.imageUrl ?? null,
+        name: row.name
+      });
     }
   }
 
@@ -1365,11 +1538,16 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
       throw new AppError("Case item valueAtomic cannot be negative", 400, "INVALID_CASE_ITEM_VALUE");
     }
     const parsedDrop = new Prisma.Decimal(item.dropRate);
+    const linkedSkin = item.cs2SkinId ? catalogSkinById.get(item.cs2SkinId) : undefined;
+    const resolvedImageUrl =
+      item.imageUrl?.trim() ||
+      linkedSkin?.imageUrl ||
+      (linkedSkin?.name ? buildFallbackImageUrlFromName(linkedSkin.name) : null);
     return {
       name: item.name.trim(),
       valueAtomic: item.valueAtomic,
       dropRate: parsedDrop,
-      imageUrl: item.imageUrl ?? null,
+      imageUrl: resolvedImageUrl ?? null,
       sortOrder: item.sortOrder ?? idx,
       isActive: item.isActive ?? true,
       cs2SkinId: item.cs2SkinId ?? null

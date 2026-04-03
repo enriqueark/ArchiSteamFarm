@@ -634,11 +634,28 @@ export default function BattlesPage() {
             {selectedBattle.drops.length ? (
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-white">Drops</h3>
-                <div className="max-h-64 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2 text-xs">
+                <div className="max-h-64 space-y-2 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2 text-xs">
                   {selectedBattle.drops.map((drop) => (
-                    <div key={drop.id} className="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-200">
-                      Round {drop.roundIndex + 1} • Seat {drop.orderIndex + 1} • {drop.caseItemName} •{" "}
-                      {fmtCoins(drop.valueAtomic)}
+                    <div
+                      key={drop.id}
+                      className="flex items-center gap-2 rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-200"
+                    >
+                      {drop.caseItemImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={drop.caseItemImageUrl}
+                          alt={drop.caseItemName}
+                          className="h-10 w-14 rounded border border-slate-700 bg-slate-900 object-contain"
+                        />
+                      ) : (
+                        <div className="h-10 w-14 rounded border border-slate-800 bg-slate-900" />
+                      )}
+                      <div>
+                        <div>
+                          Round {drop.roundIndex + 1} • Seat {drop.orderIndex + 1} • {drop.caseItemName}
+                        </div>
+                        <div className="text-[11px] text-slate-300">{fmtCoins(drop.valueAtomic)} COINS</div>
+                      </div>
                     </div>
                   ))}
                 </div>
