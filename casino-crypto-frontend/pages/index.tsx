@@ -7,7 +7,7 @@ const games = [
   { name: "CASE BATTLE", href: "/case-battles", img: "/assets/9f3dc7144a620b11022014239169d46e.png", icon: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg" },
   { name: "ROULETTE", href: "/roulette", img: "/assets/b8e5b82a90d613d81dd652412e8e23ee.png", icon: "/assets/30f1deaab44de7043abb1842bd019412.svg" },
   { name: "MINES", href: "/mines", img: "/assets/9d98d1f5815402cf67601802a236e1b3.png", icon: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg" },
-  { name: "BLACKJACK", href: "#", img: "/assets/cea3c3db4ef626ba499a275c20d4030a.png", icon: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg" },
+  { name: "BLACKJACK", href: "/mines", img: "/assets/cea3c3db4ef626ba499a275c20d4030a.png", icon: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg" },
 ];
 
 const paymentIcons = [

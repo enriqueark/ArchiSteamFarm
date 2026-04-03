@@ -107,13 +107,13 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
               <img src="/assets/83d81222ca9a94fcdf1e086fa398eed1.svg" alt="" className="w-5 h-5" />
               <span>Affiliates</span>
             </Link>
-            <div className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2 cursor-pointer">
+            <Link href="/roulette" className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2 cursor-pointer">
               <img src="/assets/d9129866945bfa6765d5ea9981de3f1c.png" alt="" className="w-8 h-8" />
               <div className="leading-tight">
                 <p className="text-xs font-bold text-[#382400]">WEEKLY</p>
                 <p className="text-xs font-bold text-[#382400]">LEADERBOARD</p>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">
