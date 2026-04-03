@@ -55,7 +55,7 @@ const footerLinks: Record<string, Array<{ label: string; href: string }>> = {
   ]
 };
 
-function formatAtomic(val: string, decimals = 6): string {
+function formatAtomic(val: string, decimals = 8): string {
   return (Number(val) / Math.pow(10, decimals)).toFixed(2);
 }
 

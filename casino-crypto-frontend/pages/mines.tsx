@@ -7,7 +7,7 @@ import {
   type MinesRevealResponse,
 } from "@/lib/api";
 
-const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
+const GAME_CURRENCY = "USDT";
 const BOARD_SIZE = 25;
 const MINE_PRESETS = [1, 3, 5, 10, 24];
 
@@ -16,12 +16,12 @@ const GEM_ICON = "/assets/7314404ef65e3d5b3dc26009de5d710c.svg";
 
 type CellState = "hidden" | "safe" | "mine";
 
-function formatAtomic(val: string, decimals = 6): string {
+function formatAtomic(val: string, decimals = 8): string {
   return (Number(val) / Math.pow(10, decimals)).toFixed(2);
 }
 
 export default function MinesPage() {
-  const [currency, setCurrency] = useState("USDT");
+  const [currency] = useState(GAME_CURRENCY);
   const [betAtomic, setBetAtomic] = useState("1000000");
   const [mineCount, setMineCount] = useState(3);
   const [game, setGame] = useState<MinesGame | null>(null);
@@ -112,14 +112,7 @@ export default function MinesPage() {
         <div>
           <label className="text-sm text-muted mb-2 block">Bet amount</label>
           <div className="flex items-center gap-2 bg-[#090909] rounded-[14px] p-1.5">
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              disabled={isActive}
-              className="bg-transparent text-white text-sm px-2 py-2 outline-none"
-            >
-              {CURRENCIES.map((c) => <option key={c} value={c} className="bg-[#090909]">{c}</option>)}
-            </select>
+            <div className="bg-transparent text-white text-sm px-2 py-2 outline-none">{currency}</div>
             <input
               value={betAtomic}
               onChange={(e) => setBetAtomic(e.target.value)}
@@ -182,13 +175,13 @@ export default function MinesPage() {
               <div className="text-center space-y-1">
                 <p className="text-sm text-muted">Potential payout</p>
                 <p className="text-xl font-bold text-accent-green">
-                  ${formatAtomic(game.potentialPayoutAtomic)}
+                  {formatAtomic(game.potentialPayoutAtomic)} COINS
                 </p>
               </div>
               {game.payoutAtomic && game.status !== "ACTIVE" && (
                 <div className="text-center">
                   <p className="text-sm text-muted">Final payout</p>
-                  <p className="text-2xl font-bold text-accent-green">${formatAtomic(game.payoutAtomic)}</p>
+                  <p className="text-2xl font-bold text-accent-green">{formatAtomic(game.payoutAtomic)} COINS</p>
                 </div>
               )}
               <div className="flex gap-2 text-xs text-muted">
@@ -230,7 +223,7 @@ export default function MinesPage() {
                 disabled={loading}
                 className="w-full py-3.5 rounded-btn bg-gradient-to-b from-[#51ee5c] to-[#37823c] text-[#0d280f] text-sm font-bold shadow-[0_2px_0_#0d2a0f,inset_0_1px_0_rgba(255,255,255,0.15)] hover:brightness-110 transition-all disabled:opacity-50"
               >
-                Cashout ${game ? formatAtomic(game.potentialPayoutAtomic) : "0.00"}
+                Cashout {game ? formatAtomic(game.potentialPayoutAtomic) : "0.00"} COINS
               </button>
             </>
           ) : (
@@ -278,7 +271,7 @@ export default function MinesPage() {
                   <img src={GEM_ICON} alt="gem" className="w-10 h-9" />
                   {game && (
                     <span className="text-[11px] font-bold text-[#0d280f]">
-                      ${formatAtomic(game.potentialPayoutAtomic)}
+                      {formatAtomic(game.potentialPayoutAtomic)} COINS
                     </span>
                   )}
                 </div>

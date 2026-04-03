@@ -11,12 +11,12 @@ import {
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
 const BET_TYPES = ["RED", "BLACK", "GREEN", "EVEN", "ODD", "LOW", "HIGH", "STRAIGHT"] as const;
-const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
+const INTERNAL_CURRENCY = "USDT";
 
 export default function RoulettePage() {
   const [round, setRound] = useState<RouletteRound | RouletteRoundEvent | null>(null);
   const [wsStatus, setWsStatus] = useState("disconnected");
-  const [currency, setCurrency] = useState<string>("USDT");
+  const [currency, setCurrency] = useState<string>(INTERNAL_CURRENCY);
   const [stakeAtomic, setStakeAtomic] = useState("1000000");
   const [betType, setBetType] = useState<string>("RED");
   const [betValue, setBetValue] = useState("");
@@ -221,20 +221,14 @@ export default function RoulettePage() {
           <div className="flex gap-2 items-end">
             <div className="flex flex-col gap-1">
               <label className="text-sm text-gray-400">Currency</label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="bg-[#161616] border border-[#252525] rounded-lg px-3 py-2 text-white text-sm"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <input
+                value="COINS"
+                disabled
+                className="bg-[#161616] border border-[#252525] rounded-lg px-3 py-2 text-white text-sm w-[96px] opacity-80"
+              />
             </div>
             <Input
-              label="Stake (atomic)"
+              label="Stake (COINS atomic)"
               value={stakeAtomic}
               onChange={(e) => setStakeAtomic(e.target.value)}
               placeholder="1000000"

@@ -166,7 +166,11 @@ export interface Wallet {
   id: string;
   currency: string;
   balanceAtomic: string;
+  balanceCoins?: string;
   lockedAtomic: string;
+  lockedCoins?: string;
+  availableAtomic?: string;
+  availableCoins?: string;
   updatedAt: string;
 }
 
@@ -586,6 +590,46 @@ export async function getActiveBlackjackGame(currency = "USDT"): Promise<Blackja
   return request<BlackjackGame | null>(`/blackjack/games/active?currency=${currency}`, {}, true);
 }
 
+export interface CashierAddress {
+  asset: string;
+  network: string;
+  networkLabel: string;
+  address: string;
+  providerTrackId: string;
+  qrCodeUrl: string | null;
+}
+
+export interface CashierWithdrawalResponse {
+  id: string;
+  status: string;
+  amountAtomic: string;
+  asset: string;
+  network: string;
+  destinationAddress: string;
+  providerTrackId: string | null;
+}
+
+export async function getDepositAddresses(): Promise<{ addresses: CashierAddress[] }> {
+  return request<{ addresses: CashierAddress[] }>("/cashier/deposit-addresses");
+}
+
+export async function createWithdrawal(input: {
+  asset: "USDT";
+  network: "erc20";
+  amountCoins: string;
+  destinationAddress: string;
+}): Promise<CashierWithdrawalResponse> {
+  return request<CashierWithdrawalResponse>(
+    "/cashier/withdrawals",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
 export async function actBlackjack(gameId: string, action: BlackjackAction): Promise<BlackjackGame> {
   return request<BlackjackGame>(
     `/blackjack/games/${gameId}/action`,
@@ -724,10 +768,20 @@ export async function tipRain(amountCoins: number): Promise<{ rain: RainState }>
 
 export interface User {
   id: string;
+  publicId?: number | null;
   email: string;
   role: string;
   status: string;
   createdAt: string;
+  level?: number;
+  levelXpAtomic?: string;
+  levelXp?: string;
+  progression?: {
+    level: number;
+    xpAtomic: string;
+    xp?: string;
+    currency?: string;
+  };
 }
 
 export async function getMe(): Promise<User> {

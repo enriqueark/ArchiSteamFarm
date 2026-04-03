@@ -15,9 +15,18 @@ const sideLinks = [
   { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Wallet" },
 ];
 
-function formatAtomic(val: string, decimals = 6): string {
+function formatAtomic(val: string, decimals = 8): string {
   const n = Number(val) / Math.pow(10, decimals);
   return n.toFixed(2);
+}
+function formatCoins(balanceCoins?: string, balanceAtomic?: string): string {
+  if (balanceCoins && Number.isFinite(Number(balanceCoins))) {
+    return Number(balanceCoins).toFixed(2);
+  }
+  if (balanceAtomic) {
+    return formatAtomic(balanceAtomic, 8);
+  }
+  return "0.00";
 }
 
 interface Props {
@@ -54,7 +63,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
     return () => sock.disconnect();
   }, []);
 
-  const primaryWallet = wallets.find((w) => w.currency === "USDT") || wallets[0];
+  const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
@@ -122,12 +131,26 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
                 href="/wallet"
                 className="flex items-center gap-2 px-4 py-2 rounded-btn bg-[#161616] border border-[#252525] hover:border-[#333] transition-colors"
               >
-                <span className="text-xs text-muted">{primaryWallet.currency}</span>
+                <span className="text-xs text-muted">COINS</span>
                 <span className="text-sm font-medium text-accent-green">
-                  ${formatAtomic(primaryWallet.balanceAtomic)}
+                  {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                 </span>
               </Link>
             )}
+            <div className="hidden md:flex items-center gap-1">
+              <Link
+                href="/deposit"
+                className="px-3 py-2 rounded-btn text-xs font-semibold bg-[#1a1a1a] text-white border border-[#2a2a2a] hover:bg-[#222] transition-colors"
+              >
+                Deposit
+              </Link>
+              <Link
+                href="/withdraw"
+                className="px-3 py-2 rounded-btn text-xs font-semibold bg-[#1a1a1a] text-white border border-[#2a2a2a] hover:bg-[#222] transition-colors"
+              >
+                Withdraw
+              </Link>
+            </div>
             {userEmail && (
               <span className="text-xs text-muted hidden xl:inline">{userEmail}</span>
             )}
