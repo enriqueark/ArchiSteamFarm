@@ -5,32 +5,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 body {
-  @apply bg-surface text-gray-100 font-sans;
+  background-color: #090909;
+  color: #fff;
+  font-family: "Gotham", "Inter", system-ui, sans-serif;
+  margin: 0;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #2a2a3d;
-  border-radius: 3px;
-}
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #252525; border-radius: 3px; }
 
 @keyframes ticker-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
 .ticker-scroll {
-  animation: ticker-scroll 30s linear infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(229,62,62,0); }
-  50% { box-shadow: 0 0 20px 2px rgba(229,62,62,0.3); }
-}
-.pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: ticker-scroll 25s linear infinite;
 }
