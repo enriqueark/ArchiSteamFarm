@@ -1,152 +1,118 @@
+import Link from "next/link";
 import { useRouter } from "next/router";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import Button from "@/components/Button";
-import BalanceControl from "@/components/BalanceControl";
-import { getMe, logout, type User } from "@/lib/api";
-import { useAuthUI } from "@/lib/auth-ui";
+import { ReactNode, useState } from "react";
+import ChatPanel from "./ChatPanel";
 
-export default function Layout({ children }: { children: ReactNode }) {
+const sideLinks = [
+  { href: "/", icon: "🏠", label: "Home" },
+  { href: "/roulette", icon: "🎰", label: "Roulette" },
+  { href: "/mines", icon: "💣", label: "Mines" },
+  { href: "/wallet", icon: "💰", label: "Wallet" },
+];
+
+const topLinks = [
+  { href: "#", label: "Rewards", icon: "⭐" },
+  { href: "#", label: "Affiliates", icon: "👥" },
+];
+
+interface Props {
+  children: ReactNode;
+  onLogout?: () => void;
+  userEmail?: string;
+}
+
+export default function Layout({ children, onLogout, userEmail }: Props) {
   const router = useRouter();
-  const { authed, openAuth, setAuthed } = useAuthUI();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  const displayName = useMemo(() => {
-    if (!user?.email) {
-      return "Player";
-    }
-    const [localPart] = user.email.split("@");
-    return localPart || "Player";
-  }, [user?.email]);
-
-  useEffect(() => {
-    if (!authed) {
-      setUser(null);
-      return;
-    }
-    let cancelled = false;
-    getMe()
-      .then((me) => {
-        if (!cancelled) {
-          setUser(me);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUser(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authed]);
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return;
-    }
-    const onOutsideClick = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", onOutsideClick);
-    };
-  }, [menuOpen]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // ignore
-    }
-    setMenuOpen(false);
-    setAuthed(false);
-  };
-
-  if (router.pathname === "/") {
-    return <>{children}</>;
-  }
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-4">
-        <div className="flex flex-1 items-center">
-          <span className="font-bold text-red-400 text-lg">Crypto Casino</span>
+    <div className="min-h-screen flex bg-surface">
+      {/* Sidebar */}
+      <aside className="w-16 bg-surface-100 border-r border-border flex flex-col items-center py-4 gap-2 shrink-0">
+        <div className="mb-4">
+          <div className="w-10 h-10 rounded-lg bg-brand flex items-center justify-center text-white font-bold text-sm">
+            R
+          </div>
         </div>
-        <div className="flex shrink-0 items-center justify-center">{authed ? <BalanceControl /> : null}</div>
-        <div className="flex flex-1 items-center justify-end gap-2">
-          {authed ? (
-            <div ref={menuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((prev) => !prev)}
-                className="flex min-w-[210px] items-center gap-3 rounded-lg bg-[#3c3f5f] px-3 py-2 text-left transition-colors hover:bg-[#4a4e72]"
-              >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#d9dbf6] text-xs font-bold text-gray-700">
-                  {displayName.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="flex flex-1 items-center gap-2 truncate text-sm font-semibold text-white">
-                  <span className="truncate">{displayName}</span>
-                  <span className="shrink-0 rounded bg-indigo-900/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-200">
-                    LVL {user?.progression?.level ?? 1}
-                  </span>
-                </span>
-                <span className={`text-xs text-gray-300 transition-transform ${menuOpen ? "rotate-180" : ""}`}>⌃</span>
-              </button>
+        {sideLinks.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            title={l.label}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all ${
+              router.pathname === l.href
+                ? "bg-surface-300 text-white"
+                : "text-gray-500 hover:bg-surface-200 hover:text-gray-300"
+            }`}
+          >
+            {l.icon}
+          </Link>
+        ))}
+      </aside>
 
-              {menuOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[240px] overflow-hidden rounded-xl border border-[#4a4e72] bg-[#3c3f5f] shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
-                  {[
-                    { label: "Profile", href: "/profile" },
-                    { label: "Affiliates", href: "/affiliates" },
-                    { label: "Support", href: "/support" },
-                    { label: "Fairness", href: "/fairness" },
-                    { label: "Leaderboard", href: "/leaderboard" },
-                    { label: "FAQ", href: "/faq" },
-                    { label: "Terms", href: "/terms" }
-                  ].map((item) => (
-                    <button
-                      key={item.href}
-                      type="button"
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white transition-colors hover:bg-[#4a4e72]"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        void router.push(item.href);
-                      }}
-                    >
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-white transition-colors hover:bg-[#4a4e72]"
-                    onClick={() => void handleLogout()}
-                  >
-                    <span>Log Out</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <Button variant="secondary" className="px-5 py-2" onClick={() => openAuth("login")}>
-                Sign in
-              </Button>
-              <Button
-                className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
-                onClick={() => openAuth("register")}
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top navigation */}
+        <header className="h-14 bg-surface-100 border-b border-border px-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-6">
+            <Link href="/" className="font-extrabold text-lg tracking-tight">
+              <span className="text-brand">RED</span>
+              <span className="text-white">WATER</span>
+            </Link>
+            {topLinks.map((l) => (
+              <Link
+                key={l.label}
+                href={l.href}
+                className="hidden md:flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors"
               >
-                Sign up
-              </Button>
-            </>
-          )}
+                <span>{l.icon}</span>
+                <span>{l.label}</span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setChatOpen(!chatOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-300 text-sm text-gray-300 hover:bg-surface-400 transition-colors"
+            >
+              💬 <span className="hidden sm:inline">Chat</span>
+            </button>
+            {userEmail && (
+              <span className="text-xs text-gray-500 hidden md:inline">{userEmail}</span>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-3 py-1.5 rounded-lg bg-surface-300 text-sm text-gray-400 hover:text-white hover:bg-surface-400 transition-colors"
+              >
+                Sign out
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Ticker bar */}
+        <div className="h-10 bg-surface-200 border-b border-border overflow-hidden flex items-center">
+          <div className="ticker-scroll flex items-center gap-6 whitespace-nowrap px-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <span key={i} className="flex items-center gap-2 text-xs">
+                <span className="w-6 h-6 rounded bg-surface-300" />
+                <span className="text-gray-500">Item #{i + 1}</span>
+                <span className="text-green-400 font-medium">${(Math.random() * 500 + 5).toFixed(2)}</span>
+              </span>
+            ))}
+          </div>
         </div>
-      </nav>
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full">{children}</main>
+
+        {/* Content + Chat */}
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 overflow-y-auto p-6">
+            {children}
+          </main>
+          {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+        </div>
+      </div>
     </div>
   );
 }

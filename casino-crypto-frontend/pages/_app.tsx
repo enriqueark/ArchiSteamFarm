@@ -1,83 +1,54 @@
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
-import { useEffect, useState } from "react";
-import GlobalChatDrawer from "@/components/GlobalChatDrawer";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import AuthGate from "@/components/AuthGate";
-import { getAccessToken, validateSession } from "@/lib/api";
-import { AuthUIProvider, type AuthModalMode } from "@/lib/auth-ui";
-import { ToastProvider } from "@/lib/toast";
+import { getAccessToken, validateSession, logout, getMe, clearSession, type User } from "@/lib/api";
 
 export default function App({ Component, pageProps }: AppProps) {
   const [authed, setAuthed] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthModalMode>("login");
+  const [checking, setChecking] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
     if (!getAccessToken()) {
-      setAuthed(false);
+      setChecking(false);
       return;
     }
     validateSession().then((valid) => {
-      if (cancelled) {
-        return;
-      }
       setAuthed(valid);
+      setChecking(false);
+      if (valid) {
+        getMe().then(setUser).catch(() => {});
+      }
     });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  const openAuth = (mode: AuthModalMode = "login") => {
-    setAuthMode(mode);
-    setAuthOpen(true);
+  const handleLogout = async () => {
+    try { await logout(); } catch { /* ignore */ }
+    clearSession();
+    setAuthed(false);
+    setUser(null);
   };
 
-  const closeAuth = () => {
-    setAuthOpen(false);
-  };
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface">
+        <div className="text-gray-500 text-sm">Loading...</div>
+      </div>
+    );
+  }
 
-  const isHomeRoute = Component === (require("./index").default as AppProps["Component"]);
+  if (!authed) {
+    return <AuthGate onAuth={() => {
+      setAuthed(true);
+      getMe().then(setUser).catch(() => {});
+    }} />;
+  }
 
   return (
-    <AuthUIProvider
-      value={{
-        authed,
-        openAuth,
-        closeAuth,
-        setAuthed
-      }}
-    >
-      <ToastProvider>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-        {!isHomeRoute && <GlobalChatDrawer />}
-        {authOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <button
-              aria-label="Close auth modal"
-              className="absolute inset-0"
-              onClick={closeAuth}
-              type="button"
-            />
-            <div className="relative z-10 w-full flex items-center justify-center">
-              <AuthGate
-                key={authMode}
-                onAuth={() => {
-                  setAuthed(true);
-                  closeAuth();
-                }}
-                mode={authMode}
-                onClose={closeAuth}
-                embedded
-              />
-            </div>
-          </div>
-        )}
-      </ToastProvider>
-    </AuthUIProvider>
+    <Layout onLogout={handleLogout} userEmail={user?.email}>
+      <Component {...pageProps} />
+    </Layout>
   );
 }

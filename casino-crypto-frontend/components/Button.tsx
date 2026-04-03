@@ -1,12 +1,12 @@
 import { ButtonHTMLAttributes } from "react";
 
 const variants: Record<string, string> = {
-  primary: "bg-indigo-600 hover:bg-indigo-700 text-white",
-  danger: "bg-red-600 hover:bg-red-700 text-white",
+  primary: "bg-brand hover:bg-brand-dark text-white",
+  danger: "bg-red-700 hover:bg-red-800 text-white",
   success: "bg-green-600 hover:bg-green-700 text-white",
-  secondary: "bg-gray-700 hover:bg-gray-600 text-gray-100",
+  secondary: "bg-surface-300 hover:bg-surface-400 text-gray-200",
   red: "bg-red-700 hover:bg-red-800 text-white",
-  black: "bg-gray-900 hover:bg-gray-800 text-white border border-gray-600",
+  black: "bg-surface-200 hover:bg-surface-300 text-white border border-border",
   green: "bg-emerald-700 hover:bg-emerald-800 text-white",
 };
 
@@ -17,7 +17,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({ variant = "primary", className = "", ...props }: Props) {
   return (
     <button
-      className={`px-4 py-2 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant] || variants.primary} ${className}`}
+      className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant] || variants.primary} ${className}`}
       {...props}
     />
   );

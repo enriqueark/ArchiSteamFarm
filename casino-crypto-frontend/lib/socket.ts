@@ -21,110 +21,9 @@ export type BetTotalsEvent = {
   totalStakedAtomic: string;
 };
 
-export type BetBreakdownEvent = {
-  roundId: string;
-  roundNumber: number;
-  currency: string;
-  totalsAtomic: {
-    RED: string;
-    BLACK: string;
-    GREEN: string;
-    BAIT: string;
-  };
-  entriesByType: {
-    RED: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    BLACK: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    GREEN: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    BAIT: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-  };
-  totalStakedAtomic: string;
-};
-
-export type RouletteSettlementSummaryEvent = {
-  roundId: string;
-  roundNumber: number;
-  currency: string;
-  winningNumber: number;
-  winningColor: string;
-  outcomes: Array<{
-    userId: string;
-    userLabel: string;
-    netAtomic: string;
-  }>;
-};
-
-export type ChatMessageEvent = {
-  id: string;
-  userId: string;
-  username?: string;
-  userLabel?: string;
-  level?: number;
-  userLevel?: number;
-  avatarUrl: string | null;
-  message: string;
-  createdAt: string;
-};
-
-export type ChatClearedEvent = {
-  clearedByUserId?: string;
-  reason: "ADMIN_COMMAND" | "HOURLY_RESET";
-  clearedAt: string;
-};
-
-export type RainStateEvent = {
-  roundId: string;
-  startsAt: string;
-  endsAt: string;
-  baseAmountAtomic: string;
-  tippedAmountAtomic: string;
-  totalAmountAtomic: string;
-  joinedCount: number;
-  hasJoined?: boolean;
-};
-
-export type RainJoinedEvent = {
-  roundId: string;
-  userId: string;
-  joinedCount: number;
-};
-
-export type RainTippedEvent = {
-  roundId: string;
-  userId: string;
-  amountAtomic: string;
-  tippedAmountAtomic: string;
-  totalAmountAtomic: string;
-};
-
-export type RainPayoutEvent = {
-  roundId: string;
-  userId: string;
-  payoutAtomic: string;
-};
-
-export type ChatUserTipEvent = {
-  id: string;
-  fromUserId: string;
-  fromUserLabel: string;
-  toUserId: string;
-  toUserLabel: string;
-  amountAtomic: string;
-  message: string | null;
-  createdAt: string;
-};
-
 export type SocketEvent =
   | { type: "roulette.round"; data: RouletteRoundEvent }
   | { type: "roulette.betTotals"; data: BetTotalsEvent }
-  | { type: "roulette.betBreakdown"; data: BetBreakdownEvent }
-  | { type: "roulette.settlementSummary"; data: RouletteSettlementSummaryEvent }
-  | { type: "chat.message"; data: ChatMessageEvent }
-  | { type: "chat.cleared"; data: ChatClearedEvent }
-  | { type: "rain.state"; data: RainStateEvent }
-  | { type: "rain.joined"; data: RainJoinedEvent }
-  | { type: "rain.tipped"; data: RainTippedEvent }
-  | { type: "rain.payout"; data: RainPayoutEvent }
-  | { type: "chat.userTip"; data: ChatUserTipEvent }
   | { type: "pong"; data: { type: "pong"; ts: string } }
   | { type: "open" }
   | { type: "close" }
@@ -179,24 +78,6 @@ export class CasinoSocket {
           this.emit({ type: "roulette.round", data: parsed.data || parsed });
         } else if (eventType === "roulette.betTotals") {
           this.emit({ type: "roulette.betTotals", data: parsed.data || parsed });
-        } else if (eventType === "roulette.betBreakdown") {
-          this.emit({ type: "roulette.betBreakdown", data: parsed.data || parsed });
-        } else if (eventType === "roulette.settlementSummary") {
-          this.emit({ type: "roulette.settlementSummary", data: parsed.data || parsed });
-        } else if (eventType === "chat.message") {
-          this.emit({ type: "chat.message", data: parsed.data || parsed });
-        } else if (eventType === "chat.cleared") {
-          this.emit({ type: "chat.cleared", data: parsed.data || parsed });
-        } else if (eventType === "rain.state") {
-          this.emit({ type: "rain.state", data: parsed.data || parsed });
-        } else if (eventType === "rain.joined") {
-          this.emit({ type: "rain.joined", data: parsed.data || parsed });
-        } else if (eventType === "rain.tipped") {
-          this.emit({ type: "rain.tipped", data: parsed.data || parsed });
-        } else if (eventType === "rain.payout") {
-          this.emit({ type: "rain.payout", data: parsed.data || parsed });
-        } else if (eventType === "chat.userTip") {
-          this.emit({ type: "chat.userTip", data: parsed.data || parsed });
         } else if (eventType === "pong") {
           this.emit({ type: "pong", data: parsed });
         }
