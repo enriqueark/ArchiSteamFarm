@@ -28,6 +28,13 @@ function fmtCoins(val: string | null | undefined, decimals = 6): string {
   return n.toFixed(2);
 }
 
+function fmtMultiplier(val: string | null | undefined): string {
+  if (!val) return "0.00";
+  const n = parseFloat(val);
+  if (isNaN(n)) return "0.00";
+  return n.toFixed(2);
+}
+
 export default function MinesPage() {
   const [currency, setCurrency] = useState("USDT");
   const [betAtomic, setBetAtomic] = useState("1000000");
@@ -203,16 +210,16 @@ export default function MinesPage() {
           />
 
           <div className="relative z-10 mt-3 px-3 py-1.5 rounded-btn bg-gradient-to-b from-[#ac2e30] to-[#f75154] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]">
-            <span className="text-white text-sm font-bold">x{game?.currentMultiplier || "0.00"}</span>
+            <span className="text-white text-sm font-bold">x{fmtMultiplier(game?.currentMultiplier)}</span>
           </div>
 
           {game && (
             <div className="relative z-10 mt-2 text-center">
               <p className="text-xs text-muted">Potential payout</p>
-              <p className="text-lg font-bold text-accent-green">{fmtCoins(game.potentialPayoutAtomic)} COINS</p>
+              <p className="text-lg font-bold text-accent-green">${fmtCoins(game.potentialPayoutAtomic)}</p>
               {game.status !== "ACTIVE" && (
                 <p className={`text-xs font-medium mt-1 ${game.status === "CASHED_OUT" ? "text-accent-green" : "text-red-400"}`}>
-                  Safe: {game.safeReveals} &nbsp; Mines: {game.mineCount} &nbsp; <span className="font-bold">{game.status}</span>
+                  {game.status === "CASHED_OUT" ? "Cashed out!" : "Game over"}
                 </p>
               )}
             </div>
@@ -241,7 +248,7 @@ export default function MinesPage() {
                 disabled={loading}
                 className="w-full h-[52px] rounded-btn bg-gradient-to-b from-[#51ee5c] to-[#37823c] text-[#0d280f] text-sm font-bold shadow-[0_2px_0_#0d2a0f,inset_0_1px_0_rgba(255,255,255,0.15)] hover:brightness-110 transition-all disabled:opacity-50"
               >
-                Cashout ${fmtCoins(game?.potentialPayoutAtomic)}
+                Cashout ${fmtCoins(game?.potentialPayoutAtomic || "0")}
               </button>
             </>
           ) : (
@@ -286,7 +293,7 @@ export default function MinesPage() {
                 <>
                   <img src={GEM_ICON} alt="gem" className="w-[42px] h-[36px]" />
                   <span className="text-[11px] font-bold text-[#0d280f] mt-0.5">
-                    {fmtCoins(game?.potentialPayoutAtomic)} COINS
+                    ${fmtCoins(game?.potentialPayoutAtomic)}
                   </span>
                 </>
               ) : (
