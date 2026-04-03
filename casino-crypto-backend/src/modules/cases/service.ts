@@ -28,6 +28,8 @@ const RAIN_FETCH_ATTEMPTS = 3;
 const RAIN_MAX_CASES_PER_PAGE = 50;
 const SKIN_WIKI_BASE_URL = "https://wiki.skin.club/en";
 const CATALOG_IMAGE_BACKFILL_LIMIT = 150;
+const SKIN_WIKI_IMAGE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const SKIN_WIKI_IMAGE_CACHE_MAX = 5000;
 
 export type VolatilityTier = "L" | "M" | "H" | "I";
 
@@ -228,23 +230,82 @@ const scoreSkinImageCandidate = (url: string): number => {
   return score;
 };
 
+const skinWikiImageCache = new Map<
+  string,
+  {
+    url: string | null;
+    expiresAt: number;
+  }
+>();
+const skinWikiInFlightRequests = new Map<string, Promise<string | null>>();
+
+const trimSkinWikiImageCacheIfNeeded = (): void => {
+  if (skinWikiImageCache.size <= SKIN_WIKI_IMAGE_CACHE_MAX) {
+    return;
+  }
+  const overflow = skinWikiImageCache.size - SKIN_WIKI_IMAGE_CACHE_MAX;
+  let removed = 0;
+  for (const key of skinWikiImageCache.keys()) {
+    skinWikiImageCache.delete(key);
+    removed += 1;
+    if (removed >= overflow) {
+      break;
+    }
+  }
+};
+
+const getCachedSkinWikiImage = (cacheKey: string): string | null | undefined => {
+  const cached = skinWikiImageCache.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+  if (cached.expiresAt <= Date.now()) {
+    skinWikiImageCache.delete(cacheKey);
+    return undefined;
+  }
+  return cached.url;
+};
+
 const fetchSkinWikiImageUrlByName = async (name: string): Promise<string | null> => {
   const query = normalizeSkinSearchQuery(name);
   if (!query) {
     return null;
   }
-  try {
-    const markdown = await fetchMarkdownViaJina(
-      `${SKIN_WIKI_BASE_URL}/search?search=${encodeURIComponent(query)}`
-    );
-    const candidates = extractSkinClubImageCandidates(markdown);
-    if (!candidates.length) {
+  const cacheKey = query.toLowerCase();
+  const cached = getCachedSkinWikiImage(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const inFlight = skinWikiInFlightRequests.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+  const request = (async () => {
+    try {
+      const markdown = await fetchMarkdownViaJina(
+        `${SKIN_WIKI_BASE_URL}/search?search=${encodeURIComponent(query)}`
+      );
+      const candidates = extractSkinClubImageCandidates(markdown);
+      if (!candidates.length) {
+        return null;
+      }
+      candidates.sort((a, b) => scoreSkinImageCandidate(b) - scoreSkinImageCandidate(a));
+      return candidates[0];
+    } catch {
       return null;
     }
-    candidates.sort((a, b) => scoreSkinImageCandidate(b) - scoreSkinImageCandidate(a));
-    return candidates[0];
-  } catch {
-    return null;
+  })();
+  skinWikiInFlightRequests.set(cacheKey, request);
+  try {
+    const resolved = await request;
+    skinWikiImageCache.set(cacheKey, {
+      url: resolved,
+      expiresAt: Date.now() + SKIN_WIKI_IMAGE_CACHE_TTL_MS
+    });
+    trimSkinWikiImageCacheIfNeeded();
+    return resolved;
+  } finally {
+    skinWikiInFlightRequests.delete(cacheKey);
   }
 };
 
