@@ -1,4 +1,3 @@
-import { Currency } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -7,15 +6,25 @@ import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
 import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "./bet-reservation.service";
-import { PLATFORM_VIRTUAL_COIN_SYMBOL, getWalletsByUser } from "./service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL, getWalletsByUser } from "./service";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)
 });
 
+const coinsFactor = 100000000n;
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / coinsFactor;
+  const fractionRaw = (abs % coinsFactor).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
+};
+
 const holdSchema = z.object({
   userId: z.string().cuid(),
-  currency: z.nativeEnum(Currency),
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
   betReference: z.string().min(8).max(128),
   amountAtomic: z
     .string()
@@ -27,7 +36,7 @@ const holdSchema = z.object({
 
 const finalizeSchema = z.object({
   userId: z.string().cuid(),
-  currency: z.nativeEnum(Currency),
+  currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
   betReference: z.string().min(8).max(128)
 });
 
@@ -48,21 +57,33 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
         id: wallet.id,
         currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         balanceAtomic: wallet.balanceAtomic.toString(),
+        balanceCoins: toCoinsString(wallet.balanceAtomic),
         lockedAtomic: wallet.lockedAtomic.toString(),
+        lockedCoins: toCoinsString(wallet.lockedAtomic),
+        availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+        availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic),
         updatedAt: wallet.updatedAt
       }))
     );
   });
 
   fastify.get("/:currency/entries", { preHandler: requireAuth }, async (request, reply) => {
-    const params = z.object({ currency: z.nativeEnum(Currency) }).parse(request.params);
+    const params = z
+      .object({
+        currency: z.union([
+          z.literal(PLATFORM_VIRTUAL_COIN_SYMBOL),
+          z.literal(PLATFORM_INTERNAL_CURRENCY)
+        ])
+      })
+      .parse(request.params);
     const query = querySchema.parse(request.query);
+    const requestedCurrency = params.currency;
 
     const wallet = await prisma.wallet.findUnique({
       where: {
         userId_currency: {
           userId: request.user.sub,
-          currency: params.currency
+          currency: PLATFORM_INTERNAL_CURRENCY
         }
       },
       select: {
@@ -87,14 +108,18 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(
       entries.map((entry) => ({
         id: entry.id,
+        currency: requestedCurrency,
         chainIndex: entry.chainIndex.toString(),
         previousHash: entry.previousHash,
         currentHash: entry.currentHash,
         direction: entry.direction,
         reason: entry.reason,
         amountAtomic: entry.amountAtomic.toString(),
+        amountCoins: toCoinsString(entry.amountAtomic),
         balanceBeforeAtomic: entry.balanceBeforeAtomic.toString(),
+        balanceBeforeCoins: toCoinsString(entry.balanceBeforeAtomic),
         balanceAfterAtomic: entry.balanceAfterAtomic.toString(),
+        balanceAfterCoins: toCoinsString(entry.balanceAfterAtomic),
         referenceId: entry.referenceId,
         idempotencyKey: entry.idempotencyKey,
         metadata: entry.metadata,
@@ -126,13 +151,17 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
         status: result.reservation.status,
         betReference: result.reservation.betReference,
         amountAtomic: result.reservation.amountAtomic.toString(),
-        currency: result.reservation.currency,
+        amountCoins: toCoinsString(result.reservation.amountAtomic),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         holdTransactionId: result.reservation.holdTransactionId,
         releaseTransactionId: result.reservation.releaseTransactionId,
         captureTransactionId: result.reservation.captureTransactionId,
         balanceAtomic: result.wallet.balanceAtomic.toString(),
+        balanceCoins: toCoinsString(result.wallet.balanceAtomic),
         lockedAtomic: result.wallet.lockedAtomic.toString(),
-        availableAtomic: result.wallet.balanceAtomic.toString()
+        lockedCoins: toCoinsString(result.wallet.lockedAtomic),
+        availableAtomic: (result.wallet.balanceAtomic - result.wallet.lockedAtomic).toString(),
+        availableCoins: toCoinsString(result.wallet.balanceAtomic - result.wallet.lockedAtomic)
       });
     }
   );
@@ -158,13 +187,17 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
         status: result.reservation.status,
         betReference: result.reservation.betReference,
         amountAtomic: result.reservation.amountAtomic.toString(),
-        currency: result.reservation.currency,
+        amountCoins: toCoinsString(result.reservation.amountAtomic),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         holdTransactionId: result.reservation.holdTransactionId,
         releaseTransactionId: result.reservation.releaseTransactionId,
         captureTransactionId: result.reservation.captureTransactionId,
         balanceAtomic: result.wallet.balanceAtomic.toString(),
+        balanceCoins: toCoinsString(result.wallet.balanceAtomic),
         lockedAtomic: result.wallet.lockedAtomic.toString(),
-        availableAtomic: result.wallet.balanceAtomic.toString()
+        lockedCoins: toCoinsString(result.wallet.lockedAtomic),
+        availableAtomic: (result.wallet.balanceAtomic - result.wallet.lockedAtomic).toString(),
+        availableCoins: toCoinsString(result.wallet.balanceAtomic - result.wallet.lockedAtomic)
       });
     }
   );
@@ -190,13 +223,17 @@ export const walletRoutes: FastifyPluginAsync = async (fastify) => {
         status: result.reservation.status,
         betReference: result.reservation.betReference,
         amountAtomic: result.reservation.amountAtomic.toString(),
-        currency: result.reservation.currency,
+        amountCoins: toCoinsString(result.reservation.amountAtomic),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         holdTransactionId: result.reservation.holdTransactionId,
         releaseTransactionId: result.reservation.releaseTransactionId,
         captureTransactionId: result.reservation.captureTransactionId,
         balanceAtomic: result.wallet.balanceAtomic.toString(),
+        balanceCoins: toCoinsString(result.wallet.balanceAtomic),
         lockedAtomic: result.wallet.lockedAtomic.toString(),
-        availableAtomic: result.wallet.balanceAtomic.toString()
+        lockedCoins: toCoinsString(result.wallet.lockedAtomic),
+        availableAtomic: (result.wallet.balanceAtomic - result.wallet.lockedAtomic).toString(),
+        availableCoins: toCoinsString(result.wallet.balanceAtomic - result.wallet.lockedAtomic)
       });
     }
   );

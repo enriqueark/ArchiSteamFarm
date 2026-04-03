@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
-import { SUPPORTED_CURRENCIES } from "../wallets/service";
+import { PLATFORM_VIRTUAL_COIN_SYMBOL, SUPPORTED_CURRENCIES } from "../wallets/service";
 import {
   RouletteBetBreakdownState,
   RouletteRoundState,
@@ -25,6 +25,7 @@ import { RouletteWebsocketHub } from "./ws-hub";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
 const websocketHub = new RouletteWebsocketHub();
+const toCoinsString = (atomic: bigint): string => (Number(atomic) / 1e8).toFixed(2);
 
 const currentRoundQuerySchema = z.object({
   currency: z.literal(PLATFORM_INTERNAL_CURRENCY)
@@ -74,7 +75,7 @@ const ensureIdempotencyKey = (request: { idempotencyKey?: string }): string => {
 const toRoundResponse = (round: RouletteRoundState) => ({
   id: round.id,
   roundNumber: round.roundNumber,
-  currency: round.currency,
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
   status: round.status,
   openAt: round.openAt,
   betsCloseAt: round.betsCloseAt,
@@ -91,7 +92,7 @@ const toRoundWsEvent = (round: RouletteRoundState) => ({
   data: {
     roundId: round.id,
     roundNumber: round.roundNumber,
-    currency: round.currency,
+    currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
     status: round.status,
     openAt: round.openAt.toISOString(),
     betsCloseAt: round.betsCloseAt.toISOString(),
@@ -107,7 +108,7 @@ const toRoundWsEvent = (round: RouletteRoundState) => ({
 const toBetBreakdownResponse = (state: RouletteBetBreakdownState) => ({
   roundId: state.roundId,
   roundNumber: state.roundNumber,
-  currency: state.currency,
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
   totalsAtomic: {
     RED: state.totalsAtomic.RED.toString(),
     BLACK: state.totalsAtomic.BLACK.toString(),
@@ -207,7 +208,7 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
       results.map((result) => ({
         roundId: result.roundId,
         roundNumber: result.roundNumber,
-        currency: result.currency,
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         winningNumber: result.winningNumber,
         winningColor: result.winningColor,
         totalStakedAtomic: result.totalStakedAtomic.toString(),
@@ -238,7 +239,7 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
         bet: {
           id: result.bet.id,
           roundId: result.bet.roundId,
-          currency: result.bet.currency,
+          currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
           betType: result.bet.betType,
           betValue: result.bet.betValue,
           stakeAtomic: result.bet.stakeAtomic.toString(),
@@ -250,8 +251,12 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
         wallet: {
           walletId: result.wallet.walletId,
           balanceAtomic: result.wallet.balanceAtomic.toString(),
+          balanceCoins: toCoinsString(result.wallet.balanceAtomic),
           lockedAtomic: result.wallet.lockedAtomic.toString(),
-          availableAtomic: result.wallet.balanceAtomic.toString()
+          lockedCoins: toCoinsString(result.wallet.lockedAtomic),
+          availableAtomic: (result.wallet.balanceAtomic - result.wallet.lockedAtomic).toString()
+          ,
+          availableCoins: toCoinsString(result.wallet.balanceAtomic - result.wallet.lockedAtomic)
         }
       });
     }
@@ -265,7 +270,7 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
       bets.map((bet) => ({
         id: bet.id,
         roundId: bet.roundId,
-        currency: bet.currency,
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
         betType: bet.betType,
         betValue: bet.betValue,
         stakeAtomic: bet.stakeAtomic.toString(),

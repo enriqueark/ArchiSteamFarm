@@ -4,6 +4,17 @@ import { requireAuth } from "../../core/auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary } from "../affiliates/service";
+import { PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
+
+const COIN_DECIMALS = 100000000n;
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COIN_DECIMALS;
+  const fractionRaw = (abs % COIN_DECIMALS).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
+};
 
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
@@ -116,9 +127,12 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       createdAt: user.createdAt,
       level,
       levelXpAtomic: xpAtomic.toString(),
+      levelXp: toCoinsString(xpAtomic, 0),
       progression: {
         level,
-        xpAtomic: xpAtomic.toString()
+        xpAtomic: xpAtomic.toString(),
+        xp: toCoinsString(xpAtomic, 0),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL
       }
     });
   });

@@ -1,15 +1,9 @@
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
-import { AppError } from "../../core/errors";
-import {
-  getSupportedExternalAssets,
-  getUsdRates,
-  quoteDepositToCoins,
-  quoteWithdrawFromCoins
-} from "./service";
-
-const assetSchema = z.enum(["BTC", "ETH", "USDT", "USDC", "SOL"]);
+const assetSchema = z.literal("COINS");
+const COIN_DECIMALS = 8;
+const USD_PER_COIN = 0.7;
 
 const depositQuoteSchema = z.object({
   asset: assetSchema,
@@ -31,73 +25,51 @@ const withdrawalQuoteSchema = z.object({
 
 export const pricingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/rates", async (_request, reply) => {
-    try {
-      const snapshot = await getUsdRates();
-      return reply.send({
-        base: "USD",
-        virtualCurrency: {
-          symbol: "COINS",
-          peg: "1 COIN = 1 USD",
-          atomicDecimals: 8
-        },
-        assets: getSupportedExternalAssets(),
-        rates: snapshot.rates,
-        fetchedAt: new Date(snapshot.fetchedAt).toISOString()
-      });
-    } catch (error) {
-      throw new AppError(
-        error instanceof Error ? error.message : "Unable to load rates",
-        502,
-        "FX_RATE_PROVIDER_ERROR"
-      );
-    }
+    return reply.send({
+      base: "USD",
+      virtualCurrency: {
+        symbol: "COINS",
+        peg: `1 COIN = ${USD_PER_COIN} USD`,
+        usdPerCoin: USD_PER_COIN,
+        atomicDecimals: COIN_DECIMALS
+      },
+      assets: ["COINS"],
+      rates: { COINS: USD_PER_COIN },
+      fetchedAt: new Date().toISOString()
+    });
   });
 
   fastify.post("/quotes/deposit", async (request, reply) => {
     const body = depositQuoteSchema.parse(request.body);
 
-    try {
-      const quote = await quoteDepositToCoins(body.asset, body.amountAtomic);
-      return reply.send({
-        asset: quote.asset,
-        amountAtomic: quote.amountAtomic.toString(),
-        amountAsset: quote.amountAsset,
-        usdRate: quote.usdRate,
-        usdValue: quote.usdValue,
-        coinsAtomic: quote.coinsAtomic.toString(),
-        coins: quote.coins,
-        fetchedAt: quote.fetchedAt.toISOString()
-      });
-    } catch (error) {
-      throw new AppError(
-        error instanceof Error ? error.message : "Unable to create deposit quote",
-        400,
-        "DEPOSIT_QUOTE_ERROR"
-      );
-    }
+    const coins = Number(body.amountAtomic) / 10 ** COIN_DECIMALS;
+    const usdValue = coins * USD_PER_COIN;
+    return reply.send({
+      asset: body.asset,
+      amountAtomic: body.amountAtomic.toString(),
+      amountAsset: coins,
+      usdRate: USD_PER_COIN,
+      usdValue,
+      coinsAtomic: body.amountAtomic.toString(),
+      coins,
+      fetchedAt: new Date().toISOString()
+    });
   });
 
   fastify.post("/quotes/withdraw", async (request, reply) => {
     const body = withdrawalQuoteSchema.parse(request.body);
 
-    try {
-      const quote = await quoteWithdrawFromCoins(body.asset, body.coinsAtomic);
-      return reply.send({
-        asset: quote.asset,
-        coinsAtomic: quote.coinsAtomic.toString(),
-        coins: quote.coins,
-        usdRate: quote.usdRate,
-        usdValue: quote.usdValue,
-        amountAtomic: quote.amountAtomic.toString(),
-        amountAsset: quote.amountAsset,
-        fetchedAt: quote.fetchedAt.toISOString()
-      });
-    } catch (error) {
-      throw new AppError(
-        error instanceof Error ? error.message : "Unable to create withdrawal quote",
-        400,
-        "WITHDRAWAL_QUOTE_ERROR"
-      );
-    }
+    const coins = Number(body.coinsAtomic) / 10 ** COIN_DECIMALS;
+    const usdValue = coins * USD_PER_COIN;
+    return reply.send({
+      asset: body.asset,
+      coinsAtomic: body.coinsAtomic.toString(),
+      coins,
+      usdRate: USD_PER_COIN,
+      usdValue,
+      amountAtomic: body.coinsAtomic.toString(),
+      amountAsset: coins,
+      fetchedAt: new Date().toISOString()
+    });
   });
 };

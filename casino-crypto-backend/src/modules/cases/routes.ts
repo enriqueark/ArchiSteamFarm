@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAuth, requireRoles } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
-import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 import {
   getCaseById,
   importRainCasesIntoSkinCatalogByAdmin,
@@ -92,7 +92,9 @@ const toCaseResponse = (value: CaseDetails) => ({
   description: value.description,
   logoUrl: value.logoUrl,
   priceAtomic: value.priceAtomic.toString(),
-  currency: value.currency,
+  priceCoins: (Number(value.priceAtomic) / 1e8).toFixed(2),
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+  currencyLabel: "COINS",
   isActive: value.isActive,
   volatilityIndex: value.volatilityIndex,
   volatilityTier: value.volatilityTier,
@@ -102,6 +104,7 @@ const toCaseResponse = (value: CaseDetails) => ({
     id: item.id,
     name: item.name,
     valueAtomic: item.valueAtomic.toString(),
+    valueCoins: (Number(item.valueAtomic) / 1e8).toFixed(2),
     dropRate: item.dropRate,
     imageUrl: item.imageUrl,
     cs2SkinId: item.cs2SkinId,
@@ -119,6 +122,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     id: value.item.id,
     name: value.item.name,
     valueAtomic: value.item.valueAtomic.toString(),
+    valueCoins: (Number(value.item.valueAtomic) / 1e8).toFixed(2),
     dropRate: value.item.dropRate,
     imageUrl: value.item.imageUrl,
     cs2SkinId: value.item.cs2SkinId,
@@ -130,6 +134,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     id: item.id,
     name: item.name,
     valueAtomic: item.valueAtomic.toString(),
+    valueCoins: (Number(item.valueAtomic) / 1e8).toFixed(2),
     dropRate: item.dropRate,
     imageUrl: item.imageUrl,
     cs2SkinId: item.cs2SkinId,
@@ -138,15 +143,22 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
   })),
   roll: value.roll,
   payoutAtomic: value.payoutAtomic.toString(),
+  payoutCoins: (Number(value.payoutAtomic) / 1e8).toFixed(2),
   profitAtomic: value.profitAtomic.toString(),
+  profitCoins: (Number(value.profitAtomic) / 1e8).toFixed(2),
   priceAtomic: value.priceAtomic.toString(),
-  currency: value.currency,
+  priceCoins: (Number(value.priceAtomic) / 1e8).toFixed(2),
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+  currencyLabel: "COINS",
   provablyFair: value.provablyFair,
   wallet: {
     walletId: value.wallet.walletId,
     balanceAtomic: value.wallet.balanceAtomic.toString(),
+    balanceCoins: (Number(value.wallet.balanceAtomic) / 1e8).toFixed(2),
     lockedAtomic: value.wallet.lockedAtomic.toString(),
-    availableAtomic: value.wallet.balanceAtomic.toString()
+    lockedCoins: (Number(value.wallet.lockedAtomic) / 1e8).toFixed(2),
+    availableAtomic: (value.wallet.balanceAtomic - value.wallet.lockedAtomic).toString(),
+    availableCoins: (Number(value.wallet.balanceAtomic - value.wallet.lockedAtomic) / 1e8).toFixed(2)
   },
   createdAt: value.createdAt
 });
@@ -242,8 +254,11 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
           volatilityTier: row.volatilityTier,
           rounds: row.rounds,
           spentAtomic: row.spentAtomic.toString(),
+          spentCoins: (Number(row.spentAtomic) / 1e8).toFixed(2),
           payoutAtomic: row.payoutAtomic.toString(),
+          payoutCoins: (Number(row.payoutAtomic) / 1e8).toFixed(2),
           profitAtomic: row.profitAtomic.toString(),
+          profitCoins: (Number(row.profitAtomic) / 1e8).toFixed(2),
           rtpPercent: row.rtpPercent,
           hitTopTierCount: row.hitTopTierCount
         }))
@@ -261,7 +276,9 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         description: row.description,
         logoUrl: row.logoUrl,
         priceAtomic: row.priceAtomic.toString(),
-        currency: row.currency,
+        priceCoins: (Number(row.priceAtomic) / 1e8).toFixed(2),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+        currencyLabel: "COINS",
         isActive: row.isActive,
         volatilityIndex: row.volatilityIndex,
         volatilityTier: row.volatilityTier,

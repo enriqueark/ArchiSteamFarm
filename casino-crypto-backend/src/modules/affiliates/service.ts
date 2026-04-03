@@ -3,11 +3,21 @@ import { DepositStatus, LedgerDirection, LedgerReason, Prisma, WithdrawalStatus 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
-import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
 const AFFILIATE_CODE_REGEX = /^[A-Z0-9][A-Z0-9_-]{2,19}$/;
 const COMMISSION_BPS = 100n; // 1% of referred wager
 const DEPOSIT_BONUS_BPS = 500n; // 5% bonus on deposit
+const COIN_DECIMALS = 100000000n;
+
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COIN_DECIMALS;
+  const fractionRaw = (abs % COIN_DECIMALS).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
+};
 
 const isKnownRequestError = (error: unknown, code: string): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
@@ -222,6 +232,7 @@ export const getAffiliateDashboard = async (userId: string) => {
           code: referralApplied.affiliateCode.code,
           createdAt: referralApplied.createdAt,
           bonusReceivedAtomic: referralApplied.bonusReceivedAtomic.toString(),
+          bonusReceivedCoins: toCoinsString(referralApplied.bonusReceivedAtomic),
           referrer: {
             publicId: referralApplied.referrer.publicId,
             userLabel: formatUserLabel(
@@ -234,9 +245,14 @@ export const getAffiliateDashboard = async (userId: string) => {
     stats: {
       referralCount: myReferrals.length,
       totalWageredAtomic: stats.totalWageredAtomic.toString(),
+      totalWageredCoins: toCoinsString(stats.totalWageredAtomic),
       totalCommissionAtomic: stats.totalCommissionAtomic.toString(),
+      totalCommissionCoins: toCoinsString(stats.totalCommissionAtomic),
       claimableCommissionAtomic: stats.claimableCommissionAtomic.toString(),
-      claimedCommissionAtomic: stats.claimedCommissionAtomic.toString()
+      claimableCommissionCoins: toCoinsString(stats.claimableCommissionAtomic),
+      claimedCommissionAtomic: stats.claimedCommissionAtomic.toString(),
+      claimedCommissionCoins: toCoinsString(stats.claimedCommissionAtomic),
+      currency: PLATFORM_VIRTUAL_COIN_SYMBOL
     },
     referrals: myReferrals.map((row) => ({
       referralId: row.id,
@@ -248,10 +264,15 @@ export const getAffiliateDashboard = async (userId: string) => {
         createdAt: row.referred.createdAt
       },
       totalWageredAtomic: row.totalWageredAtomic.toString(),
+      totalWageredCoins: toCoinsString(row.totalWageredAtomic),
       totalCommissionAtomic: row.totalCommissionAtomic.toString(),
+      totalCommissionCoins: toCoinsString(row.totalCommissionAtomic),
       claimableCommissionAtomic: row.claimableCommissionAtomic.toString(),
+      claimableCommissionCoins: toCoinsString(row.claimableCommissionAtomic),
       claimedCommissionAtomic: row.claimedCommissionAtomic.toString(),
+      claimedCommissionCoins: toCoinsString(row.claimedCommissionAtomic),
       bonusReceivedAtomic: row.bonusReceivedAtomic.toString(),
+      bonusReceivedCoins: toCoinsString(row.bonusReceivedAtomic),
       active: row.totalWageredAtomic > 0n
     }))
   };
@@ -353,7 +374,10 @@ export const claimAffiliateCommission = async (userId: string, idempotencyKey: s
 
     return {
       claimedAtomic: claimedAtomic.toString(),
+      claimedCoins: toCoinsString(claimedAtomic),
       balanceAtomic: walletUpdated.balanceAtomic.toString(),
+      balanceCoins: toCoinsString(walletUpdated.balanceAtomic),
+      currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
       claimedAt: new Date()
     };
   });
@@ -645,7 +669,7 @@ export const getProfileSummary = async (userId: string) => {
 
   const balanceAtomic = wallet?.balanceAtomic ?? 0n;
   const lockedAtomic = wallet?.lockedAtomic ?? 0n;
-  const availableAtomic = balanceAtomic;
+  const availableAtomic = balanceAtomic - lockedAtomic;
 
   return {
     user: {
@@ -657,43 +681,64 @@ export const getProfileSummary = async (userId: string) => {
       profileVisible,
       level: getLevelFromXp(levelXpAtomic),
       levelXpAtomic: levelXpAtomic.toString(),
+      levelXp: toCoinsString(levelXpAtomic, 0),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     },
     wallet: {
       walletId: wallet?.id ?? null,
       balanceAtomic: balanceAtomic.toString(),
+      balanceCoins: toCoinsString(balanceAtomic),
       lockedAtomic: lockedAtomic.toString(),
+      lockedCoins: toCoinsString(lockedAtomic),
       availableAtomic: availableAtomic.toString(),
+      availableCoins: toCoinsString(availableAtomic),
+      currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
       updatedAt: wallet?.updatedAt ?? null
     },
     totals: {
       depositsAtomic: (depositsAgg._sum.amountAtomic ?? 0n).toString(),
+      depositsCoins: toCoinsString(depositsAgg._sum.amountAtomic ?? 0n),
       withdrawalsAtomic: (withdrawalsAgg._sum.amountAtomic ?? 0n).toString(),
+      withdrawalsCoins: toCoinsString(withdrawalsAgg._sum.amountAtomic ?? 0n),
       withdrawalFeesAtomic: (withdrawalsAgg._sum.feeAtomic ?? 0n).toString(),
+      withdrawalFeesCoins: toCoinsString(withdrawalsAgg._sum.feeAtomic ?? 0n),
       wageredAtomic: totalWageredAtomic.toString(),
+      wageredCoins: toCoinsString(totalWageredAtomic),
       payoutAtomic: totalPayoutAtomic.toString(),
+      payoutCoins: toCoinsString(totalPayoutAtomic),
       netGamingAtomic: (totalPayoutAtomic - totalWageredAtomic).toString(),
+      netGamingCoins: toCoinsString(totalPayoutAtomic - totalWageredAtomic),
       bonusFromReferralAtomic: (referralAsReferred?.bonusReceivedAtomic ?? 0n).toString(),
+      bonusFromReferralCoins: toCoinsString(referralAsReferred?.bonusReceivedAtomic ?? 0n),
       claimableAffiliateCommissionAtomic: (
         referralAsReferrerAgg._sum.claimableCommissionAtomic ?? 0n
       ).toString(),
+      claimableAffiliateCommissionCoins: toCoinsString(referralAsReferrerAgg._sum.claimableCommissionAtomic ?? 0n),
       claimedAffiliateCommissionAtomic: (
         referralAsReferrerAgg._sum.claimedCommissionAtomic ?? 0n
-      ).toString()
+      ).toString(),
+      claimedAffiliateCommissionCoins: toCoinsString(referralAsReferrerAgg._sum.claimedCommissionAtomic ?? 0n),
+      currency: PLATFORM_VIRTUAL_COIN_SYMBOL
     },
     perGame: {
       mines: {
         wageredAtomic: minesWagered.toString(),
-        payoutAtomic: minesPayout.toString()
+        wageredCoins: toCoinsString(minesWagered),
+        payoutAtomic: minesPayout.toString(),
+        payoutCoins: toCoinsString(minesPayout)
       },
       blackjack: {
         wageredAtomic: blackjackWagered.toString(),
-        payoutAtomic: blackjackPayout.toString()
+        wageredCoins: toCoinsString(blackjackWagered),
+        payoutAtomic: blackjackPayout.toString(),
+        payoutCoins: toCoinsString(blackjackPayout)
       },
       roulette: {
         wageredAtomic: rouletteWagered.toString(),
-        payoutAtomic: roulettePayout.toString()
+        wageredCoins: toCoinsString(rouletteWagered),
+        payoutAtomic: roulettePayout.toString(),
+        payoutCoins: toCoinsString(roulettePayout)
       }
     }
   };

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
-import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 import {
   actOnBlackjackGame,
   getActiveBlackjackGame,
@@ -49,12 +49,20 @@ const ensureIdempotencyKey = (request: { idempotencyKey?: string }): string => {
 const toGameResponse = (state: Awaited<ReturnType<typeof getBlackjackGameById>>) => ({
   gameId: state.gameId,
   status: state.status,
-  currency: state.currency,
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
   initialBetAtomic: state.initialBetAtomic.toString(),
+  initialBetCoins: (Number(state.initialBetAtomic) / 1e8).toFixed(2),
   mainBetAtomic: state.mainBetAtomic.toString(),
+  mainBetCoins: (Number(state.mainBetAtomic) / 1e8).toFixed(2),
   sideBetPairsAtomic: state.sideBetPairsAtomic.toString(),
+  sideBetPairsCoins: (Number(state.sideBetPairsAtomic) / 1e8).toFixed(2),
   sideBet21Plus3Atomic: state.sideBet21Plus3Atomic.toString(),
+  sideBet21Plus3Coins: (Number(state.sideBet21Plus3Atomic) / 1e8).toFixed(2),
   insuranceBetAtomic: state.insuranceBetAtomic?.toString() ?? null,
+  insuranceBetCoins:
+    state.insuranceBetAtomic !== null && state.insuranceBetAtomic !== undefined
+      ? (Number(state.insuranceBetAtomic) / 1e8).toFixed(2)
+      : null,
   canSplit: state.canSplit,
   canInsurance: state.canInsurance,
   activeHandIndex: state.activeHandIndex,
@@ -62,6 +70,7 @@ const toGameResponse = (state: Awaited<ReturnType<typeof getBlackjackGameById>>)
   playerHands: state.playerHands.map((hand) => ({
     cards: hand.cards,
     stakeAtomic: hand.stakeAtomic.toString(),
+    stakeCoins: (Number(hand.stakeAtomic) / 1e8).toFixed(2),
     doubled: hand.doubled,
     stood: hand.stood,
     busted: hand.busted,
@@ -73,13 +82,20 @@ const toGameResponse = (state: Awaited<ReturnType<typeof getBlackjackGameById>>)
   paytable: state.paytable,
   provablyFair: state.provablyFair,
   payoutAtomic: state.payoutAtomic?.toString() ?? null,
+  payoutCoins:
+    state.payoutAtomic !== null && state.payoutAtomic !== undefined
+      ? (Number(state.payoutAtomic) / 1e8).toFixed(2)
+      : null,
   createdAt: state.createdAt,
   finishedAt: state.finishedAt,
   wallet: {
     walletId: state.wallet.walletId,
     balanceAtomic: state.wallet.balanceAtomic.toString(),
+    balanceCoins: (Number(state.wallet.balanceAtomic) / 1e8).toFixed(2),
     lockedAtomic: state.wallet.lockedAtomic.toString(),
-    availableAtomic: state.wallet.balanceAtomic.toString()
+    lockedCoins: (Number(state.wallet.lockedAtomic) / 1e8).toFixed(2),
+    availableAtomic: (state.wallet.balanceAtomic - state.wallet.lockedAtomic).toString(),
+    availableCoins: (Number(state.wallet.balanceAtomic - state.wallet.lockedAtomic) / 1e8).toFixed(2)
   }
 });
 

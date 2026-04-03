@@ -87,6 +87,16 @@ const isMissingLevelXpColumnError = (error: unknown): boolean => {
   return false;
 };
 
+const COIN_ATOMIC_FACTOR = 100000000n;
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COIN_ATOMIC_FACTOR;
+  const fractionRaw = (abs % COIN_ATOMIC_FACTOR).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
+};
+
 const ADMIN_PANEL_HTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -319,11 +329,11 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         const atomic = parseAtomicBigInt(atomicValue);
         const negative = atomic < 0n;
         const abs = negative ? -atomic : atomic;
-        // 1 coin = 1e8 atomic; cents rounded to nearest cent.
+        // 1 coin = 1e8 atomic.
         const cents = (abs + 500000n) / 1000000n;
         const whole = cents / 100n;
         const fraction = (cents % 100n).toString().padStart(2, "0");
-        const money = "$" + withThousands(whole.toString()) + "." + fraction;
+        const money = withThousands(whole.toString()) + "." + fraction + " " + COIN_SYMBOL;
         const signed = opts.signed === true;
         if (signed) {
           return (negative ? "-" : "+") + money;
@@ -887,7 +897,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 "<div class=\\"mono\\">publicId=#" + (data.user.publicId ?? "-") + " | id=" + data.user.id + "</div>" +
                 "<div class=\\"mono\\">email=" + data.user.email + "</div>" +
                 "<div class=\\"mono\\">role=" + data.user.role + " status=" + data.user.status + "</div>" +
-                "<div class=\\"mono\\">level=" + data.user.level + " xpAtomic=" + data.user.levelXpAtomic + "</div>" +
+                "<div class=\\"mono\\">level=" + data.user.level + " xp=" + (data.user.levelXp || data.user.levelXpAtomic) + "</div>" +
                 "<div class=\\"mono\\">createdAt=" + data.user.createdAt + "</div>" +
               "</div>" +
               "<div>" +
@@ -1011,7 +1021,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
-              <div class="mono">level=\${user.level} xpAtomic=\${user.levelXpAtomic}</div>
+              <div class="mono">level=\${user.level} xp=\${user.levelXp || user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
               \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
             </td>
@@ -1063,7 +1073,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 msgEl.className = "mono msg err";
                 return;
               }
-              msgEl.textContent = "OK. " + COIN_CURRENCY + " balanceAtomic=" + data.balanceAtomic;
+              msgEl.textContent = "OK. " + COIN_SYMBOL + " balance=" + (data.balanceCoins || data.balanceAtomic);
               msgEl.className = "mono msg ok";
             } catch (error) {
               msgEl.textContent = error && error.message ? error.message : "Adjustment failed.";
@@ -1398,10 +1408,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           updatedAt: user.updatedAt,
           wallets: user.wallets.map((wallet) => ({
             id: wallet.id,
-            currency: wallet.currency,
+            currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
             balanceAtomic: wallet.balanceAtomic.toString(),
+            balanceCoins: toCoinsString(wallet.balanceAtomic),
             lockedAtomic: wallet.lockedAtomic.toString(),
+            lockedCoins: toCoinsString(wallet.lockedAtomic),
             availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+            availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic),
             updatedAt: wallet.updatedAt
           }))
         }))
@@ -1756,10 +1769,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         },
         wallets: userRow.wallets.map((wallet) => ({
           id: wallet.id,
-          currency: wallet.currency,
+          currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
           balanceAtomic: wallet.balanceAtomic.toString(),
+          balanceCoins: toCoinsString(wallet.balanceAtomic),
           lockedAtomic: wallet.lockedAtomic.toString(),
+          lockedCoins: toCoinsString(wallet.lockedAtomic),
           availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+          availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic),
           updatedAt: wallet.updatedAt
         })),
         summary: {

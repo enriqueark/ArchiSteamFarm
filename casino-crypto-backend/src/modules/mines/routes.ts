@@ -15,7 +15,7 @@ import {
   setProvablyFairClientSeed,
   startMinesGame
 } from "./service";
-import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
 const startGameSchema = z.object({
   currency: z.literal(PLATFORM_INTERNAL_CURRENCY),
@@ -43,15 +43,21 @@ const gameParamsSchema = z.object({
 const toGameResponse = (result: MinesGameState) => ({
   gameId: result.gameId,
   status: result.status,
-  currency: result.currency,
+  currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
   betAtomic: result.betAtomic.toString(),
+  betCoins: (Number(result.betAtomic) / 1e8).toFixed(2),
   mineCount: result.mineCount,
   boardSize: result.boardSize,
   safeReveals: result.safeReveals,
   revealedCells: result.revealedCells,
   currentMultiplier: result.currentMultiplier.toFixed(8),
   potentialPayoutAtomic: result.potentialPayoutAtomic.toString(),
+  potentialPayoutCoins: (Number(result.potentialPayoutAtomic) / 1e8).toFixed(2),
   payoutAtomic: result.payoutAtomic?.toString() ?? null,
+  payoutCoins:
+    result.payoutAtomic !== null && result.payoutAtomic !== undefined
+      ? (Number(result.payoutAtomic) / 1e8).toFixed(2)
+      : null,
   provablyFair: {
     serverSeedHash: result.provablyFair.serverSeedHash,
     clientSeed: result.provablyFair.clientSeed,
@@ -60,8 +66,11 @@ const toGameResponse = (result: MinesGameState) => ({
   wallet: {
     walletId: result.wallet.walletId,
     balanceAtomic: result.wallet.balanceAtomic.toString(),
+    balanceCoins: (Number(result.wallet.balanceAtomic) / 1e8).toFixed(2),
     lockedAtomic: result.wallet.lockedAtomic.toString(),
-    availableAtomic: result.wallet.balanceAtomic.toString()
+    lockedCoins: (Number(result.wallet.lockedAtomic) / 1e8).toFixed(2),
+    availableAtomic: (result.wallet.balanceAtomic - result.wallet.lockedAtomic).toString(),
+    availableCoins: (Number(result.wallet.balanceAtomic - result.wallet.lockedAtomic) / 1e8).toFixed(2)
   },
   createdAt: result.createdAt,
   finishedAt: result.finishedAt
