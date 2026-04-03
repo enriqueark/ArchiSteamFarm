@@ -7,28 +7,36 @@ import {
   type MinesRevealResponse,
 } from "@/lib/api";
 
-const GAME_CURRENCY = "USDT";
+const CURRENCIES = ["USDT", "BTC", "ETH", "USDC"] as const;
 const BOARD_SIZE = 25;
 const MINE_PRESETS = [1, 3, 5, 10, 24];
 
 const HIDDEN_TILE = "/assets/09d0723a9bfccbed73637ba3ba799693.svg";
 const GEM_ICON = "/assets/7314404ef65e3d5b3dc26009de5d710c.svg";
+const BOMB_ICON = "/assets/c4b1622f42a16ecfa9bd80339816d0f1.png";
+const WEAPON_ART = "/assets/4e425b7d3c328e970651b77449845d15.png";
+const RAIL_LEFT = "/assets/53afd2537d26b04bd54b538a8d997e24.svg";
+const RAIL_RIGHT = "/assets/b4fbfa3ebe2ac32ca7bc3136b2647ee7.svg";
+const DIVIDER_SVG = "/assets/5edaa698796fe2f18fcc3c6a7ec12584.svg";
 
 type CellState = "hidden" | "safe" | "mine";
 
-function formatAtomic(val: string, decimals = 8): string {
-  return (Number(val) / Math.pow(10, decimals)).toFixed(2);
+function fmtCoins(val: string | null | undefined, decimals = 6): string {
+  if (!val) return "0.00";
+  const n = Number(val) / Math.pow(10, decimals);
+  if (isNaN(n)) return "0.00";
+  return n.toFixed(2);
 }
 
 export default function MinesPage() {
-  const [currency] = useState(GAME_CURRENCY);
+  const [currency, setCurrency] = useState("USDT");
   const [betAtomic, setBetAtomic] = useState("1000000");
   const [mineCount, setMineCount] = useState(3);
   const [game, setGame] = useState<MinesGame | null>(null);
   const [cells, setCells] = useState<CellState[]>(Array(BOARD_SIZE).fill("hidden"));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastReveal, setLastReveal] = useState<MinesRevealResponse["reveal"] | null>(null);
+  const [, setLastReveal] = useState<MinesRevealResponse["reveal"] | null>(null);
 
   const isActive = game?.status === "ACTIVE";
 
@@ -101,136 +109,146 @@ export default function MinesPage() {
     handleReveal(pick);
   };
 
+  const safeCount = cells.filter((c) => c === "safe").length;
+  const totalSafe = BOARD_SIZE - mineCount;
+  const progress = isActive ? (safeCount / totalSafe) * 100 : 0;
+
   return (
     <div className="flex gap-5 max-w-[1300px] mx-auto">
-      {/* Left panel — controls */}
-      <div
-        className="w-[401px] shrink-0 rounded-card p-5 flex flex-col gap-4"
-        style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
-      >
-        {/* Bet amount */}
-        <div>
-          <label className="text-sm text-muted mb-2 block">Bet amount</label>
-          <div className="flex items-center gap-2 bg-[#090909] rounded-[14px] p-1.5">
-            <div className="bg-transparent text-white text-sm px-2 py-2 outline-none">{currency}</div>
-            <input
-              value={betAtomic}
-              onChange={(e) => setBetAtomic(e.target.value)}
-              disabled={isActive}
-              className="flex-1 bg-transparent text-white text-sm font-medium outline-none text-right"
-              placeholder="1000000"
-            />
-            <button
-              onClick={() => setBetAtomic(String(Math.floor(Number(betAtomic) / 2)))}
-              disabled={isActive}
-              className="px-3 py-1.5 rounded-btn bg-[#1a1a1a] text-xs text-muted font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] disabled:opacity-30"
-            >
-              1/2
-            </button>
-            <button
-              onClick={() => setBetAtomic(String(Number(betAtomic) * 2))}
-              disabled={isActive}
-              className="px-3 py-1.5 rounded-btn bg-[#1a1a1a] text-xs text-muted font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] disabled:opacity-30"
-            >
-              x2
-            </button>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <hr className="border-[#1e1e1e]" />
-
-        {/* Number of mines */}
-        <div>
-          <label className="text-sm text-muted mb-2 block">Number of mines</label>
-          <div className="flex items-center gap-2 bg-[#090909] rounded-[14px] p-1.5">
-            <span className="flex-1 px-3 py-2 text-white text-sm font-medium">{mineCount}</span>
-            {MINE_PRESETS.map((n) => (
-              <button
-                key={n}
-                onClick={() => setMineCount(n)}
+      {/* ── Left panel ── */}
+      <div className="w-[401px] shrink-0 rounded-card flex flex-col" style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}>
+        <div className="p-5 flex flex-col gap-4">
+          {/* Bet amount */}
+          <div>
+            <p className="text-sm text-muted mb-2">Bet amount</p>
+            <div className="flex items-center bg-[#090909] rounded-[14px] h-[54px] px-1.5 gap-1.5">
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
                 disabled={isActive}
-                className={`px-3 py-1.5 rounded-btn text-xs font-medium transition-all disabled:opacity-30 ${
-                  mineCount === n
-                    ? "bg-gradient-to-b from-[#ac2e30] to-[#f75154] text-white shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]"
-                    : "bg-[#1a1a1a] text-muted shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
-                }`}
+                className="bg-transparent text-white text-sm font-medium px-2 outline-none appearance-none cursor-pointer"
               >
-                {n}
+                {CURRENCIES.map((c) => <option key={c} value={c} className="bg-[#090909]">{c}</option>)}
+              </select>
+              <input
+                value={betAtomic}
+                onChange={(e) => setBetAtomic(e.target.value)}
+                disabled={isActive}
+                className="flex-1 bg-transparent text-white text-sm font-medium outline-none text-right min-w-0"
+                placeholder="1000000"
+              />
+              <button
+                onClick={() => setBetAtomic(String(Math.floor(Number(betAtomic) / 2)))}
+                disabled={isActive}
+                className="h-[42px] px-3 rounded-btn bg-[#1a1a1a] text-xs text-muted font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] disabled:opacity-30"
+              >
+                1/2
               </button>
-            ))}
+              <button
+                disabled={isActive}
+                className="h-[42px] px-3 rounded-btn bg-[#1a1a1a] text-xs text-muted font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] disabled:opacity-30"
+              >
+                Max
+              </button>
+            </div>
+          </div>
+
+          {/* Red progress bar */}
+          <div className="h-1 rounded-full bg-[#1a1a1a] overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${progress}%`, background: "linear-gradient(90deg, #ac2e30, #f75154)" }}
+            />
+          </div>
+
+          {/* Divider SVG */}
+          <img src={DIVIDER_SVG} alt="" className="w-full opacity-30" />
+
+          {/* Number of mines */}
+          <div>
+            <p className="text-sm text-muted mb-2">Number of mines</p>
+            <div className="flex items-center bg-[#090909] rounded-[14px] h-[54px] px-1.5 gap-1.5">
+              <div className="h-[42px] px-4 rounded-btn bg-[#1a1a1a] flex items-center shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
+                <span className="text-white text-sm font-medium">{mineCount}</span>
+              </div>
+              <div className="flex-1" />
+              {MINE_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setMineCount(n)}
+                  disabled={isActive}
+                  className={`h-[42px] min-w-[42px] px-2 rounded-btn text-xs font-medium transition-all disabled:opacity-30 ${
+                    mineCount === n
+                      ? "bg-gradient-to-b from-[#ac2e30] to-[#f75154] text-white shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]"
+                      : "bg-[#1a1a1a] text-muted shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Divider */}
-        <hr className="border-[#1e1e1e]" />
+        {/* Multiplier / weapon art area */}
+        <div className="flex-1 relative flex flex-col items-center justify-center px-5 overflow-hidden" style={{ background: "linear-gradient(180deg, #282828 0%, #1a1a1a 100%)" }}>
+          <img src={RAIL_LEFT} alt="" className="absolute left-3 top-1/2 -translate-y-1/2 h-3/4 opacity-40" />
+          <img src={RAIL_RIGHT} alt="" className="absolute right-3 top-1/2 -translate-y-1/2 h-3/4 opacity-40" />
 
-        {/* Multiplier display */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-4">
-          {game ? (
-            <>
-              <div className="px-4 py-2 rounded-btn bg-gradient-to-b from-[#ac2e30] to-[#f75154] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]">
-                <span className="text-white text-lg font-bold">x{game.currentMultiplier}</span>
-              </div>
-              <div className="text-center space-y-1">
-                <p className="text-sm text-muted">Potential payout</p>
-                <p className="text-xl font-bold text-accent-green">
-                  {formatAtomic(game.potentialPayoutAtomic)} COINS
+          <img
+            src={WEAPON_ART}
+            alt=""
+            className="w-[220px] h-[220px] object-contain relative z-10"
+            style={{ transform: "rotate(12.9deg)" }}
+          />
+
+          <div className="relative z-10 mt-3 px-3 py-1.5 rounded-btn bg-gradient-to-b from-[#ac2e30] to-[#f75154] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]">
+            <span className="text-white text-sm font-bold">x{game?.currentMultiplier || "0.00"}</span>
+          </div>
+
+          {game && (
+            <div className="relative z-10 mt-2 text-center">
+              <p className="text-xs text-muted">Potential payout</p>
+              <p className="text-lg font-bold text-accent-green">{fmtCoins(game.potentialPayoutAtomic)} COINS</p>
+              {game.status !== "ACTIVE" && (
+                <p className={`text-xs font-medium mt-1 ${game.status === "CASHED_OUT" ? "text-accent-green" : "text-red-400"}`}>
+                  Safe: {game.safeReveals} &nbsp; Mines: {game.mineCount} &nbsp; <span className="font-bold">{game.status}</span>
                 </p>
-              </div>
-              {game.payoutAtomic && game.status !== "ACTIVE" && (
-                <div className="text-center">
-                  <p className="text-sm text-muted">Final payout</p>
-                  <p className="text-2xl font-bold text-accent-green">{formatAtomic(game.payoutAtomic)} COINS</p>
-                </div>
               )}
-              <div className="flex gap-2 text-xs text-muted">
-                <span>Safe: {game.safeReveals}</span>
-                <span>Mines: {game.mineCount}</span>
-                <span className={`font-medium ${
-                  game.status === "ACTIVE" ? "text-accent-green" : game.status === "CASHED_OUT" ? "text-accent-blue" : "text-red-400"
-                }`}>{game.status}</span>
-              </div>
-            </>
-          ) : (
-            <div className="text-center">
-              <img src="/assets/4e425b7d3c328e970651b77449845d15.png" alt="" className="w-32 h-32 object-contain mx-auto opacity-40 mb-3" />
-              <p className="text-muted text-sm">Set your bet and start the game</p>
             </div>
           )}
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="bg-[#2a1015] border border-[#5c1a20] rounded-btn px-3 py-2">
-            <p className="text-red-400 text-xs">{error}</p>
-          </div>
-        )}
+        {/* Bottom buttons */}
+        <div className="p-5 flex flex-col gap-2">
+          {error && (
+            <div className="bg-[#2a1015] border border-[#5c1a20] rounded-btn px-3 py-2 mb-1">
+              <p className="text-red-400 text-xs">{error}</p>
+            </div>
+          )}
 
-        {/* Action buttons */}
-        <div className="flex flex-col gap-2">
           {isActive ? (
             <>
               <button
                 onClick={handlePickRandom}
                 disabled={loading}
-                className="w-full py-3.5 rounded-btn bg-[#1a1a1a] text-white text-sm font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] hover:bg-[#222] transition-colors disabled:opacity-50"
+                className="w-full h-[52px] rounded-btn bg-[#1a1a1a] text-white text-sm font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] hover:bg-[#222] transition-colors disabled:opacity-50"
               >
                 Pick random tile
               </button>
               <button
                 onClick={handleCashout}
                 disabled={loading}
-                className="w-full py-3.5 rounded-btn bg-gradient-to-b from-[#51ee5c] to-[#37823c] text-[#0d280f] text-sm font-bold shadow-[0_2px_0_#0d2a0f,inset_0_1px_0_rgba(255,255,255,0.15)] hover:brightness-110 transition-all disabled:opacity-50"
+                className="w-full h-[52px] rounded-btn bg-gradient-to-b from-[#51ee5c] to-[#37823c] text-[#0d280f] text-sm font-bold shadow-[0_2px_0_#0d2a0f,inset_0_1px_0_rgba(255,255,255,0.15)] hover:brightness-110 transition-all disabled:opacity-50"
               >
-                Cashout {game ? formatAtomic(game.potentialPayoutAtomic) : "0.00"} COINS
+                Cashout ${fmtCoins(game?.potentialPayoutAtomic)}
               </button>
             </>
           ) : (
             <button
               onClick={handleStart}
               disabled={loading || !betAtomic}
-              className="w-full py-3.5 rounded-btn bg-gradient-to-b from-[#ac2e30] to-[#f75154] text-white text-sm font-bold shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] hover:brightness-110 transition-all disabled:opacity-50"
+              className="w-full h-[52px] rounded-btn bg-gradient-to-b from-[#ac2e30] to-[#f75154] text-white text-sm font-bold shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] hover:brightness-110 transition-all disabled:opacity-50"
             >
               {loading ? "Starting..." : "Start game"}
             </button>
@@ -238,9 +256,9 @@ export default function MinesPage() {
         </div>
       </div>
 
-      {/* Right panel — 5x5 board */}
+      {/* ── Right: 5×5 board ── */}
       <div
-        className="flex-1 rounded-card p-8 flex items-center justify-center"
+        className="flex-1 rounded-card flex items-center justify-center p-8"
         style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
       >
         <div className="flex flex-wrap gap-3" style={{ width: "583px" }}>
@@ -249,34 +267,30 @@ export default function MinesPage() {
               key={idx}
               onClick={() => handleReveal(idx)}
               disabled={state !== "hidden" || !isActive || loading}
-              className={`w-[107px] h-[107px] rounded-btn flex items-center justify-center transition-all ${
-                state === "hidden"
-                  ? isActive
-                    ? "cursor-pointer hover:brightness-125 hover:scale-[1.03]"
-                    : "cursor-default opacity-60"
-                  : ""
-              }`}
+              className="w-[107px] h-[107px] rounded-btn flex flex-col items-center justify-center transition-all"
               style={
                 state === "safe"
-                  ? { background: "linear-gradient(180deg, #51ee5c 0%, #37823c 100%)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 0 0 rgba(255,255,255,0.07)" }
+                  ? { background: "linear-gradient(180deg, #51ee5c 0%, #37823c 100%)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 2.5px rgba(0,0,0,0.25), inset 0 -1px 0 0 #50e95a" }
                   : state === "mine"
                     ? { background: "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)", boxShadow: "0 2px 0 0 #2a0d0d, inset 0 2px 0 0 rgba(255,255,255,0.07)" }
                     : undefined
               }
             >
               {state === "hidden" ? (
-                <img src={HIDDEN_TILE} alt="" className="w-full h-full" />
+                <img
+                  src={HIDDEN_TILE}
+                  alt=""
+                  className={`w-full h-full ${isActive ? "cursor-pointer hover:brightness-125" : "opacity-50"}`}
+                />
               ) : state === "safe" ? (
-                <div className="flex flex-col items-center gap-1">
-                  <img src={GEM_ICON} alt="gem" className="w-10 h-9" />
-                  {game && (
-                    <span className="text-[11px] font-bold text-[#0d280f]">
-                      {formatAtomic(game.potentialPayoutAtomic)} COINS
-                    </span>
-                  )}
-                </div>
+                <>
+                  <img src={GEM_ICON} alt="gem" className="w-[42px] h-[36px]" />
+                  <span className="text-[11px] font-bold text-[#0d280f] mt-0.5">
+                    {fmtCoins(game?.potentialPayoutAtomic)} COINS
+                  </span>
+                </>
               ) : (
-                <span className="text-3xl">💣</span>
+                <img src={BOMB_ICON} alt="mine" className="w-[50px] h-[50px] object-contain" />
               )}
             </button>
           ))}
