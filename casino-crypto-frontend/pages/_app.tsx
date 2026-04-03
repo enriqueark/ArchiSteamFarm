@@ -33,7 +33,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
+      <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-gray-500 text-sm">Loading...</div>
       </div>
     );

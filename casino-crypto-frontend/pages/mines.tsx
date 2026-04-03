@@ -109,7 +109,7 @@ export default function MinesPage() {
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    className="bg-surface-200 border border-border rounded-lg px-3 py-2 text-white text-sm"
+                    className="bg-[#161616] border border-[#252525] rounded-lg px-3 py-2 text-white text-sm"
                     disabled={isActive}
                   >
                     {CURRENCIES.map((c) => (
@@ -193,7 +193,7 @@ export default function MinesPage() {
                   </div>
                 )}
                 {lastReveal && (
-                  <div className="mt-2 pt-2 border-t border-border">
+                  <div className="mt-2 pt-2 border-t border-[#252525]">
                     <p className="text-gray-400 text-xs">Last reveal:</p>
                     <p className="text-xs">
                       Cell {lastReveal.cellIndex} —{" "}
@@ -218,8 +218,8 @@ export default function MinesPage() {
                 className={`aspect-square rounded flex items-center justify-center text-lg font-bold transition-all ${
                   state === "hidden"
                     ? isActive
-                      ? "bg-surface-300 hover:bg-surface-400 cursor-pointer"
-                      : "bg-surface-200 cursor-not-allowed"
+                      ? "bg-[#1a1a1a] hover:bg-[#252525] cursor-pointer"
+                      : "bg-[#161616] cursor-not-allowed"
                     : state === "safe"
                       ? "bg-green-800 text-green-200"
                       : "bg-red-800 text-red-200"
@@ -240,7 +240,7 @@ export default function MinesPage() {
 
       {response && (
         <Card title="API Response">
-          <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-surface-200 p-3 rounded-lg">
+          <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-[#161616] p-3 rounded-lg">
             {response}
           </pre>
         </Card>

@@ -7,9 +7,9 @@ interface Props extends InputHTMLAttributes<HTMLInputElement> {
 export default function Input({ label, className = "", ...props }: Props) {
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-xs text-gray-500">{label}</label>}
+      {label && <label className="text-xs text-muted">{label}</label>}
       <input
-        className={`bg-surface-200 border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors ${className}`}
+        className={`bg-[#161616] border border-[#252525] rounded-btn px-3 py-2.5 text-sm text-white placeholder-[#555] outline-none focus:border-accent-red/50 transition-colors ${className}`}
         {...props}
       />
     </div>

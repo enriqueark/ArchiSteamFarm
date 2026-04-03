@@ -224,7 +224,7 @@ export default function RoulettePage() {
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="bg-surface-200 border border-border rounded-lg px-3 py-2 text-white text-sm"
+                className="bg-[#161616] border border-[#252525] rounded-lg px-3 py-2 text-white text-sm"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>
@@ -282,7 +282,7 @@ export default function RoulettePage() {
         <Card title="API Response">
           {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
           {response && (
-            <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-surface-200 p-3 rounded-lg">
+            <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-[#161616] p-3 rounded-lg">
               {JSON.stringify(response, null, 2)}
             </pre>
           )}

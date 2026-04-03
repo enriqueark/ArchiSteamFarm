@@ -34,36 +34,34 @@ export default function AuthGate({ onAuth }: Props) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
+    <div className="min-h-screen flex items-center justify-center bg-page">
+      <div className="w-full max-w-[380px]">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            <span className="text-brand">RED</span>
-            <span className="text-white">WATER</span>
-          </h1>
-          <p className="text-gray-600 text-sm mt-1">Crypto Casino</p>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-8" />
+            <span className="text-2xl font-bold text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
+          </div>
+          <p className="text-sm text-muted">Crypto Casino</p>
         </div>
 
-        <div className="bg-surface-100 border border-border rounded-xl p-6">
-          {/* Tabs */}
-          <div className="flex gap-1 mb-6 bg-surface-200 rounded-lg p-1">
+        <div className="rounded-card bg-panel p-6 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
+          <div className="flex mb-6 bg-[#161616] rounded-btn p-1">
             <button
               onClick={() => setMode("login")}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+              className={`flex-1 py-2.5 text-sm font-medium rounded-[10px] transition-all ${
                 mode === "login"
-                  ? "bg-surface-300 text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "bg-panel text-white shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
+                  : "text-muted hover:text-white"
               }`}
             >
               Sign in
             </button>
             <button
               onClick={() => setMode("register")}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+              className={`flex-1 py-2.5 text-sm font-medium rounded-[10px] transition-all ${
                 mode === "register"
-                  ? "bg-surface-300 text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "bg-panel text-white shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
+                  : "text-muted hover:text-white"
               }`}
             >
               Sign up
@@ -72,36 +70,36 @@ export default function AuthGate({ onAuth }: Props) {
 
           <div className="space-y-4" onKeyDown={handleKeyDown}>
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Email</label>
+              <label className="block text-xs text-muted mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="user@example.com"
-                className="w-full bg-surface-200 border border-border rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors"
+                className="w-full bg-[#161616] rounded-btn px-4 py-3 text-sm text-white placeholder-[#555] outline-none border border-[#252525] focus:border-accent-red/50 transition-colors"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Password</label>
+              <label className="block text-xs text-muted mb-1.5">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="min 8 characters"
-                className="w-full bg-surface-200 border border-border rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors"
+                className="w-full bg-[#161616] rounded-btn px-4 py-3 text-sm text-white placeholder-[#555] outline-none border border-[#252525] focus:border-accent-red/50 transition-colors"
               />
             </div>
 
             {error && (
-              <div className="bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2">
-                <p className="text-red-400 text-xs">{error}</p>
+              <div className="bg-[#2a1015] border border-[#5c1a20] rounded-btn px-3 py-2">
+                <p className="text-accent-red text-xs">{error}</p>
               </div>
             )}
 
             <button
               onClick={submit}
               disabled={loading}
-              className="w-full py-2.5 rounded-lg bg-brand hover:bg-brand-dark text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 rounded-btn bg-gradient-to-r from-[#ac2e30] to-[#f75154] text-white text-sm font-semibold transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476]"
             >
               {loading ? "..." : mode === "login" ? "Sign in" : "Sign up"}
             </button>
