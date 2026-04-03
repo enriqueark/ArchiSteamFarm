@@ -3,11 +3,12 @@ import type { AppProps } from "next/app";
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import AuthGate from "@/components/AuthGate";
-import { getAccessToken, validateSession } from "@/lib/api";
+import { getAccessToken, validateSession, logout, getMe, clearSession, type User } from "@/lib/api";
 
 export default function App({ Component, pageProps }: AppProps) {
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -17,23 +18,36 @@ export default function App({ Component, pageProps }: AppProps) {
     validateSession().then((valid) => {
       setAuthed(valid);
       setChecking(false);
+      if (valid) {
+        getMe().then(setUser).catch(() => {});
+      }
     });
   }, []);
 
+  const handleLogout = async () => {
+    try { await logout(); } catch { /* ignore */ }
+    clearSession();
+    setAuthed(false);
+    setUser(null);
+  };
+
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400">
-        Verifying session...
+      <div className="min-h-screen flex items-center justify-center bg-surface">
+        <div className="text-gray-500 text-sm">Loading...</div>
       </div>
     );
   }
 
   if (!authed) {
-    return <AuthGate onAuth={() => setAuthed(true)} />;
+    return <AuthGate onAuth={() => {
+      setAuthed(true);
+      getMe().then(setUser).catch(() => {});
+    }} />;
   }
 
   return (
-    <Layout>
+    <Layout onLogout={handleLogout} userEmail={user?.email}>
       <Component {...pageProps} />
     </Layout>
   );
