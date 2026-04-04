@@ -44,7 +44,6 @@ export default function MinesPage() {
   const lost = game?.status === "LOST";
   const betNum = parseFloat(bet || "0");
   const ba = String(Math.round(betNum * 1e6));
-  const sliderPct = maxBal > 0 ? Math.min(100, (betNum / maxBal) * 100) : 0;
 
   const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); };
   const start = async () => {
@@ -105,20 +104,16 @@ export default function MinesPage() {
             </div>
           </div>
 
-          {/* Progress bar (bet slider) */}
-          <div style={{ width: "100%", height: 6, borderRadius: 3, background: "#1a1a1a", position: "relative", cursor: act ? "default" : "pointer" }}
+          {/* Red bar slider (SVG asset) */}
+          <div style={{ width: "100%", position: "relative", cursor: act ? "default" : "pointer" }}
             onClick={(e) => {
               if (act) return;
               const rect = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
               setBet((pct * maxBal).toFixed(2));
             }}>
-            <div style={{ width: `${sliderPct}%`, height: "100%", borderRadius: 3, background: "linear-gradient(90deg,#ac2e30,#f34950)", transition: "width 0.1s" }} />
-            <div style={{ position: "absolute", top: -5, left: `calc(${sliderPct}% - 8px)`, width: 16, height: 16, borderRadius: "50%", background: "#fff", border: "2px solid #f34950", transition: "left 0.1s" }} />
+            <img src={DIV} alt="" style={{ width: "100%", display: "block" }} />
           </div>
-
-          {/* Divider */}
-          <img src={DIV} alt="" style={{ width: "100%", display: "block" }} />
 
           {/* Number of mines */}
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -126,7 +121,7 @@ export default function MinesPage() {
             <div style={{ display: "flex", alignItems: "center", minHeight: 54, borderRadius: 14, padding: 6, background: "#090909", boxSizing: "border-box" }}>
               <input type="number" min={1} max={24} value={mc} disabled={act}
                 onChange={(e) => setMc(Math.min(24, Math.max(1, parseInt(e.target.value) || 1)))}
-                style={{ width: 60, height: 42, borderRadius: 12, border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, textAlign: "center" }} />
+                style={{ width: "100%", height: 42, borderRadius: 12, border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, padding: "0 12px", boxSizing: "border-box" }} />
             </div>
           </div>
 
