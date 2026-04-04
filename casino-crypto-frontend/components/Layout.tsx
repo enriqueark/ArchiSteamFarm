@@ -66,8 +66,8 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar */}
-      <aside className="bg-chrome flex flex-col py-3 shrink-0 w-[180px] overflow-hidden">
+      {/* Left sidebar — collapsed by default, expands on hamburger click */}
+      <aside className={`bg-chrome flex flex-col py-3 shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-[180px]" : "w-[52px]"}`}>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
@@ -79,7 +79,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
               }`}
             >
               <img src={item.src} alt={item.label} className="w-5 h-5 shrink-0" />
-              <span className="text-[13px] font-medium whitespace-nowrap">{item.label}</span>
+              {sidebarOpen && <span className="text-[13px] font-medium whitespace-nowrap">{item.label}</span>}
             </Link>
           );
         })}
@@ -90,7 +90,9 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         {/* Top nav */}
         <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
-            <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6 opacity-60" />
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:opacity-100 opacity-60 transition-opacity">
+              <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6" />
+            </button>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
