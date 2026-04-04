@@ -66,19 +66,19 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar — collapsed by default, expands on hamburger click */}
-      <aside className={`bg-chrome flex flex-col py-3 shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-[180px]" : "w-[52px]"}`}>
+      {/* Left sidebar */}
+      <aside className={`flex flex-col items-center pt-2 shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-[170px]" : "w-[40px]"}`}>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 mx-2 px-3 h-[40px] rounded-[10px] shrink-0 transition-colors ${
-                active ? "bg-[#1a1a1a] text-white" : "text-[#828282] hover:bg-[#161616] hover:text-white"
+              className={`flex items-center gap-2.5 w-full px-2 h-[38px] shrink-0 transition-colors ${
+                active ? "text-white" : "text-[#828282] hover:text-white"
               }`}
             >
-              <img src={item.src} alt={item.label} className="w-5 h-5 shrink-0" />
+              <img src={item.src} alt={item.label} className="w-[28px] h-[28px] shrink-0" />
               {sidebarOpen && <span className="text-[13px] font-medium whitespace-nowrap">{item.label}</span>}
             </Link>
           );
