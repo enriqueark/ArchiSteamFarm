@@ -77,9 +77,9 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         {/* Hamburger toggle — top of sidebar */}
         <div
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, cursor: "pointer", marginBottom: 4 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", width: "100%", cursor: "pointer", marginBottom: 6 }}
         >
-          <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" style={{ width: 24, height: 24, opacity: 0.6 }} />
+          <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 42, height: 42, borderRadius: 8 }} />
         </div>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;

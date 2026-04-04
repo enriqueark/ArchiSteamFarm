@@ -206,7 +206,7 @@ export default function ChatPanel({ onClose }: Props) {
 
   return (
     <aside
-      className="sticky top-0 h-[100vh] w-[297px] shrink-0 rounded-card flex flex-col overflow-hidden"
+      className="w-[297px] shrink-0 rounded-[16px] flex flex-col overflow-hidden"
       style={{ background: "linear-gradient(180deg, #121212 0%, #0d0d0d 100%)" }}
     >
       {/* Header */}
