@@ -10,9 +10,8 @@ const sideLinks = [
   { href: "/cases", src: "/assets/098fe17d7ecd701c12a38a0cadfb52c7.svg", label: "Cases" },
   { href: "/case-battles", src: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg", label: "Case Battle" },
   { href: "/roulette", src: "/assets/30f1deaab44de7043abb1842bd019412.svg", label: "Roulette" },
-  { href: "/mines", src: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg", label: "Mines" },
-  { href: "/blackjack", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
-  { href: "/wallet", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Wallet" },
+  { href: "/mines", src: "/assets/50a1a1ae813369ada622b0018ecaa16f.svg", label: "Mines" },
+  { href: "#", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
 ];
 
 function formatAtomic(val: string, decimals = 8): string {
@@ -67,26 +66,20 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar — expandable */}
-      <aside
-        className={`bg-chrome flex flex-col py-2.5 shrink-0 transition-all duration-200 overflow-hidden ${
-          sidebarOpen ? "w-[200px]" : "w-[62px]"
-        }`}
-      >
+      {/* Left sidebar */}
+      <aside className="bg-chrome flex flex-col py-3 shrink-0 w-[180px] overflow-hidden">
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 mx-2 px-2.5 h-[42px] rounded-btn transition-all shrink-0 ${
-                active ? "bg-[#1a1a1a] text-white" : "text-muted hover:bg-[#161616] hover:text-white"
+              className={`flex items-center gap-3 mx-2 px-3 h-[40px] rounded-[10px] shrink-0 transition-colors ${
+                active ? "bg-[#1a1a1a] text-white" : "text-[#828282] hover:bg-[#161616] hover:text-white"
               }`}
             >
-              <img src={item.src} alt={item.label} className="w-6 h-6 shrink-0" />
-              {sidebarOpen && (
-                <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
-              )}
+              <img src={item.src} alt={item.label} className="w-5 h-5 shrink-0" />
+              <span className="text-[13px] font-medium whitespace-nowrap">{item.label}</span>
             </Link>
           );
         })}
@@ -97,10 +90,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         {/* Top nav */}
         <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
-            {/* Hamburger toggles sidebar */}
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:opacity-100 opacity-60 transition-opacity">
-              <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6" />
-            </button>
+            <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6 opacity-60" />
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
