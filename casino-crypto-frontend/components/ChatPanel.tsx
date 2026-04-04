@@ -213,31 +213,42 @@ export default function ChatPanel({ onClose }: Props) {
 
   return (
     <aside
-      className="w-[297px] shrink-0 rounded-[16px] flex flex-col overflow-hidden"
+      className="relative w-[297px] shrink-0 rounded-[16px] flex flex-col overflow-hidden"
       style={{ background: "linear-gradient(180deg, #121212 0%, #0d0d0d 100%)" }}
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3"
+        className="flex w-full items-center justify-between gap-[26px] overflow-hidden px-4 py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #1a1a1a 0%, #282828 100%)" }}
       >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="w-5 h-5" />
-            <span className="text-sm font-medium text-accent-red">Chat</span>
+        <div className="flex w-fit items-center gap-3">
+          <div className="flex w-fit items-center gap-2">
+            <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
+            <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#161616] rounded-md px-2 py-1">
-            <img src="/assets/7633b71f35a53e0231fddc5fed059472.svg" alt="" className="w-3.5 h-3.5" />
-            <span className="text-xs text-muted">{onlineCount}</span>
+          <div className="flex w-fit items-center gap-2 rounded-[8px] bg-[#161616] px-[11px] py-2">
+            <span className="h-[10px] w-[10px] rounded-full bg-[#8aff53]" />
+            <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
         </div>
         <button onClick={onClose}>
-          <img src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg" alt="close" className="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity" />
+          <img
+            src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
+            alt="close"
+            className="h-[42px] w-[42px] rounded-[8px] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] opacity-60 transition-opacity hover:opacity-100"
+          />
         </button>
       </div>
 
-      {/* Live Rain card (mapped from main-gl HTML/CSS block) */}
-      <div className="mx-auto my-4 w-[265px]">
+      {/* Rain area overlay copied from main-gl structure */}
+      <div
+        className="pointer-events-none absolute left-0 top-[112px] z-[4] w-[297px] min-h-[174px]"
+        style={{ background: "linear-gradient(180deg, #0d0d0d 0%, rgba(13,13,13,0) 100%)" }}
+      />
+      <div className="pointer-events-none absolute -left-4 top-[128px] z-[5] h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[172.7px]" />
+      <div className="pointer-events-none absolute right-0 top-[128px] z-[5] h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[75.2px]" />
+
+      <div className="absolute left-4 top-[128px] z-[6] w-[265px]">
         <div
           role="button"
           tabIndex={0}
@@ -257,9 +268,6 @@ export default function ChatPanel({ onClose }: Props) {
           }`}
           title="Join rain"
         >
-          <div className="pointer-events-none absolute -left-4 -top-4 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[172.7px]" />
-          <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[75.2px]" />
-
           <div className="relative z-10 flex items-center gap-[10px] px-[8px] py-[7px]">
             <img
               src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
@@ -300,7 +308,7 @@ export default function ChatPanel({ onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2 space-y-4">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-[198px] space-y-3">
         {messages.map((m, i) => (
           <div key={m.id || i} className="flex items-start gap-2.5">
             {m.avatarUrl ? (
@@ -337,10 +345,10 @@ export default function ChatPanel({ onClose }: Props) {
 
       {/* Input */}
       <div
-        className="px-3 py-3"
+        className="w-full shrink-0 overflow-hidden rounded-b-[16px] px-[10px] py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #282828 0%, #1a1a1a 100%)" }}
       >
-        <div className="flex items-center gap-2 bg-[#161616] rounded-btn px-3 py-2.5">
+        <div className="flex items-center justify-between rounded-[14px] bg-[#0d0d0d] p-[6px]">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -351,14 +359,14 @@ export default function ChatPanel({ onClose }: Props) {
               }
             }}
             placeholder="Write message..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-muted outline-none"
+            className="flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
           />
-          <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="w-5 h-5 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" />
+          <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="h-6 w-6 opacity-50 transition-opacity hover:opacity-100" />
           <img
             src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg"
             alt="send"
             onClick={() => void handleSend()}
-            className={`w-5 h-5 cursor-pointer hover:opacity-100 transition-opacity ${
+            className={`h-[42px] w-[42px] cursor-pointer rounded-[8px] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] transition-opacity hover:opacity-100 ${
               sending ? "opacity-100" : "opacity-50"
             }`}
           />
