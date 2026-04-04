@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { startMinesGame, revealMine, cashoutMines, getWallets, type MinesGame, type MinesRevealResponse } from "@/lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -13,7 +13,6 @@ const RR = `${A}b4fbfa3ebe2ac32ca7bc3136b2647ee7.svg`;
 const P1 = `${A}b6d6c3347b8703c97896883a1403de0b.svg`;
 const P2 = `${A}6b1afbc61c27e477151d378fd42686be.svg`;
 const P3 = `${A}48299ac45bc8c79776e03a90ed321ed3.svg`;
-const WPN = `${A}4e425b7d3c328e970651b77449845d15.png`;
 
 type Cell = "hidden" | "safe" | "mine";
 const G = '"DM Sans","Gotham",sans-serif';
@@ -31,6 +30,7 @@ export default function MinesPage() {
   const [err, setErr] = useState<string | null>(null);
   const [, setLR] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [maxBal, setMaxBal] = useState(5000);
+  const [skinUrl, setSkinUrl] = useState<string | null>(null);
 
   useEffect(() => {
     getWallets().then((w) => {
@@ -44,7 +44,15 @@ export default function MinesPage() {
   const betNum = parseFloat(bet || "0");
   const ba = String(Math.round(betNum * 1e6));
 
-  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); };
+  const fetchSkin = useCallback(async (amountAtomic: string | null | undefined) => {
+    if (!amountAtomic || amountAtomic === "0") { setSkinUrl(null); return; }
+    try {
+      const res = await getSkinPreviewByAmountAtomic(amountAtomic);
+      setSkinUrl(res.preview?.imageUrl || null);
+    } catch { setSkinUrl(null); }
+  }, []);
+
+  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); setSkinUrl(null); };
   const start = async () => {
     setErr(null); setLd(true); reset();
     try {
@@ -59,11 +67,16 @@ export default function MinesPage() {
       const r = await revealMine(game.gameId, idx); setGame(r); setLR(r.reveal);
       const n = [...cells]; n[idx] = r.reveal.hitMine ? "mine" : "safe";
       r.revealedCells?.forEach((i) => { if (n[i] === "hidden") n[i] = "safe"; }); setCells(n);
+      if (!r.reveal.hitMine && r.status === "ACTIVE") {
+        fetchSkin(r.potentialPayoutAtomic);
+      } else {
+        setSkinUrl(null);
+      }
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try { setGame(await cashoutMines(game.gameId)); setSkinUrl(null); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const pickR = () => {
     if (!act) return;
@@ -164,7 +177,9 @@ export default function MinesPage() {
               <img src={P1} alt="" style={{ position: "absolute", width: "57%", height: "auto", opacity: 0.2 }} />
               <img src={P2} alt="" style={{ position: "absolute", width: "44%", height: "auto", opacity: 0.15 }} />
               <img src={P3} alt="" style={{ position: "absolute", width: "30%", height: "auto", opacity: 0.1 }} />
-              <img src={WPN} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
+              {skinUrl && (
+                <img src={skinUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
+              )}
             </div>
             <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 6, position: "relative", zIndex: 1 }}>
               <p style={{ color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, margin: 0, whiteSpace: "nowrap" }}>x{fm(game?.currentMultiplier)}</p>
