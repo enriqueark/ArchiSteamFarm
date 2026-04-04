@@ -175,61 +175,64 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
         </header>
 
-        {/* Live ticker */}
-        <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden">
-          <div className={`flex items-center gap-1.5 py-1.5 px-1.5 ${tickerEvents.length > 5 ? "ticker-scroll" : ""}`}>
-            {(tickerEvents.length > 0 ? [...tickerEvents, ...tickerEvents] : Array.from({ length: 10 })).map((ev, i) => {
-              const round = ev as RouletteRoundEvent | undefined;
-              return (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 min-w-[189px] h-[65px] rounded-btn px-3 shrink-0"
-                  style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
-                >
-                  <div className="relative w-[50px] h-[50px] shrink-0 flex items-center justify-center">
-                    <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[32px] rounded-r ${
-                      round?.winningColor === "RED" ? "bg-red-500" : round?.winningColor === "BLACK" ? "bg-gray-400" : round?.winningColor === "GREEN" ? "bg-green-500" : "bg-accent-red"
-                    }`} />
-                    {round ? (
-                      <span className={`text-2xl font-bold ${
-                        round.winningColor === "RED" ? "text-red-400" : round.winningColor === "GREEN" ? "text-green-400" : "text-white"
-                      }`}>
-                        {round.winningNumber}
-                      </span>
-                    ) : (
-                      <span className="w-8 h-8 rounded bg-[#1a1a1a]" />
-                    )}
+        {/* Ticker + Content area (left of chat) */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
+          {/* Live ticker */}
+          <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden shrink-0">
+            <div className={`flex items-center gap-1.5 py-1.5 px-1.5 ${tickerEvents.length > 5 ? "ticker-scroll" : ""}`}>
+              {(tickerEvents.length > 0 ? [...tickerEvents, ...tickerEvents] : Array.from({ length: 10 })).map((ev, i) => {
+                const round = ev as RouletteRoundEvent | undefined;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 min-w-[189px] h-[65px] rounded-btn px-3 shrink-0"
+                    style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
+                  >
+                    <div className="relative w-[50px] h-[50px] shrink-0 flex items-center justify-center">
+                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[32px] rounded-r ${
+                        round?.winningColor === "RED" ? "bg-red-500" : round?.winningColor === "BLACK" ? "bg-gray-400" : round?.winningColor === "GREEN" ? "bg-green-500" : "bg-accent-red"
+                      }`} />
+                      {round ? (
+                        <span className={`text-2xl font-bold ${
+                          round.winningColor === "RED" ? "text-red-400" : round.winningColor === "GREEN" ? "text-green-400" : "text-white"
+                        }`}>
+                          {round.winningNumber}
+                        </span>
+                      ) : (
+                        <span className="w-8 h-8 rounded bg-[#1a1a1a]" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-muted truncate">Roulette</p>
+                      <p className="text-[11px] text-white truncate">
+                        {round ? `Round #${round.roundNumber}` : "Waiting..."}
+                      </p>
+                      <p className="text-[12px] font-medium text-accent-green">
+                        {round ? `${round.currency}` : "—"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-muted truncate">Roulette</p>
-                    <p className="text-[11px] text-white truncate">
-                      {round ? `Round #${round.roundNumber}` : "Waiting..."}
-                    </p>
-                    <p className="text-[12px] font-medium text-accent-green">
-                      {round ? `${round.currency}` : "—"}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Content + Chat side by side, below ticker */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Page content */}
           <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
             {children}
           </main>
-          {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
-          {!chatOpen && (
-            <button
-              onClick={() => setChatOpen(true)}
-              className="fixed bottom-4 right-4 w-12 h-12 rounded-full bg-accent-red flex items-center justify-center text-white shadow-lg z-50 hover:bg-[#f75154] transition-colors"
-            >
-              💬
-            </button>
-          )}
         </div>
+
+        {/* Chat panel — right column, covers ticker + content height */}
+        {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+        {!chatOpen && (
+          <button
+            onClick={() => setChatOpen(true)}
+            className="fixed bottom-4 right-4 w-12 h-12 rounded-full bg-accent-red flex items-center justify-center text-white shadow-lg z-50 hover:bg-[#f75154] transition-colors"
+          >
+            💬
+          </button>
+        )}
       </div>
     </div>
   );
