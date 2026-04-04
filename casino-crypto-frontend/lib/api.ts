@@ -705,6 +705,10 @@ export async function startMinesGame(
   );
 }
 
+export async function getActiveMinesGame(): Promise<MinesGame | null> {
+  return request<MinesGame | null>("/mines/games/active");
+}
+
 export async function getMinesGame(gameId: string): Promise<MinesGame> {
   return request<MinesGame>(`/mines/games/${gameId}`);
 }

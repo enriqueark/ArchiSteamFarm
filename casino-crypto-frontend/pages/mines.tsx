@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, type MinesGame, type MinesRevealResponse } from "@/lib/api";
+import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -52,12 +52,47 @@ export default function MinesPage() {
     } catch { setSkinUrl(null); }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const restoreActiveGame = async () => {
+      setLd(true);
+      try {
+        const activeGame = await getActiveMinesGame();
+        if (!activeGame || cancelled) {
+          return;
+        }
+        setGame(activeGame);
+        setBet((Number(activeGame.betAtomic) / 1e6).toFixed(2));
+        setMc(activeGame.mineCount);
+        const next = Array(BOARD).fill("hidden") as Cell[];
+        activeGame.revealedCells?.forEach((i) => {
+          if (i >= 0 && i < BOARD) {
+            next[i] = "safe";
+          }
+        });
+        setCells(next);
+        await fetchSkin(activeGame.potentialPayoutAtomic);
+      } catch {
+        // Ignore restore errors to allow a normal fresh game.
+      } finally {
+        if (!cancelled) {
+          setLd(false);
+        }
+      }
+    };
+    void restoreActiveGame();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchSkin]);
+
   const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); setSkinUrl(null); };
   const start = async () => {
     setErr(null); setLd(true); reset();
     try {
       const g = await startMinesGame("USDT", ba, mc); setGame(g);
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
+      fetchSkin(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const reveal = async (idx: number) => {
