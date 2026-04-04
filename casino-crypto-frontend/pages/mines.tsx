@@ -93,12 +93,12 @@ export default function MinesPage() {
               </div>
               <div style={{ display: "flex", gap: 4 }}>
                 <div onClick={() => !act && setBet(String(Math.max(0, betNum / 2).toFixed(2)))}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#fff", boxShadow: SD, cursor: "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
-                  <p style={{ color: "#828282", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>1/2</p>
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#1a1a1a", boxShadow: SD, cursor: "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
+                  <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>1/2</p>
                 </div>
                 <div onClick={() => !act && setBet(maxBal.toFixed(2))}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#fff", boxShadow: SD, cursor: "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
-                  <p style={{ color: "#828282", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>Max</p>
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#1a1a1a", boxShadow: SD, cursor: "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
+                  <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>Max</p>
                 </div>
               </div>
             </div>
@@ -130,9 +130,9 @@ export default function MinesPage() {
             {PRESETS.map((n) => (
               <div key={n} onClick={() => !act && setMc(n)}
                 style={{ flex: 1, maxWidth: 69, minHeight: 42, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12,
-                  background: mc === n ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#fff",
+                  background: mc === n ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
                   boxShadow: mc === n ? SR : SD, cursor: "pointer", opacity: act ? 0.3 : 1 }}>
-                <p style={{ color: mc === n ? "#fff" : "#828282", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>{n}</p>
+                <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>{n}</p>
               </div>
             ))}
           </div>
