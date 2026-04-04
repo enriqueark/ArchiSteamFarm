@@ -178,21 +178,21 @@ export default function MinesPage() {
       </div>
 
       {/* 5×5 GRID */}
-      <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 107px)", gap: 12 }}>
+      <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, width: "100%", maxWidth: 700 }}>
           {cells.map((st, i) => {
             if (st === "mine") return (
-              <img key={i} src={MINE_TILE} alt="mine" style={{ width: 107, height: 109, borderRadius: 12, display: "block" }} />
+              <img key={i} src={MINE_TILE} alt="mine" style={{ width: "100%", aspectRatio: "1", borderRadius: 12, display: "block" }} />
             );
             if (st === "safe") return (
-              <div key={i} style={{ width: 107, height: 107, borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#51ee5c,#37823c)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 0 0 rgba(255,255,255,.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <img src={GEM} alt="" style={{ width: 54, height: "auto" }} />
-                <p style={{ color: "#0d280f", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0, lineHeight: "20px" }}>{pay}</p>
+              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#51ee5c,#37823c)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 0 0 rgba(255,255,255,.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <img src={GEM} alt="" style={{ width: "45%", height: "auto" }} />
+                <p style={{ color: "#0d280f", fontSize: 14, fontFamily: G, fontWeight: 500, margin: 0, lineHeight: "18px" }}>{pay}</p>
               </div>
             );
             return (
               <img key={i} src={TILE} alt="" onClick={() => reveal(i)}
-                style={{ width: 107, height: 109, borderRadius: 12, display: "block", boxShadow: "0 2px 0 0 #161616, inset 0 2px 0 0 rgba(255,255,255,.07)", cursor: act ? "pointer" : "default", opacity: act ? 1 : 0.5 }} />
+                style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, display: "block", boxShadow: "0 2px 0 0 #161616, inset 0 2px 0 0 rgba(255,255,255,.07)", cursor: act ? "pointer" : "default", opacity: act ? 1 : 0.5 }} />
             );
           })}
         </div>
