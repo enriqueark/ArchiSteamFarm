@@ -1,251 +1,186 @@
 import { useState, useEffect } from "react";
-import {
-  startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic,
-  type MinesGame, type MinesRevealResponse,
-} from "@/lib/api";
+import { startMinesGame, revealMine, cashoutMines, getWallets, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
-const CURS = ["USDT", "BTC", "ETH", "USDC"] as const;
 const A = "/assets/";
-const TILE = `${A}09d0723a9bfccbed73637ba3ba799693.svg`;
-const GEM = `${A}7314404ef65e3d5b3dc26009de5d710c.svg`;
-const DIV = `${A}5edaa698796fe2f18fcc3c6a7ec12584.svg`;
-const RL = `${A}53afd2537d26b04bd54b538a8d997e24.svg`;
-const RR = `${A}b4fbfa3ebe2ac32ca7bc3136b2647ee7.svg`;
-const P1 = `${A}b6d6c3347b8703c97896883a1403de0b.svg`;
-const P2 = `${A}6b1afbc61c27e477151d378fd42686be.svg`;
-const P3 = `${A}48299ac45bc8c79776e03a90ed321ed3.svg`;
-const WPN = `${A}4e425b7d3c328e970651b77449845d15.png`;
-const BOMB = `${A}c4b1622f42a16ecfa9bd80339816d0f1.png`;
 
 type Cell = "hidden" | "safe" | "mine";
-const f = (v: string | null | undefined, d = 6) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
-const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
-
-const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
-const SR = "inset 0 1px 0 0 #f24f51, inset 0 -1px 0 0 #ff7476";
+const fmt = (v: string | null | undefined, d = 6) => {
+  if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2);
+};
+const fmtM = (v: string | null | undefined) => {
+  if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2);
+};
 
 export default function MinesPage() {
-  const [cur, setCur] = useState("USDT");
-  const [bet, setBet] = useState("0");
+  const [bet, setBet] = useState("0.12");
   const [mc, setMc] = useState(1);
   const [game, setGame] = useState<MinesGame | null>(null);
   const [cells, setCells] = useState<Cell[]>(Array(BOARD).fill("hidden"));
   const [ld, setLd] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [, setLR] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [maxBal, setMaxBal] = useState(5000);
-  const [skinPreview, setSkinPreview] = useState<{
-    id: string;
-    name: string;
-    valueAtomic: string;
-    imageUrl: string | null;
-  } | null>(null);
 
   useEffect(() => {
     getWallets().then((w) => {
-      const wallet = w.find((x) => x.currency === cur);
-      if (wallet) { const b = Number(wallet.balanceAtomic) / 1e6; setMaxBal(Math.min(b, 5000)); }
+      const wallet = w.find((x) => x.currency === "USDT");
+      if (wallet) setMaxBal(Math.min(Number(wallet.balanceAtomic) / 1e6, 5000));
     }).catch(() => {});
-  }, [cur]);
+  }, []);
 
   const act = game?.status === "ACTIVE";
   const lost = game?.status === "LOST";
   const ba = String(Math.round(parseFloat(bet || "0") * 1e6));
-  const refreshSkinPreview = async (amountAtomic: string | null | undefined) => {
-    if (!amountAtomic) {
-      setSkinPreview(null);
-      return;
-    }
-    try {
-      const quote = await getSkinPreviewByAmountAtomic(amountAtomic);
-      setSkinPreview(quote.preview);
-    } catch {
-      setSkinPreview(null);
-    }
-  };
+  const pay = "$" + fmt(game?.potentialPayoutAtomic);
 
-  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); setSkinPreview(null); };
   const start = async () => {
-    setErr(null); setLd(true); reset();
-    try { const g = await startMinesGame(cur, ba, mc); setGame(g);
+    setErr(null); setLd(true); setCells(Array(BOARD).fill("hidden"));
+    try {
+      const g = await startMinesGame("USDT", ba, mc); setGame(g);
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
-      await refreshSkinPreview(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const reveal = async (idx: number) => {
     if (!game || cells[idx] !== "hidden" || !act) return;
     setErr(null); setLd(true);
-    try { const r = await revealMine(game.gameId, idx); setGame(r); setLR(r.reveal);
+    try {
+      const r = await revealMine(game.gameId, idx); setGame(r);
       const n = [...cells]; n[idx] = r.reveal.hitMine ? "mine" : "safe";
       r.revealedCells?.forEach((i) => { if (n[i] === "hidden") n[i] = "safe"; }); setCells(n);
-      if (r.status === "ACTIVE") {
-        await refreshSkinPreview(r.potentialPayoutAtomic);
-      } else {
-        setSkinPreview(null);
-      }
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); setSkinPreview(null); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try { setGame(await cashoutMines(game.gameId)); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
-  const pickR = () => { if (!act) return; const h = cells.map((s, i) => s === "hidden" ? i : -1).filter((i) => i >= 0); if (h.length) reveal(h[Math.floor(Math.random() * h.length)]); };
-
-  const pay = "$" + f(game?.potentialPayoutAtomic);
+  const pickR = () => {
+    if (!act) return; const h = cells.map((s, i) => s === "hidden" ? i : -1).filter((i) => i >= 0);
+    if (h.length) reveal(h[Math.floor(Math.random() * h.length)]);
+  };
 
   return (
-    <div style={{ display: "flex", gap: "20px" }}>
-      {/* ═══ LEFT PANEL 401px ═══ */}
-      <div style={{ width: 401, maxWidth: 401, minHeight: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", flexDirection: "column" }}>
-        <div style={{ width: 361, margin: "0 auto", padding: "20px 0", display: "flex", flexDirection: "column", gap: 20, flex: 1 }}>
-
-          {/* Bet amount section */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 9, width: "100%" }}>
-            <p style={{ color: "#828282", fontSize: 14, fontFamily: '"Gotham",sans-serif', fontWeight: 400, lineHeight: "14px", margin: 0 }}>Bet amount</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 54, borderRadius: 14, padding: 6, background: "#090909", boxSizing: "border-box" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 12px" }}>
-                <p style={{ color: "#fff", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0 }}>
-                  ${act ? f(game?.betAtomic) : bet}
-                </p>
-              </div>
-              <div style={{ display: "flex", alignItems: "stretch", gap: 4 }}>
-                <div onClick={() => !act && setBet(String(Math.max(0.1, parseFloat(bet || "0") / 2).toFixed(2)))}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#fff", boxShadow: SD, cursor: act ? "default" : "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
-                  <p style={{ color: "#828282", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0 }}>1/2</p>
+    <div style={{ display: "flex", gap: 20 }}>
+      {/* ═══ LEFT PANEL ═══ */}
+      <div className="mines-kx-frame-n5">
+        <div className="mines-kx-frame-ld">
+          {/* Bet amount */}
+          <div className="mines-kx-frame-ac">
+            <div className="mines-kx-text-bet-amount-y61">
+              <p className="mines-kx-text-bet-amount-y62">Bet amount</p>
+            </div>
+            <div className="mines-kx-frame13">
+              <div className="mines-kx-frame-at">
+                <div className="mines-kx-text12f11">
+                  <input className="mines-kx-text12f12" value={act ? "$" + fmt(game?.betAtomic) : "$" + bet}
+                    onChange={(e) => !act && setBet(e.target.value.replace(/^\$/, ""))} disabled={act}
+                    style={{ background: "transparent", border: "none", outline: "none", width: "100%", padding: 0, font: "inherit", color: "inherit" }} />
                 </div>
-                <div onClick={() => { if (!act) setBet(String(maxBal.toFixed(2))); }}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "#fff", boxShadow: SD, cursor: act ? "default" : "pointer", height: 42, opacity: act ? 0.3 : 1 }}>
-                  <p style={{ color: "#828282", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0 }}>Max</p>
+              </div>
+              <div className="mines-kx-frame27">
+                <div className="mines-kx-frame-u3" onClick={() => !act && setBet(String(Math.max(0.1, parseFloat(bet || "0") / 2).toFixed(2)))} style={{ cursor: "pointer" }}>
+                  <div className="mines-kx-text12-zx1"><p className="mines-kx-text12-zx2">1/2</p></div>
+                </div>
+                <div className="mines-kx-frame-j2" onClick={() => !act && setBet(maxBal.toFixed(2))} style={{ cursor: "pointer" }}>
+                  <div className="mines-kx-text-max811"><p className="mines-kx-text-max812">Max</p></div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Slider */}
-          <input type="range" min="0.10" max={maxBal} step="0.01" value={bet} disabled={act}
-            onChange={(e) => setBet(e.target.value)}
-            style={{ width: "100%", accentColor: "#f34950" }} />
-
           {/* Divider SVG */}
-          <img src={DIV} alt="" style={{ width: "100%", display: "block" }} />
+          <img src={`${A}5edaa698796fe2f18fcc3c6a7ec12584.svg`} alt="" width="361" height="16" className="mines-kx-vector-frame97-oa" />
 
-          {/* Number of mines section */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 9, width: "100%" }}>
-            <p style={{ color: "#828282", fontSize: 14, fontFamily: '"Gotham",sans-serif', fontWeight: 400, lineHeight: "14px", margin: 0 }}>Number of mines</p>
-            <div style={{ display: "flex", alignItems: "center", width: "100%", minHeight: 54, borderRadius: 14, padding: 6, background: "#090909", boxSizing: "border-box" }}>
-              <input type="number" min={1} max={24} value={mc} disabled={act}
-                onChange={(e) => setMc(Math.min(24, Math.max(1, parseInt(e.target.value) || 1)))}
-                style={{ width: 60, height: 42, borderRadius: 12, border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, textAlign: "center", padding: "0 12px" }} />
+          {/* Number of mines */}
+          <div className="mines-kx-frame-we">
+            <div className="mines-kx-text-number-mines7f1">
+              <p className="mines-kx-text-number-mines7f2">Number of mines</p>
+            </div>
+            <div className="mines-kx-frame-ig2">
+              <div className="mines-kx-frame7w">
+                <div className="mines-kx-text1-wv1">
+                  <input className="mines-kx-text1-wv2" type="number" min={1} max={24} value={mc}
+                    onChange={(e) => !act && setMc(Math.min(24, Math.max(1, parseInt(e.target.value) || 1)))} disabled={act}
+                    style={{ background: "transparent", border: "none", outline: "none", width: 40, padding: 0, font: "inherit", color: "inherit", textAlign: "left" }} />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Preset buttons */}
-          <div style={{ display: "flex", gap: 4, width: "100%", justifyContent: "center" }}>
+          <div className="mines-kx-frame6q">
             {PRESETS.map((n) => (
-              <div key={n} onClick={() => !act && setMc(n)}
-                style={{ flexGrow: 1, flexShrink: 1, maxWidth: 69, minHeight: 42, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12,
-                  background: mc === n ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#fff",
-                  boxShadow: mc === n ? SR : SD, cursor: act ? "default" : "pointer", opacity: act ? 0.3 : 1 }}>
-                <p style={{ color: mc === n ? "#fff" : "#828282", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0 }}>{n}</p>
+              <div key={n} className={mc === n ? "mines-kx-frame2p" : "mines-kx-frame-ss"} onClick={() => !act && setMc(n)} style={{ cursor: "pointer" }}>
+                <div className={mc === n ? "mines-kx-text1-hr1" : "mines-kx-text3-vp1"}>
+                  <p className={mc === n ? "mines-kx-text1-hr2" : "mines-kx-text3-vp2"}>{n}</p>
+                </div>
               </div>
             ))}
           </div>
 
           {/* HR */}
-          <hr style={{ width: "100%", border: "none", borderTop: "1px solid #1e1e1e", margin: 0 }} />
+          <hr className="mines-kx-frame-line1-qs" />
 
           {/* Weapon art + multiplier */}
-          <div style={{ flex: 1, width: "100%", overflow: "hidden", borderRadius: 12, background: "linear-gradient(180deg,#282828,#1a1a1a)", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            <img src={RL} alt="" style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", height: 247, opacity: 0.5 }} />
-            <img src={RR} alt="" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", height: 247, opacity: 0.5 }} />
-            <div style={{ position: "relative", width: 266, minHeight: 200 }}>
-              <img src={P1} alt="" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 151, height: 172, opacity: 0.2 }} />
-              <img src={P2} alt="" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 116, height: 131, opacity: 0.15 }} />
-              <img src={P3} alt="" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 80, height: 87, opacity: 0.1 }} />
-              <img src={WPN} alt="" style={{ width: 266, height: 199, objectFit: "cover", display: "block", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
+          <div className="mines-kx-frame-tp">
+            <img src={`${A}53afd2537d26b04bd54b538a8d997e24.svg`} alt="" width="18.2" height="247.4" className="mines-kx-vector-group4-ak" />
+            <img src={`${A}b4fbfa3ebe2ac32ca7bc3136b2647ee7.svg`} alt="" width="18.2" height="247.4" className="mines-kx-vector-group5-ll" />
+            <div className="mines-kx-frame-group63m">
+              <img src={`${A}b6d6c3347b8703c97896883a1403de0b.svg`} alt="" width="150.78" height="171.86" className="mines-kx-vector-polygon1x9" />
+              <img src={`${A}6b1afbc61c27e477151d378fd42686be.svg`} alt="" width="116.07" height="130.58" className="mines-kx-vector-polygon28a" />
+              <img src={`${A}48299ac45bc8c79776e03a90ed321ed3.svg`} alt="" width="79.8" height="87.05" className="mines-kx-vector-polygon3-po" />
+              <img src={`${A}4e425b7d3c328e970651b77449845d15.png`} alt="" width="334.19" height="267.69" className="mines-kx-image2405e76b4b1-en"
+                style={lost ? { filter: "brightness(0.4)" } : undefined} />
             </div>
-            <div style={{ width: 69, maxWidth: 69, minHeight: 42, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 8, marginBottom: 8, position: "relative", zIndex: 1 }}>
-              <p style={{ color: "#fff", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0 }}>x{fm(game?.currentMultiplier)}</p>
+            <div className="mines-kx-frame-xs">
+              <div className="mines-kx-text92-mr1">
+                <p className="mines-kx-text92-mr2">x{fmtM(game?.currentMultiplier)}</p>
+              </div>
             </div>
           </div>
 
           {/* Error */}
           {err && <p style={{ color: "#f34950", fontSize: 12, margin: 0 }}>{err}</p>}
 
-          {/* Visual cashout skin preview */}
-          {act && skinPreview ? (
-            <div style={{ width: "100%", border: "1px solid #2b2b2b", borderRadius: 12, background: "#111", padding: 8, boxSizing: "border-box" }}>
-              <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: 0.6, fontFamily: '"Gotham",sans-serif' }}>
-                Visual cashout skin
-              </p>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {skinPreview.imageUrl ? (
-                  <img
-                    src={skinPreview.imageUrl}
-                    alt={skinPreview.name}
-                    style={{ width: 80, height: 56, objectFit: "contain", background: "#0b0b0b", border: "1px solid #2b2b2b", borderRadius: 8 }}
-                  />
-                ) : (
-                  <div style={{ width: 80, height: 56, background: "#0b0b0b", border: "1px solid #2b2b2b", borderRadius: 8 }} />
-                )}
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ color: "#fff", fontSize: 12, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: '"Gotham",sans-serif', fontWeight: 500 }}>
-                    {skinPreview.name}
-                  </p>
-                  <p style={{ color: "#828282", fontSize: 11, margin: "3px 0 0 0", fontFamily: '"Gotham",sans-serif' }}>
-                    Approx. ${f(skinPreview.valueAtomic)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {/* Action buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+          <div className="mines-kx-frame-wd">
             {act ? (
               <>
-                <div onClick={pickR} style={{ width: "100%", padding: "16px 36px", borderRadius: 12, background: "#1a1a1a", boxShadow: SD, display: "flex", alignItems: "center", justifyContent: "center", cursor: ld ? "default" : "pointer", opacity: ld ? 0.5 : 1 }}>
-                  <p style={{ color: "#828282", fontSize: 18, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0, textAlign: "center" }}>Pick random tile</p>
+                <div className="mines-kx-frame-bq3" onClick={pickR} style={{ cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
+                  <div className="mines-kx-text-pick-random0p1"><p className="mines-kx-text-pick-random0p2">Pick random tile</p></div>
                 </div>
-                <div onClick={cashout} style={{ width: "100%", padding: "16px 36px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", alignItems: "center", justifyContent: "center", cursor: ld ? "default" : "pointer", opacity: ld ? 0.5 : 1 }}>
-                  <p style={{ color: "#fff", fontSize: 18, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0, textAlign: "center" }}>Cashout {pay}</p>
+                <div className="mines-kx-frame7e" onClick={cashout} style={{ cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
+                  <div className="mines-kx-text11-qj1"><p className="mines-kx-text11-qj2">Cashout {pay}</p></div>
                 </div>
               </>
             ) : (
-              <div onClick={() => !ld && parseFloat(bet) > 0 && start()} style={{ width: "100%", padding: "16px 36px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", alignItems: "center", justifyContent: "center", cursor: ld ? "default" : "pointer", opacity: ld || parseFloat(bet) <= 0 ? 0.5 : 1 }}>
-                <p style={{ color: "#fff", fontSize: 18, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0, textAlign: "center" }}>{ld ? "Starting..." : "Start game"}</p>
+              <div className="mines-kx-frame7e" onClick={() => !ld && parseFloat(bet) > 0 && start()} style={{ cursor: "pointer", opacity: ld || parseFloat(bet) <= 0 ? 0.5 : 1 }}>
+                <div className="mines-kx-text11-qj1"><p className="mines-kx-text11-qj2">{ld ? "Starting..." : "Start game"}</p></div>
               </div>
             )}
           </div>
-
-          {/* Currency selector (small) */}
-          <select value={cur} onChange={(e) => setCur(e.target.value)} disabled={act}
-            style={{ width: "100%", height: 36, borderRadius: 8, border: "none", background: "#090909", color: "#828282", fontSize: 14, fontFamily: '"Gotham",sans-serif', padding: "0 12px", outline: "none" }}>
-            {CURS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
         </div>
       </div>
 
-      {/* ═══ 5×5 GRID 824px ═══ */}
-      <div style={{ width: 824, maxWidth: 824, minHeight: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 583, maxWidth: 583, display: "flex", flexWrap: "wrap", gap: 11.88, justifyContent: "flex-start", alignItems: "center" }}>
+      {/* ═══ 5×5 GRID ═══ */}
+      <div className="mines-kx-frame4h">
+        <div className="mines-kx-frame9o">
           {cells.map((st, i) => {
-            if (st === "hidden") return (
-              <img key={i} src={TILE} alt="" onClick={() => reveal(i)}
-                style={{ width: 107, maxWidth: 107, minHeight: 107, borderRadius: 12, display: "block", margin: 0, boxShadow: "0 2px 0 0 #161616, inset 0 2px 0 0 rgba(255,255,255,.07)", cursor: act ? "pointer" : "default", opacity: act ? 1 : 0.5 }} />
-            );
             if (st === "safe") return (
-              <div key={i} style={{ width: 107, maxWidth: 107, minHeight: 107, borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#51ee5c,#37823c)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 0 0 rgba(255,255,255,.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <img src={GEM} alt="" style={{ width: 54, height: "auto", display: "block" }} />
-                <p style={{ color: "#0d280f", fontSize: 16, fontFamily: '"Gotham",sans-serif', fontWeight: 500, margin: 0, textAlign: "center", lineHeight: "20px" }}>{pay}</p>
+              <div key={i} className="mines-kx-frame53">
+                <img src={`${A}7314404ef65e3d5b3dc26009de5d710c.svg`} alt="" width="54.17" height="47.94" className="mines-kx-vector-bw" />
+                <div className="mines-kx-text920v1"><p className="mines-kx-text920v2">{pay}</p></div>
+              </div>
+            );
+            if (st === "mine") return (
+              <div key={i} className="mines-kx-frame53" style={{ background: "linear-gradient(180deg,#f75154,#ac2e30)", boxShadow: "0 2px 0 0 #2a0d0d, inset 0 2px 0 0 rgba(255,255,255,.07)" }}>
+                <img src={`${A}10f2877c99ecd50d20a64d37819aab29.png`} alt="mine" style={{ width: 60, height: 60, objectFit: "contain", margin: "auto" }} />
               </div>
             );
             return (
-              <div key={i} style={{ width: 107, maxWidth: 107, minHeight: 107, borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#f75154,#ac2e30)", boxShadow: "0 2px 0 0 #2a0d0d, inset 0 2px 0 0 rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <img src={BOMB} alt="" style={{ width: 50, height: 50, objectFit: "contain" }} />
-              </div>
+              <img key={i} src={`${A}09d0723a9bfccbed73637ba3ba799693.svg`} alt="" width="106.9" height="108.9"
+                className="mines-kx-vector-frame108-fi" onClick={() => reveal(i)}
+                style={{ cursor: act ? "pointer" : "default", opacity: act ? 1 : 0.5 }} />
             );
           })}
         </div>
