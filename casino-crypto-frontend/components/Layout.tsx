@@ -74,6 +74,13 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           overflow: "hidden", alignItems: "flex-start",
         }}
       >
+        {/* Hamburger toggle — top of sidebar */}
+        <div
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, cursor: "pointer", marginBottom: 4 }}
+        >
+          <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" style={{ width: 24, height: 24, opacity: 0.6 }} />
+        </div>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
@@ -104,9 +111,6 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         {/* Top nav */}
         <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:opacity-100 opacity-60 transition-opacity">
-              <img src="/assets/3df1f4631ccc25f16c81d64ff3af5f46.svg" alt="menu" className="w-6 h-6" />
-            </button>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
