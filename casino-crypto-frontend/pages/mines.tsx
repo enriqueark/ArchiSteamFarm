@@ -207,9 +207,9 @@ export default function MinesPage() {
               <img key={i} src={MINE_TILE} alt="mine" style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, display: "block" }} />
             );
             if (st === "safe") return (
-              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#51ee5c,#37823c)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 0 0 rgba(255,255,255,.07)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <img src={GEM} alt="" style={{ width: "45%", height: "auto" }} />
-                <p style={{ color: "#0d280f", fontSize: 14, fontFamily: G, fontWeight: 500, margin: 0, lineHeight: "18px" }}>{pay}</p>
+              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#51ee5c,#37823c)", boxShadow: "0 2px 0 0 #0d2a0f, inset 0 2px 2.5px rgba(0,0,0,.25), inset 0 -1px 0 #50e95a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <img src={GEM} alt="" style={{ width: "50%", height: "auto", filter: "drop-shadow(0 2px 4px rgba(0,0,0,.3))" }} />
+                <p style={{ color: "#0d280f", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0, lineHeight: "20px", textShadow: "0 1px 0 rgba(255,255,255,.15)" }}>{pay}</p>
               </div>
             );
             return (
