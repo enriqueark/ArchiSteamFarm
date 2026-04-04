@@ -6,12 +6,11 @@ import { getWallets, type Wallet } from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
 const sideLinks = [
-  { href: "/", src: "/assets/976039a8dadda2c262ac3ebbbd8ca834.svg", label: "Home" },
-  { href: "/cases", src: "/assets/098fe17d7ecd701c12a38a0cadfb52c7.svg", label: "Cases" },
-  { href: "/case-battles", src: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg", label: "Case Battle" },
-  { href: "/roulette", src: "/assets/30f1deaab44de7043abb1842bd019412.svg", label: "Roulette" },
+  { href: "/cases", src: "/assets/e2aff152f333aa01b1f9280bef464454.svg", label: "Cases" },
+  { href: "/case-battles", src: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg", label: "Case Battle" },
+  { href: "/roulette", src: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg", label: "Roulette" },
   { href: "/mines", src: "/assets/50a1a1ae813369ada622b0018ecaa16f.svg", label: "Mines" },
-  { href: "#", src: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg", label: "Blackjack" },
+  { href: "#", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
 
 function formatAtomic(val: string, decimals = 8): string {
@@ -67,19 +66,34 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
   return (
     <div className="h-screen flex overflow-hidden bg-page">
       {/* Left sidebar */}
-      <aside className={`flex flex-col items-center pt-2 shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-[170px]" : "w-[40px]"}`}>
+      <aside
+        style={{
+          display: "flex", flexDirection: "column", gap: 6, padding: 10,
+          background: "#0d0d0d", borderRadius: 18, flexShrink: 0,
+          width: sidebarOpen ? 220 : 62, transition: "width 0.2s",
+          overflow: "hidden", alignItems: "flex-start",
+        }}
+      >
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-2.5 w-full px-2 h-[38px] shrink-0 transition-colors ${
-                active ? "text-white" : "text-[#828282] hover:text-white"
-              }`}
+              style={{
+                display: "flex", alignItems: "center", gap: 14,
+                width: "100%", padding: sidebarOpen ? "8px 12px" : "0",
+                borderRadius: 8, textDecoration: "none",
+                background: active ? "#1a1a1a" : "transparent",
+                justifyContent: sidebarOpen ? "flex-start" : "center",
+              }}
             >
-              <img src={item.src} alt={item.label} className="w-[28px] h-[28px] shrink-0" />
-              {sidebarOpen && <span className="text-[13px] font-medium whitespace-nowrap">{item.label}</span>}
+              <img src={item.src} alt={item.label} style={{ width: 42, height: 42, borderRadius: 8, display: "block", flexShrink: 0 }} />
+              {sidebarOpen && (
+                <span style={{ color: "#fff", fontSize: 14, fontFamily: '"Inter",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>
+                  {item.label}
+                </span>
+              )}
             </Link>
           );
         })}
