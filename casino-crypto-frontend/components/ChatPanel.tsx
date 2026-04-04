@@ -236,8 +236,8 @@ export default function ChatPanel({ onClose }: Props) {
         </button>
       </div>
 
-      {/* Live Rain card (mapped from main-gl HTML/CSS block) */}
-      <div className="mx-auto my-4 w-[265px]">
+      {/* Live Rain card (keep chat structure stable, tune visuals only here) */}
+      <div className="px-4 pt-3 pb-2">
         <div
           role="button"
           tabIndex={0}
@@ -252,13 +252,14 @@ export default function ChatPanel({ onClose }: Props) {
               void handleJoinRain();
             }
           }}
-          className={`relative min-h-[76px] overflow-hidden rounded-[12px] bg-[#1a1a1a] ${
+          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] ${
             joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
           }`}
+          style={{ background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 62%, #2a2419 100%)" }}
           title="Join rain"
         >
-          <div className="pointer-events-none absolute -left-4 -top-4 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[172.7px]" />
-          <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[75.2px]" />
+          <div className="pointer-events-none absolute -left-5 -top-5 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[160px]" />
+          <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[70px]" />
 
           <div className="relative z-10 flex items-center gap-[10px] px-[8px] py-[7px]">
             <img
@@ -279,7 +280,7 @@ export default function ChatPanel({ onClose }: Props) {
                     void handleTipRain();
                   }}
                   disabled={tippingRain}
-                  className="flex items-center justify-center rounded-[5px] px-[6px] py-[6px] text-[18px] font-medium leading-[18px] text-[#090909] disabled:opacity-60"
+                  className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
                   style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                   title="Tip rain"
                 >
@@ -289,8 +290,8 @@ export default function ChatPanel({ onClose }: Props) {
 
               <div className="w-[83px]">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[4px] text-left text-[14px] font-normal leading-[14px] text-[#828282]">
-                  {rain ? `${formatRelative(rain.startsAt)} · ${rain.joinedCount} joined` : "No active rain"}
+                <p className="mt-[4px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                  {rain ? `${formatRelative(rain.startsAt)} • ${rain.joinedCount} joined` : "No active rain"}
                   {rain?.hasJoined ? " · joined" : ""}
                 </p>
               </div>
