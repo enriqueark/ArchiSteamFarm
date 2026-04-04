@@ -178,8 +178,8 @@ export default function MinesPage() {
       </div>
 
       {/* 5×5 GRID */}
-      <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, width: "100%", maxWidth: 620 }}>
+      <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, width: 583, maxWidth: 583 }}>
           {cells.map((st, i) => {
             if (st === "mine") return (
               <img key={i} src={MINE_TILE} alt="mine" style={{ width: "100%", aspectRatio: "1", borderRadius: 12, display: "block" }} />
