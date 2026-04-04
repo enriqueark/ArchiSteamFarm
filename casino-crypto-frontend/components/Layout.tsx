@@ -215,22 +215,22 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           </div>
         </div>
 
-        {/* Content area */}
-        <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-          {children}
-        </main>
+        {/* Content + Chat side by side, below ticker */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+            {children}
+          </main>
+          {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+          {!chatOpen && (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="fixed bottom-4 right-4 w-12 h-12 rounded-full bg-accent-red flex items-center justify-center text-white shadow-lg z-50 hover:bg-[#f75154] transition-colors"
+            >
+              💬
+            </button>
+          )}
+        </div>
       </div>
-
-      {/* Chat panel — full height right side, sibling of main column */}
-      {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
-      {!chatOpen && (
-        <button
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-4 right-4 w-12 h-12 rounded-full bg-accent-red flex items-center justify-center text-white shadow-lg z-50 hover:bg-[#f75154] transition-colors"
-        >
-          💬
-        </button>
-      )}
     </div>
   );
 }
