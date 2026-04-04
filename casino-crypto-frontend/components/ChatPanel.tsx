@@ -237,42 +237,45 @@ export default function ChatPanel({ onClose }: Props) {
       </div>
 
       {/* Live Rain card */}
-      <button
-        type="button"
-        className="mx-3 my-2 flex items-center gap-3 rounded-[10px] border border-[#1f1f1f] bg-[#161616] px-3 py-2 text-left transition-colors hover:bg-[#1b1b1b] disabled:opacity-60"
-        onClick={() => void handleJoinRain()}
-        disabled={joiningRain}
-      >
-        <img
-          src="/assets/cd5bcd223ad039502b06fe463c0a7508.png"
-          alt="Live rain"
-          className="h-[36px] w-[36px] shrink-0 rounded-md"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-white">Live Rain</p>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-[#f3bf52]">
-              {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
-            </span>
-            <span className="h-1 w-1 rounded-full bg-[#2d2d2d]" />
-            <span className="text-[10px] text-[#8a8a8a]">
-              {rain ? formatRelative(rain.startsAt) : "No active rain"}
-              {rain?.hasJoined ? " · joined" : ""}
-            </span>
-          </div>
+      <div className="mx-3 my-2 rounded-[10px] border border-[#202020] bg-[#131313] px-2.5 py-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleJoinRain()}
+            disabled={joiningRain}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-60"
+            title="Join rain"
+          >
+            <img
+              src="/assets/cd5bcd223ad039502b06fe463c0a7508.png"
+              alt="Live rain"
+              className="h-[28px] w-[28px] shrink-0 rounded-full border border-[#3a2e16] bg-[#20180d] p-[2px]"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-bold leading-none text-[#f0c25c]">
+                  {rain ? fromAtomicToCoins(rain.totalAmountAtomic) : "0.00"}
+                </span>
+                <span className="text-[10px] font-semibold leading-none text-[#d8c89f]">coins</span>
+              </div>
+              <p className="mt-[2px] text-[11px] font-semibold leading-none text-white">Live Rain</p>
+              <p className="mt-[2px] text-[10px] leading-none text-[#8a8a8a]">
+                {rain ? `${formatRelative(rain.startsAt)} · ${rain.joinedCount} joined` : "No active rain"}
+                {rain?.hasJoined ? " · joined" : ""}
+              </p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleTipRain()}
+            disabled={tippingRain}
+            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-gradient-to-b from-[#f0c25c] to-[#be8426] text-[11px] font-bold leading-none text-[#251903] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] disabled:opacity-50"
+            title="Tip rain"
+          >
+            +
+          </button>
         </div>
-        <span
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            void handleTipRain();
-          }}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-b from-[#f0c25c] to-[#be8426] text-xs font-bold text-[#251903] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]"
-          title="Tip rain"
-        >
-          +
-        </span>
-      </button>
+      </div>
 
       {/* Messages */}
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2 space-y-4">
