@@ -148,7 +148,7 @@ export default function MinesPage() {
               <img src={P1} alt="" style={{ position: "absolute", width: 130, height: 148, opacity: 0.2 }} />
               <img src={P2} alt="" style={{ position: "absolute", width: 100, height: 113, opacity: 0.15 }} />
               <img src={P3} alt="" style={{ position: "absolute", width: 68, height: 74, opacity: 0.1 }} />
-              <img src={WPN} alt="" style={{ width: 230, height: 170, objectFit: "cover", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none", boxShadow: "0 22px 34px rgba(0,0,0,.25)" }} />
+              <img src={WPN} alt="" style={{ width: 230, height: 170, objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none", boxShadow: "0 22px 34px rgba(0,0,0,.25)", mixBlendMode: "lighten" }} />
             </div>
             <div style={{ minHeight: 42, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, margin: "8px 0", position: "relative", zIndex: 1 }}>
               <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0, whiteSpace: "nowrap" }}>x{fm(game?.currentMultiplier)}</p>
