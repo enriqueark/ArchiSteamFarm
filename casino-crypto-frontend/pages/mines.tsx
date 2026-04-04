@@ -141,7 +141,7 @@ export default function MinesPage() {
           <hr style={{ width: "100%", border: "none", borderTop: "1px solid #1e1e1e", margin: 0 }} />
 
           {/* Weapon art + multiplier */}
-          <div style={{ flex: 1, overflow: "hidden", borderRadius: 12, background: "#090909", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
+          <div style={{ overflow: "hidden", borderRadius: 12, background: "#090909", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 180 }}>
             <img src={RL} alt="" style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", height: 140, opacity: 0.5 }} />
             <img src={RR} alt="" style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", height: 140, opacity: 0.5 }} />
             <div style={{ position: "relative", width: 180, minHeight: 130, display: "flex", alignItems: "center", justifyContent: "center" }}>
