@@ -75,10 +75,10 @@ export default function MinesPage() {
   const pay = "$" + f(game?.potentialPayoutAtomic);
 
   return (
-    <div style={{ display: "flex", gap: 20, minHeight: 768 }}>
+    <div style={{ display: "flex", gap: 20, height: 768 }}>
       {/* LEFT PANEL */}
-      <div style={{ width: 401, minWidth: 401, minHeight: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", flexDirection: "column" }}>
-        <div style={{ width: 361, margin: "0 auto", padding: "20px 0", display: "flex", flexDirection: "column", gap: 20, flex: 1 }}>
+      <div style={{ width: 340, minWidth: 340, height: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", flexDirection: "column" }}>
+        <div style={{ width: 300, margin: "0 auto", padding: "20px 0", display: "flex", flexDirection: "column", gap: 14, flex: 1, overflow: "hidden" }}>
 
           {/* Bet amount */}
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -141,17 +141,17 @@ export default function MinesPage() {
           <hr style={{ width: "100%", border: "none", borderTop: "1px solid #1e1e1e", margin: 0 }} />
 
           {/* Weapon art + multiplier */}
-          <div style={{ flex: 1, overflow: "hidden", borderRadius: 12, background: "linear-gradient(180deg,#282828,#1a1a1a)", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 280 }}>
-            <img src={RL} alt="" style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", height: 247, opacity: 0.5 }} />
-            <img src={RR} alt="" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", height: 247, opacity: 0.5 }} />
-            <div style={{ position: "relative", width: 266, minHeight: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <img src={P1} alt="" style={{ position: "absolute", width: 151, height: 172, opacity: 0.2 }} />
-              <img src={P2} alt="" style={{ position: "absolute", width: 116, height: 131, opacity: 0.15 }} />
-              <img src={P3} alt="" style={{ position: "absolute", width: 80, height: 87, opacity: 0.1 }} />
-              <img src={WPN} alt="" style={{ width: 266, height: 199, objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
+          <div style={{ flex: 1, overflow: "hidden", borderRadius: 12, background: "linear-gradient(180deg,#282828,#1a1a1a)", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <img src={RL} alt="" style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", height: 200, opacity: 0.5 }} />
+            <img src={RR} alt="" style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", height: 200, opacity: 0.5 }} />
+            <div style={{ position: "relative", width: 220, height: 170, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={P1} alt="" style={{ position: "absolute", width: 130, height: 148, opacity: 0.2 }} />
+              <img src={P2} alt="" style={{ position: "absolute", width: 100, height: 113, opacity: 0.15 }} />
+              <img src={P3} alt="" style={{ position: "absolute", width: 70, height: 76, opacity: 0.1 }} />
+              <img src={WPN} alt="" style={{ width: 220, height: 165, objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
             </div>
-            <div style={{ minHeight: 42, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, margin: "8px 0", position: "relative", zIndex: 1 }}>
-              <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0, whiteSpace: "nowrap" }}>x{fm(game?.currentMultiplier)}</p>
+            <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", borderRadius: 10, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 6, position: "relative", zIndex: 1 }}>
+              <p style={{ color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, margin: 0, whiteSpace: "nowrap" }}>x{fm(game?.currentMultiplier)}</p>
             </div>
           </div>
 
@@ -178,8 +178,8 @@ export default function MinesPage() {
       </div>
 
       {/* 5×5 GRID */}
-      <div style={{ flex: 1, minHeight: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 583, display: "flex", flexWrap: "wrap", gap: 11.88 }}>
+      <div style={{ flex: 1, height: 768, borderRadius: 16, overflow: "hidden", background: "linear-gradient(180deg,#161616,#0d0d0d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", padding: 20 }}>
           {cells.map((st, i) => {
             if (st === "mine") return (
               <img key={i} src={MINE_TILE} alt="mine" style={{ width: 107, height: 109, borderRadius: 12, display: "block" }} />
