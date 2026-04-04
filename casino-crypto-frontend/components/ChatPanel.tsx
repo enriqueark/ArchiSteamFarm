@@ -236,44 +236,66 @@ export default function ChatPanel({ onClose }: Props) {
         </button>
       </div>
 
-      {/* Live Rain card */}
-      <div className="mx-3 my-2 rounded-[10px] border border-[#202020] bg-[#131313] px-2.5 py-2.5">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleJoinRain()}
-            disabled={joiningRain}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-60"
-            title="Join rain"
-          >
+      {/* Live Rain card (mapped from main-gl HTML/CSS block) */}
+      <div className="mx-auto my-4 w-[265px]">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (!joiningRain) {
+              void handleJoinRain();
+            }
+          }}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !joiningRain) {
+              e.preventDefault();
+              void handleJoinRain();
+            }
+          }}
+          className={`relative min-h-[76px] overflow-hidden rounded-[12px] bg-[#1a1a1a] ${
+            joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
+          }`}
+          title="Join rain"
+        >
+          <div className="pointer-events-none absolute -left-4 -top-4 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[172.7px]" />
+          <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[75.2px]" />
+
+          <div className="relative z-10 flex items-center gap-[10px] px-[8px] py-[7px]">
             <img
-              src="/assets/cd5bcd223ad039502b06fe463c0a7508.png"
+              src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
               alt="Live rain"
-              className="h-[28px] w-[28px] shrink-0 rounded-full border border-[#3a2e16] bg-[#20180d] p-[2px]"
+              className="h-[62px] w-[62px] shrink-0 object-cover"
             />
+
             <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] font-bold leading-none text-[#f0c25c]">
-                  {rain ? fromAtomicToCoins(rain.totalAmountAtomic) : "0.00"}
-                </span>
-                <span className="text-[10px] font-semibold leading-none text-[#d8c89f]">coins</span>
+              <div className="mb-[4px] flex min-h-[36px] w-fit items-center gap-[8px] rounded-[8px] bg-[#161616] p-[5px]">
+                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
+                  {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleTipRain();
+                  }}
+                  disabled={tippingRain}
+                  className="flex items-center justify-center rounded-[5px] px-[6px] py-[6px] text-[18px] font-medium leading-[18px] text-[#090909] disabled:opacity-60"
+                  style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
+                  title="Tip rain"
+                >
+                  +
+                </button>
               </div>
-              <p className="mt-[2px] text-[11px] font-semibold leading-none text-white">Live Rain</p>
-              <p className="mt-[2px] text-[10px] leading-none text-[#8a8a8a]">
-                {rain ? `${formatRelative(rain.startsAt)} · ${rain.joinedCount} joined` : "No active rain"}
-                {rain?.hasJoined ? " · joined" : ""}
-              </p>
+
+              <div className="w-[83px]">
+                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
+                <p className="mt-[4px] text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                  {rain ? `${formatRelative(rain.startsAt)} · ${rain.joinedCount} joined` : "No active rain"}
+                  {rain?.hasJoined ? " · joined" : ""}
+                </p>
+              </div>
             </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleTipRain()}
-            disabled={tippingRain}
-            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] bg-gradient-to-b from-[#f0c25c] to-[#be8426] text-[11px] font-bold leading-none text-[#251903] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)] disabled:opacity-50"
-            title="Tip rain"
-          >
-            +
-          </button>
+          </div>
         </div>
       </div>
 
