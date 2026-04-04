@@ -109,15 +109,15 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
       {/* Main column */}
       <div className="flex-1 flex min-h-0 flex-col min-w-0">
         {/* Top nav */}
-        <header className="bg-chrome px-5 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
+          <div className="flex items-center gap-4 flex-1">
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
             </Link>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 justify-center">
             <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/9c5bb018d55a11c0b094ee2c9833d52f.svg" alt="" className="w-5 h-5" />
               <span>Rewards</span>
@@ -135,7 +135,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 justify-end">
             {primaryWallet && (
               <Link
                 href="/wallet"
