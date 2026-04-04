@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { ReactNode, useEffect, useState, useRef } from "react";
 import ChatPanel from "./ChatPanel";
+import Footer from "./Footer";
 import { getWallets, type Wallet } from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
@@ -222,6 +223,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
             {/* Page content */}
             <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               {children}
+              <Footer />
             </main>
           </div>
 

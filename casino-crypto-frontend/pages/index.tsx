@@ -10,50 +10,6 @@ const games = [
   { name: "BLACKJACK", href: "/blackjack", img: "/assets/cea3c3db4ef626ba499a275c20d4030a.png", icon: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg" },
 ];
 
-const paymentIcons = [
-  "/assets/1903346205e1d7861e96e48ef729ecb4.svg",
-  "/assets/7ce9248d8ed70dcea02d587203a69379.svg",
-  "/assets/8ccb1d8b0cc81c1b72e2ca61d0244f1e.svg",
-  "/assets/f3e31c4e22d3356b101fb1ca2772558e.svg",
-  "/assets/ea741470ab21c5753b5aa5b3f7159e37.svg",
-  "/assets/469022e761f0ce059a4dbe7681ec4853.svg",
-  "/assets/74ba8ca43e6f43bc7bcae3d0ffe144a5.svg",
-  "/assets/0233322853161dd2c7fd57043a803cbb.svg",
-  "/assets/88393c3b45f1b8ff20baa4b2f154f643.svg",
-  "/assets/35903d683ebe29f6d6e095f24da6013e.svg",
-];
-
-const footerLinks: Record<string, Array<{ label: string; href: string }>> = {
-  Games: [
-    { label: "Cases", href: "/cases" },
-    { label: "Case Battles", href: "/case-battles" },
-    { label: "Roulette", href: "/roulette" },
-    { label: "Mines", href: "/mines" },
-    { label: "BlackJack", href: "/blackjack" }
-  ],
-  Platform: [
-    { label: "Rewards", href: "/roulette" },
-    { label: "Affiliates", href: "/wallet" },
-    { label: "Blog", href: "/" },
-    { label: "Support", href: "/wallet" },
-    { label: "FAQ", href: "/" },
-    { label: "Partnerships", href: "/" }
-  ],
-  "About us": [
-    { label: "Terms of Service", href: "/" },
-    { label: "Privacy Policy", href: "/" },
-    { label: "AML Policy", href: "/" },
-    { label: "Cookies Policy", href: "/" },
-    { label: "Self-Exclusion", href: "/" },
-    { label: "Fairness", href: "/" }
-  ],
-  Community: [
-    { label: "Twitter", href: "/" },
-    { label: "Discord", href: "/" },
-    { label: "Telegram", href: "/" },
-    { label: "Kick", href: "/" }
-  ]
-};
 
 function formatAtomic(val: string, decimals = 8): string {
   return (Number(val) / Math.pow(10, decimals)).toFixed(2);
@@ -187,48 +143,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="pt-8 pb-6">
-        <div className="flex gap-10">
-          <div className="w-[280px] shrink-0">
-            <div className="flex items-center gap-2 mb-3">
-              <img src="/assets/8f21dcea07664a217d7d054711bb7e6a.svg" alt="logo" className="h-7" />
-              <span className="text-lg font-bold text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
-            </div>
-            <p className="text-xs text-muted mb-3">&copy; All rights reserved 2026</p>
-            <p className="text-[11px] text-muted leading-relaxed mb-4">
-              Upgrader is operated by Innospace LTD, Organization number 646564, Voukourestiou, 25 Neptune House, 1st Floor, Office 11, Zakaki, 3045, Limassol, Cyprus.
-            </p>
-            <div className="space-y-1 text-xs text-muted mb-4">
-              <p>Support: <span className="text-white">support@redwater.gg</span></p>
-              <p>Partners: <span className="text-white">partners@redwater.gg</span></p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-[42px] h-[42px] rounded-pill border-2 border-accent-red text-accent-red text-sm font-bold flex items-center justify-center">18+</span>
-              <p className="text-[10px] text-muted leading-snug">By accessing this site, you confirm that you are over 18 years old.</p>
-            </div>
-          </div>
-          <div className="flex-1 grid grid-cols-4 gap-6">
-            {Object.entries(footerLinks).map(([title, links]) => (
-              <div key={title}>
-                <h3 className="text-sm font-semibold text-white mb-4">{title}</h3>
-                <ul className="space-y-2.5">
-                  {links.map((l) => (
-                    <li key={l.label}>
-                      <Link href={l.href} className="text-sm text-muted hover:text-white transition-colors">{l.label}</Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-8 flex gap-3">
-          {paymentIcons.map((src, i) => (
-            <img key={i} src={src} alt="" className="w-[70px] h-[48px] object-contain" />
-          ))}
-        </div>
-      </footer>
     </div>
   );
 }

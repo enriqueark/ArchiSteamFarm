@@ -207,7 +207,7 @@ export default function MinesPage() {
               <img key={i} src={MINE_TILE} alt="mine" style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, display: "block" }} />
             );
             if (st === "safe") return (
-              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}>
+              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
                 <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{pay}</p>
               </div>
