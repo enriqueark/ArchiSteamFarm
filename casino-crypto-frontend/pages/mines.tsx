@@ -17,7 +17,7 @@ const WPN = `${A}4e425b7d3c328e970651b77449845d15.png`;
 
 type Cell = "hidden" | "safe" | "mine";
 
-const G = '"Inter","Gotham",sans-serif';
+const G = '"DM Sans","Gotham",sans-serif';
 const f = (v: string | null | undefined, d = 6) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
 const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
 const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
