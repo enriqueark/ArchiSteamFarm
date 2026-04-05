@@ -371,9 +371,16 @@ export default function ChatPanel({ onClose }: Props) {
           </div>
         </div>
         {isJoinWindow ? (
-          <div className="mt-2 rounded-[8px] border border-[#ffd869] bg-gradient-to-r from-[#ffe66f] to-[#ffc94d] px-3 py-2 text-center text-[20px] font-bold leading-[20px] text-[#201708] shadow-[0_0_18px_rgba(255,205,90,0.35)]">
+          <button
+            type="button"
+            onClick={() => void handleJoinRain()}
+            disabled={joiningRain}
+            className="mt-2 h-[40px] w-full rounded-[8px] border border-[rgba(255,95,99,0.7)] text-center text-[20px] font-bold leading-[20px] text-white shadow-[0_0_18px_rgba(242,79,81,0.45),inset_0_1px_0_rgba(255,175,175,0.35),inset_0_-1px_0_rgba(128,19,20,0.85)] transition-[filter,transform] duration-150 hover:brightness-105 active:translate-y-[1px] disabled:cursor-wait disabled:opacity-80"
+            style={{ background: "linear-gradient(180deg, #8f2526 0%, #d94547 56%, #f24f51 100%)" }}
+            title="Join Rain"
+          >
             Join Rain
-          </div>
+          </button>
         ) : null}
       </div>
 
