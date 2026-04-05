@@ -252,12 +252,17 @@ export default function ChatPanel({ onClose }: Props) {
               void handleJoinRain();
             }
           }}
-          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] ${
+          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#70551f] ${
             joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
           }`}
-          style={{ background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 62%, #2a2419 100%)" }}
+          style={{
+            background: "linear-gradient(90deg, #1a1a1a 0%, #181818 58%, #211d15 100%)",
+            boxShadow: "inset 0 0 0 1px rgba(255, 195, 83, 0.16), 0 0 12px rgba(255, 195, 83, 0.06)"
+          }}
           title="Join rain"
         >
+          <div className="rain-gold-border pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
+          <div className="rain-gold-flow pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
           <div className="pointer-events-none absolute -left-5 -top-5 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[160px]" />
           <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[70px]" />
 
@@ -366,6 +371,39 @@ export default function ChatPanel({ onClose }: Props) {
         </div>
         {error && <p className="mt-2 text-[11px] text-accent-red">{error}</p>}
       </div>
+      <style jsx>{`
+        .rain-gold-border {
+          border: 1px solid rgba(255, 195, 83, 0.28);
+          box-shadow:
+            inset 0 0 0 1px rgba(255, 195, 83, 0.16),
+            inset 0 0 16px rgba(255, 195, 83, 0.06);
+        }
+
+        .rain-gold-flow {
+          background-image:
+            radial-gradient(130px 78px at 44px 38px, rgba(255, 195, 83, 0.52) 0%, rgba(255, 195, 83, 0.26) 42%, rgba(255, 195, 83, 0.08) 62%, rgba(255, 195, 83, 0) 82%),
+            linear-gradient(90deg, rgba(255, 195, 83, 0.34) 0%, rgba(255, 195, 83, 0.2) 24%, rgba(255, 195, 83, 0.11) 44%, rgba(255, 195, 83, 0) 74%);
+          background-repeat: no-repeat;
+          background-size: 100% 100%, 110% 100%;
+          animation: rainGoldFlow 3.2s ease-in-out infinite;
+          opacity: 0.92;
+        }
+
+        @keyframes rainGoldFlow {
+          0% {
+            background-position: 0% 50%, -8% 50%;
+            opacity: 0.82;
+          }
+          50% {
+            background-position: 10% 50%, 4% 50%;
+            opacity: 0.98;
+          }
+          100% {
+            background-position: 0% 50%, -8% 50%;
+            opacity: 0.82;
+          }
+        }
+      `}</style>
     </aside>
   );
 }
