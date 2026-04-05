@@ -287,7 +287,7 @@ export default function ChatPanel({ onClose }: Props) {
               <img
                 src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
                 alt="Live rain"
-                className="h-[38px] w-[38px] shrink-0 object-cover"
+                className="h-[46px] w-[46px] shrink-0 object-cover"
               />
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
