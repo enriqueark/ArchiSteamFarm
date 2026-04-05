@@ -344,7 +344,7 @@ export default function ChatPanel({ onClose }: Props) {
                 alt="Live rain"
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
-              <div className="min-w-0 pt-[4px]">
+              <div className="min-w-0 pt-[8px]">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[22px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
@@ -466,7 +466,14 @@ export default function ChatPanel({ onClose }: Props) {
               className={`chat-send-btn ${sending ? "opacity-100" : "opacity-95 hover:opacity-100"}`}
               title="Send message"
             >
-              <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[22px] w-[22px]" />
+              <svg viewBox="0 0 42 42" aria-hidden="true" className="h-[18px] w-[18px] text-white">
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M28.3815 12.1225C29.4913 11.6551 30.6812 12.5936 30.4852 13.7819L28.1705 27.8164C27.9473 29.1696 26.461 29.9461 25.2196 29.2718C24.1807 28.7075 22.6394 27.839 21.2503 26.9313C20.5566 26.478 18.4327 25.0247 18.6938 23.9901C18.917 23.1055 22.4876 19.7818 24.528 17.8051C25.3294 17.0287 24.9644 16.5801 24.0179 17.295C21.6698 19.0684 17.9 21.7647 16.6533 22.5235C15.5534 23.193 14.9791 23.3073 14.2941 23.193C13.0432 22.9846 11.8835 22.6618 10.9367 22.2693C9.65695 21.7388 9.71928 19.9802 10.9358 19.468L28.3815 12.1225Z"
+                  fill="currentColor"
+                />
+              </svg>
             </button>
           </div>
         </div>
