@@ -342,24 +342,24 @@ export default function ChatPanel({ onClose }: Props) {
           <div className="pointer-events-none absolute right-0 top-0 h-full w-[124px] bg-gradient-to-l from-[rgba(255,195,83,0.22)] via-[rgba(255,195,83,0.08)] to-transparent" />
           <div className="rain-gold-sweep pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
 
-          <div className="relative z-10 flex min-h-[76px] items-center justify-between gap-2 px-[10px]">
-            <div className="flex min-w-0 flex-1 items-center gap-[9px]">
+          <div className="relative z-10 flex min-h-[76px] items-center justify-between px-[10px]">
+            <div className="flex min-w-0 items-center gap-[9px]">
               <img
                 src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
                 alt="Live rain"
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[4px] truncate text-left text-[13px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[8px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
             </div>
 
-            <div className="ml-1 flex shrink-0 items-center gap-[6px]">
-              <div className="rounded-[8px] bg-[#111111] px-[7px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
-                <p className="m-0 text-left text-[15px] font-medium leading-[15px] text-white">
+            <div className="ml-2 flex shrink-0 items-center gap-[6px]">
+              <div className="rounded-[8px] bg-[#111111] px-[8px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
+                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
                   {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0.00"}
                 </p>
               </div>
