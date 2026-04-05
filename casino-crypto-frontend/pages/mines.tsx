@@ -202,6 +202,15 @@ export default function MinesPage() {
               width: "100%",
               height: 6,
               borderRadius: 999,
+              background: "#2a2a2a",
+              position: "absolute",
+              top: 6,
+              left: 0
+            }} />
+            <div style={{
+              width: `${(betPct * 100).toFixed(3)}%`,
+              height: 6,
+              borderRadius: 999,
               background: "linear-gradient(90deg,#ac2e30,#f75154)",
               position: "absolute",
               top: 6,
