@@ -10,12 +10,14 @@ const MIN_TIP_ATOMIC = COIN_ATOMIC;
 const RAIN_BASE_ATOMIC = 5n * COIN_ATOMIC;
 const RAIN_SOURCE_SEED = "rain-hourly-seed";
 
-const hourStart = (date: Date): Date =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), 0, 0, 0));
+const halfHourStart = (date: Date): Date => {
+  const minuteBucket = date.getUTCMinutes() < 30 ? 0 : 30;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), minuteBucket, 0, 0));
+};
 
-const addHours = (date: Date, hours: number): Date => {
+const addMinutes = (date: Date, minutes: number): Date => {
   const copy = new Date(date);
-  copy.setUTCHours(copy.getUTCHours() + hours);
+  copy.setUTCMinutes(copy.getUTCMinutes() + minutes);
   return copy;
 };
 
@@ -45,8 +47,8 @@ const lockWallet = async (tx: Prisma.TransactionClient, userId: string) => {
 };
 
 const ensureCurrentRainRound = async (tx: Prisma.TransactionClient, now: Date) => {
-  const start = hourStart(now);
-  const end = addHours(start, 1);
+  const start = halfHourStart(now);
+  const end = addMinutes(start, 30);
   const existing = await tx.rainRound.findFirst({
     where: {
       startsAt: start,
