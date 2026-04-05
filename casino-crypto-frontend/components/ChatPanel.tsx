@@ -290,23 +290,25 @@ export default function ChatPanel({ onClose }: Props) {
         className="flex w-full items-center justify-between gap-[26px] overflow-hidden px-4 py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #1a1a1a 0%, #282828 100%)" }}
       >
-        <div className="flex w-fit items-center gap-3">
+        <div className="flex w-fit items-center gap-2">
           <div className="flex w-fit items-center gap-2">
             <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
             <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-          <div className="flex w-fit items-center gap-2 px-[2px] py-[2px]">
-            <span className="h-[10px] w-[10px] rounded-full bg-[#39ff8c] shadow-[0_0_10px_rgba(57,255,140,0.9)]" />
+        </div>
+        <div className="flex w-fit items-center gap-[6px]">
+          <div className="flex w-fit translate-x-[2px] items-center gap-2 px-[2px] py-[2px]">
+            <span className="chat-online-dot h-[10px] w-[10px] rounded-full bg-[#39ff8c]" />
             <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
+          <button onClick={onClose} className="chat-red-icon-btn mr-[2px]" title="Close chat">
+            <img
+              src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
+              alt="close"
+              className="h-[42px] w-[42px] rounded-[8px] opacity-95"
+            />
+          </button>
         </div>
-        <button onClick={onClose} className="chat-red-icon-btn mr-[2px]" title="Close chat">
-          <img
-            src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
-            alt="close"
-            className="h-[42px] w-[42px] rounded-[8px] opacity-95"
-          />
-        </button>
       </div>
 
       {/* Live Rain card (layout matched to reference: icon left, text center, amount/right controls) */}
@@ -345,7 +347,7 @@ export default function ChatPanel({ onClose }: Props) {
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
               <div className="min-w-0 pt-[8px]">
-                <p className="m-0 mt-[6px] text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
+                <p className="m-0 translate-y-[10px] text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[22px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
@@ -496,6 +498,11 @@ export default function ChatPanel({ onClose }: Props) {
           transform: translateY(1px);
         }
 
+        .chat-online-dot {
+          box-shadow: 0 0 10px rgba(57, 255, 140, 0.9);
+          animation: chatOnlineBlink 1.2s steps(1, end) infinite;
+        }
+
         .chat-send-btn {
           width: 42px;
           height: 42px;
@@ -516,6 +523,19 @@ export default function ChatPanel({ onClose }: Props) {
 
         .chat-send-btn:active {
           transform: translateY(1px);
+        }
+
+        @keyframes chatOnlineBlink {
+          0%,
+          49% {
+            opacity: 1;
+            box-shadow: 0 0 10px rgba(57, 255, 140, 0.9);
+          }
+          50%,
+          100% {
+            opacity: 0.2;
+            box-shadow: 0 0 3px rgba(57, 255, 140, 0.35);
+          }
         }
 
         .rain-gold-border {
