@@ -1012,6 +1012,17 @@ export const setRouletteBroadcaster = (next: RouletteBroadcaster | null): void =
 
 export const getRouletteBroadcaster = (): RouletteBroadcaster | null => broadcaster;
 
+export const getRealtimeConnectedClientsCount = (): number => {
+  if (!broadcaster) {
+    return 0;
+  }
+  const candidate = broadcaster as unknown as { getConnectedClientsCount?: () => number };
+  if (typeof candidate.getConnectedClientsCount === "function") {
+    return candidate.getConnectedClientsCount();
+  }
+  return 0;
+};
+
 export const startRouletteRoundWorker = async (logger: FastifyBaseLogger): Promise<void> => {
   if (workerTimer) {
     return;

@@ -63,6 +63,7 @@ export default function ChatPanel({ onClose }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [rain, setRain] = useState<RainState | null>(null);
+  const [connectedUsers, setConnectedUsers] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const [joiningRain, setJoiningRain] = useState(false);
   const [tippingRain, setTippingRain] = useState(false);
@@ -116,6 +117,8 @@ export default function ChatPanel({ onClose }: Props) {
         });
       } else if (ev.type === "chat.cleared") {
         setMessages([]);
+      } else if (ev.type === "chat.presence") {
+        setConnectedUsers(ev.data.onlineCount);
       } else if (ev.type === "rain.state") {
         setRain((prev) => ({
           roundId: ev.data.roundId,
@@ -172,7 +175,13 @@ export default function ChatPanel({ onClose }: Props) {
     }
   }, [messages.length]);
 
-  const onlineCount = useMemo(() => Math.max(1, Math.min(9999, messages.length + 80)), [messages.length]);
+  const onlineCount = useMemo(() => {
+    const fallbackByMessages = Math.max(15, messages.length);
+    if (typeof connectedUsers === "number" && Number.isFinite(connectedUsers)) {
+      return Math.max(15, Math.min(9999, connectedUsers));
+    }
+    return Math.min(9999, fallbackByMessages);
+  }, [connectedUsers, messages.length]);
 
   const handleSend = async () => {
     const text = message.trim();
@@ -240,8 +249,8 @@ export default function ChatPanel({ onClose }: Props) {
             <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
             <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-          <div className="flex w-fit items-center gap-2 rounded-[8px] bg-[#161616] px-[11px] py-2">
-            <span className="h-[10px] w-[10px] rounded-full bg-[#8aff53]" />
+          <div className="flex w-fit items-center gap-2 rounded-[8px] border border-[#39ff8c] bg-[#0f261a] px-[11px] py-2 shadow-[inset_0_1px_0_rgba(171,255,211,0.2),0_0_14px_rgba(57,255,140,0.42)]">
+            <span className="h-[10px] w-[10px] rounded-full bg-[#39ff8c] shadow-[0_0_10px_rgba(57,255,140,0.9)]" />
             <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
         </div>
@@ -287,7 +296,7 @@ export default function ChatPanel({ onClose }: Props) {
               <img
                 src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
                 alt="Live rain"
-                className="h-[46px] w-[46px] shrink-0 object-cover"
+                className="h-[52px] w-[52px] shrink-0 object-cover"
               />
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>

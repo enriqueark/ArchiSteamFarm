@@ -158,6 +158,7 @@ export const rouletteRoutes: FastifyPluginAsync = async (fastify) => {
     const currencyFilter = parsed.success ? parsed.data.currency : undefined;
 
     websocketHub.attachClient(socket, currencyFilter);
+    websocketHub.broadcastOnlineCount();
 
     void (async () => {
       const currencies = currencyFilter ? [currencyFilter] : SUPPORTED_CURRENCIES;

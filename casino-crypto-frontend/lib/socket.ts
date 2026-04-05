@@ -86,6 +86,12 @@ export type SocketEvent =
         createdAt: string;
       };
     }
+  | {
+      type: "chat.presence";
+      data: {
+        onlineCount: number;
+      };
+    }
   | { type: "pong"; data: { type: "pong"; ts: string } }
   | { type: "open" }
   | { type: "close" }
@@ -152,6 +158,8 @@ export class CasinoSocket {
           this.emit({ type: "rain.joined", data: parsed.data || parsed });
         } else if (eventType === "chat.userTip") {
           this.emit({ type: "chat.userTip", data: parsed.data || parsed });
+        } else if (eventType === "chat.presence") {
+          this.emit({ type: "chat.presence", data: parsed.data || parsed });
         } else if (eventType === "pong") {
           this.emit({ type: "pong", data: parsed });
         }

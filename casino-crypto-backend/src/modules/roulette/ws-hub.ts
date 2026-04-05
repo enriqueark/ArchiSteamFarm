@@ -135,6 +135,12 @@ type RouletteRealtimeEvent =
         message: string | null;
         createdAt: string;
       };
+    }
+  | {
+      type: "chat.presence";
+      data: {
+        onlineCount: number;
+      };
     };
 
 type ClientConnection = {
@@ -162,6 +168,33 @@ export class RouletteWebsocketHub {
   private readonly clients = new Map<string, ClientConnection>();
   private heartbeat?: NodeJS.Timeout;
 
+  public getConnectedClientsCount(): number {
+    return this.clients.size;
+  }
+
+  public broadcastOnlineCount(): void {
+    const payload = JSON.stringify({
+      type: "chat.presence",
+      data: {
+        onlineCount: this.getConnectedClientsCount()
+      }
+    } as RouletteRealtimeEvent);
+
+    this.clients.forEach((client) => {
+      if (client.socket.readyState !== WebSocket.OPEN) {
+        this.clients.delete(client.id);
+        return;
+      }
+
+      try {
+        client.socket.send(payload);
+      } catch {
+        this.clients.delete(client.id);
+        client.socket.terminate();
+      }
+    });
+  }
+
   public start(): void {
     if (this.heartbeat) {
       return;
@@ -172,6 +205,7 @@ export class RouletteWebsocketHub {
         if (!client.isAlive) {
           client.socket.terminate();
           this.clients.delete(client.id);
+          this.broadcastOnlineCount();
           return;
         }
 
@@ -212,6 +246,7 @@ export class RouletteWebsocketHub {
     };
 
     this.clients.set(id, client);
+    this.broadcastOnlineCount();
 
     socket.on("pong", () => {
       client.isAlive = true;
@@ -223,10 +258,12 @@ export class RouletteWebsocketHub {
 
     socket.on("close", () => {
       this.clients.delete(id);
+      this.broadcastOnlineCount();
     });
 
     socket.on("error", () => {
       this.clients.delete(id);
+      this.broadcastOnlineCount();
       socket.terminate();
     });
   }
