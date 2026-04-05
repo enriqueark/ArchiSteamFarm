@@ -11,7 +11,7 @@ const sideLinks = [
   { href: "/case-battles", src: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg", label: "Case Battle" },
   { href: "/roulette", src: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg", label: "Roulette" },
   { href: "/mines", src: "/assets/50a1a1ae813369ada622b0018ecaa16f.svg", label: "Mines" },
-  { href: "#", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
+  { href: "/blackjack", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
 
 function formatAtomic(val: string, decimals = 8): string {
@@ -38,6 +38,7 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [hoveredSideHref, setHoveredSideHref] = useState<string | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<RouletteRoundEvent[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
@@ -84,21 +85,50 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
         </div>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
+          const hovered = hoveredSideHref === item.href;
+          const highlighted = active || hovered;
           return (
             <Link
               key={item.label}
               href={item.href}
+              onMouseEnter={() => setHoveredSideHref(item.href)}
+              onMouseLeave={() => setHoveredSideHref((prev) => (prev === item.href ? null : prev))}
               style={{
                 display: "flex", alignItems: "center", gap: 14,
                 width: "100%", padding: sidebarOpen ? "8px 12px" : "0",
                 borderRadius: 8, textDecoration: "none",
-                background: active ? "#1a1a1a" : "transparent",
+                background: highlighted ? "linear-gradient(180deg, #ac2e30 0%, #f75154 100%)" : "transparent",
+                boxShadow: highlighted ? "0 0 14px rgba(247,81,84,0.35)" : "none",
                 justifyContent: sidebarOpen ? "flex-start" : "center",
+                transition: "background 160ms ease, box-shadow 160ms ease, transform 160ms ease",
+                transform: highlighted ? "translateX(1px)" : "translateX(0)"
               }}
             >
-              <img src={item.src} alt={item.label} style={{ width: 42, height: 42, borderRadius: 8, display: "block", flexShrink: 0 }} />
+              <img
+                src={item.src}
+                alt={item.label}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 8,
+                  display: "block",
+                  flexShrink: 0,
+                  filter: highlighted
+                    ? "invert(20%) sepia(97%) saturate(3234%) hue-rotate(340deg) brightness(109%) contrast(93%)"
+                    : "grayscale(1) brightness(0.68)"
+                }}
+              />
               {sidebarOpen && (
-                <span style={{ color: "#fff", fontSize: 14, fontFamily: '"Inter",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>
+                <span
+                  style={{
+                    color: highlighted ? "#fff" : "#8f8f8f",
+                    fontSize: 14,
+                    fontFamily: '"Inter",sans-serif',
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                    transition: "color 160ms ease"
+                  }}
+                >
                   {item.label}
                 </span>
               )}
