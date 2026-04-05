@@ -39,6 +39,46 @@ function formatRainAmount(atomic: string): string {
   return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function getNextHalfHourBoundaryCET(now = new Date()): Date {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  const parts = formatter.formatToParts(now);
+  const byType = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const year = Number(byType("year"));
+  const month = Number(byType("month"));
+  const day = Number(byType("day"));
+  const hour = Number(byType("hour"));
+  const minute = Number(byType("minute"));
+
+  // Build an approximate UTC date matching the CET wall-clock parts,
+  // then choose next :00/:30 boundary in that wall-clock space.
+  const approxUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const next = new Date(approxUtc);
+  if (minute < 30) {
+    next.setUTCMinutes(30, 0, 0);
+  } else {
+    next.setUTCHours(next.getUTCHours() + 1, 0, 0, 0);
+  }
+  return next;
+}
+
+function formatNextRainCountdown(msLeft: number): string {
+  if (msLeft <= 0) return "Next rain in 0 secs";
+  const totalSec = Math.floor(msLeft / 1000);
+  if (totalSec < 60) {
+    return `Next rain in ${totalSec} secs`;
+  }
+  const min = Math.floor(totalSec / 60);
+  return `Next rain in ${min} mins`;
+}
+
 function userColor(label: string): string {
   const palette = ["#53a3ff", "#7e53ff", "#ffc353", "#46d38a", "#ff7c93"];
   const seed = label.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
@@ -68,6 +108,7 @@ export default function ChatPanel({ onClose }: Props) {
   const [joiningRain, setJoiningRain] = useState(false);
   const [tippingRain, setTippingRain] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const listRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<CasinoSocket | null>(null);
 
@@ -175,6 +216,11 @@ export default function ChatPanel({ onClose }: Props) {
     }
   }, [messages.length]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const onlineCount = useMemo(() => {
     const fallbackByMessages = Math.max(15, messages.length);
     if (typeof connectedUsers === "number" && Number.isFinite(connectedUsers)) {
@@ -182,6 +228,11 @@ export default function ChatPanel({ onClose }: Props) {
     }
     return Math.min(9999, fallbackByMessages);
   }, [connectedUsers, messages.length]);
+
+  const nextRainAt = useMemo(() => getNextHalfHourBoundaryCET(new Date(nowMs)), [nowMs]);
+  const msUntilNextRain = Math.max(0, nextRainAt.getTime() - nowMs);
+  const isJoinWindow = msUntilNextRain <= 60_000;
+  const nextRainLabel = useMemo(() => formatNextRainCountdown(msUntilNextRain), [msUntilNextRain]);
 
   const handleSend = async () => {
     const text = message.trim();
@@ -301,11 +352,7 @@ export default function ChatPanel({ onClose }: Props) {
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[4px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
-                  {rain
-                    ? `${formatRelative(rain.startsAt)}${rain.joinedCount > 0 ? ` • ${rain.joinedCount} joined` : ""}${
-                        rain.hasJoined ? " • joined" : ""
-                      }`
-                    : "No active rain"}
+                  {nextRainLabel}
                 </p>
               </div>
             </div>
@@ -332,6 +379,11 @@ export default function ChatPanel({ onClose }: Props) {
             </div>
           </div>
         </div>
+        {isJoinWindow ? (
+          <div className="mt-2 rounded-[8px] border border-[#ffd869] bg-gradient-to-r from-[#ffe66f] to-[#ffc94d] px-3 py-2 text-center text-[20px] font-bold leading-[20px] text-[#201708] shadow-[0_0_18px_rgba(255,205,90,0.35)]">
+            Join Rain
+          </div>
+        ) : null}
       </div>
 
       {/* Messages */}

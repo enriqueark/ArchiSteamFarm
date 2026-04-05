@@ -172,29 +172,6 @@ export class RouletteWebsocketHub {
     return this.clients.size;
   }
 
-  public broadcastOnlineCount(): void {
-    const payload = JSON.stringify({
-      type: "chat.presence",
-      data: {
-        onlineCount: this.getConnectedClientsCount()
-      }
-    } as RouletteRealtimeEvent);
-
-    this.clients.forEach((client) => {
-      if (client.socket.readyState !== WebSocket.OPEN) {
-        this.clients.delete(client.id);
-        return;
-      }
-
-      try {
-        client.socket.send(payload);
-      } catch {
-        this.clients.delete(client.id);
-        client.socket.terminate();
-      }
-    });
-  }
-
   public start(): void {
     if (this.heartbeat) {
       return;
@@ -279,6 +256,31 @@ export class RouletteWebsocketHub {
         return;
       }
 
+      if (client.socket.readyState !== WebSocket.OPEN) {
+        this.clients.delete(client.id);
+        this.broadcastOnlineCount();
+        return;
+      }
+
+      try {
+        client.socket.send(payload);
+      } catch {
+        this.clients.delete(client.id);
+        this.broadcastOnlineCount();
+        client.socket.terminate();
+      }
+    });
+  }
+
+  public broadcastOnlineCount(): void {
+    const payload = JSON.stringify({
+      type: "chat.presence",
+      data: {
+        onlineCount: this.getConnectedClientsCount()
+      }
+    });
+
+    this.clients.forEach((client) => {
       if (client.socket.readyState !== WebSocket.OPEN) {
         this.clients.delete(client.id);
         return;
