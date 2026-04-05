@@ -368,7 +368,7 @@ export default function ChatPanel({ onClose }: Props) {
         className="w-full shrink-0 overflow-hidden rounded-b-[16px] px-[10px] py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #282828 0%, #1a1a1a 100%)" }}
       >
-        <div className="flex items-center justify-between rounded-[14px] bg-[#0d0d0d] p-[6px]">
+        <div className="flex items-center gap-2 rounded-[14px] bg-[#0d0d0d] p-[6px]">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -379,9 +379,9 @@ export default function ChatPanel({ onClose }: Props) {
               }
             }}
             placeholder="Write message..."
-            className="flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
+            className="min-w-0 flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
           />
-          <div className="flex items-center gap-[7px]">
+          <div className="flex shrink-0 items-center gap-[7px] pr-[1px]">
             <button
               type="button"
               className="flex h-6 w-6 shrink-0 items-center justify-center cursor-pointer opacity-95 transition-opacity hover:opacity-100"
@@ -427,6 +427,7 @@ export default function ChatPanel({ onClose }: Props) {
         .chat-send-btn {
           width: 42px;
           height: 42px;
+          flex-shrink: 0;
           border-radius: 8px;
           border: 1px solid rgba(255, 95, 99, 0.65);
           background: linear-gradient(180deg, #8f2526 0%, #d94547 56%, #f24f51 100%);
