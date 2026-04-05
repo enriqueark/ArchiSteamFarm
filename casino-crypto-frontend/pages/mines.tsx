@@ -33,6 +33,7 @@ export default function MinesPage() {
   const [draggingBet, setDraggingBet] = useState(false);
   const [skinAnimTick, setSkinAnimTick] = useState(0);
   const [cellAnim, setCellAnim] = useState<Record<number, "safe" | "mine">>({});
+  const [safeCellGainByIndex, setSafeCellGainByIndex] = useState<Record<number, string>>({});
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cellAnimTimeoutsRef = useRef<number[]>([]);
 
@@ -200,6 +201,7 @@ export default function MinesPage() {
           }
         });
         setCells(next);
+        setSafeCellGainByIndex({});
         await fetchSkin(activeGame.potentialPayoutAtomic);
       } catch {
         // Ignore restore errors to allow a normal fresh game.
@@ -215,7 +217,12 @@ export default function MinesPage() {
     };
   }, [fetchSkin]);
 
-  const reset = () => { setCells(Array(BOARD).fill("hidden")); setLR(null); setSkinUrl(null); };
+  const reset = () => {
+    setCells(Array(BOARD).fill("hidden"));
+    setLR(null);
+    setSkinUrl(null);
+    setSafeCellGainByIndex({});
+  };
   const start = async () => {
     setErr(null); setLd(true); reset();
     try {
@@ -228,6 +235,7 @@ export default function MinesPage() {
     if (!game || cells[idx] !== "hidden" || !act) return;
     setErr(null); setLd(true);
     try {
+      const previousPotentialAtomic = Number(game.potentialPayoutAtomic ?? game.betAtomic ?? "0");
       const r = await revealMine(game.gameId, idx); setGame(r); setLR(r.reveal);
       const n = [...cells];
       const newlySafe: number[] = [];
@@ -246,6 +254,22 @@ export default function MinesPage() {
         }
       });
       setCells(n);
+      const nextPotentialAtomic = Number(r.potentialPayoutAtomic ?? "0");
+      const deltaAtomic = Number.isFinite(previousPotentialAtomic) && Number.isFinite(nextPotentialAtomic)
+        ? Math.max(0, nextPotentialAtomic - previousPotentialAtomic)
+        : 0;
+      const deltaLabel = `+$${(deltaAtomic / 1e6).toFixed(2)}`;
+      if (newlySafe.length > 0) {
+        setSafeCellGainByIndex((prev) => {
+          const copy = { ...prev };
+          newlySafe.forEach((safeIdx) => {
+            if (!copy[safeIdx]) {
+              copy[safeIdx] = deltaLabel;
+            }
+          });
+          return copy;
+        });
+      }
       triggerCellAnimation(newlySafe, mineIdx);
       if (mineIdx !== null || r.status === "LOST") {
         playMineSfx();
@@ -459,7 +483,7 @@ export default function MinesPage() {
             if (st === "safe") return (
               <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
-                <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{pay}</p>
+                <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{safeCellGainByIndex[i] ?? "+$0.00"}</p>
               </div>
             );
             return (
