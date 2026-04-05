@@ -45,6 +45,20 @@ function userColor(label: string): string {
   return palette[Math.abs(seed) % palette.length];
 }
 
+function toUserFacingError(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  const msg = err.message?.trim();
+  if (!msg) return fallback;
+  const lower = msg.toLowerCase();
+  if (lower.includes("internal error") || lower.includes("internal")) {
+    return fallback;
+  }
+  if (lower.includes("unauthorized") || lower.includes("forbidden") || lower.includes("token")) {
+    return "Please sign in to use chat.";
+  }
+  return msg;
+}
+
 export default function ChatPanel({ onClose }: Props) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -74,7 +88,7 @@ export default function ChatPanel({ onClose }: Props) {
         setMessages(chatRows);
       } catch (e: unknown) {
         if (!mounted) return;
-        setError(e instanceof Error ? e.message : "Failed to load chat");
+        // Keep initial chat load failures silent to avoid persistent UI noise.
       }
       try {
         const rainState = await getRainState();
@@ -170,7 +184,7 @@ export default function ChatPanel({ onClose }: Props) {
       upsertMessage(created);
       setMessage("");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to send message");
+      setError(toUserFacingError(e, "Failed to send message"));
     } finally {
       setSending(false);
     }
@@ -184,7 +198,7 @@ export default function ChatPanel({ onClose }: Props) {
       const next = await joinRain();
       setRain(next);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to join rain");
+      setError(toUserFacingError(e, "Failed to join rain"));
     } finally {
       setJoiningRain(false);
     }
@@ -205,7 +219,7 @@ export default function ChatPanel({ onClose }: Props) {
       const result = await tipRain(amountCoins);
       setRain(result.rain);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to tip rain");
+      setError(toUserFacingError(e, "Failed to tip rain"));
     } finally {
       setTippingRain(false);
     }
@@ -278,8 +292,11 @@ export default function ChatPanel({ onClose }: Props) {
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[4px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
-                  {rain ? `${formatRelative(rain.startsAt)} • ${rain.joinedCount} joined` : "No active rain"}
-                  {rain?.hasJoined ? " · joined" : ""}
+                  {rain
+                    ? `${formatRelative(rain.startsAt)}${rain.joinedCount > 0 ? ` • ${rain.joinedCount} joined` : ""}${
+                        rain.hasJoined ? " • joined" : ""
+                      }`
+                    : "No active rain"}
                 </p>
               </div>
             </div>
@@ -307,26 +324,27 @@ export default function ChatPanel({ onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2 space-y-4">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-2 space-y-2">
         {messages.map((m, i) => (
-          <div key={m.id || i} className="flex items-start gap-2.5">
+          <div key={m.id || i} className="flex items-start gap-3 py-1">
             {m.avatarUrl ? (
-              <img src={m.avatarUrl} alt={m.username} className="w-10 h-10 rounded-full shrink-0 object-cover" />
+              <img src={m.avatarUrl} alt={m.username} className="w-10 h-10 rounded-[12px] shrink-0 object-cover" />
             ) : (
               <div
-                className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-bold"
+                className="w-10 h-10 rounded-[12px] shrink-0 flex items-center justify-center text-white text-xs font-bold"
                 style={{ backgroundColor: "#1f1f1f", border: "1px solid #2a2a2a" }}
               >
                 {(m.username || "U").slice(0, 1).toUpperCase()}
               </div>
             )}
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 mb-0.5">
+            <div className="min-w-0 flex-1 max-w-[213px]">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-sm font-medium" style={{ color: userColor(m.username || "Player") }}>
                   {m.username || "Player"}
                 </span>
                 <span
-                  className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
+                  className="text-[10px] px-[6px] py-[2px] rounded-[6px] font-bold"
                   style={{
                     border: `1px solid ${userColor(m.username || "Player")}`,
                     color: userColor(m.username || "Player")
@@ -334,9 +352,12 @@ export default function ChatPanel({ onClose }: Props) {
                 >
                   {m.userLevel || 1}
                 </span>
-                <span className="text-[10px] text-muted">{formatRelative(m.createdAt)}</span>
+                </div>
+                <span className="text-[11px] text-[#828282] whitespace-nowrap">{formatRelative(m.createdAt)}</span>
               </div>
-              <p className="text-xs text-[#b2b2b2]">{m.message}</p>
+              <div className="rounded-[8px] bg-[#161616] px-3 py-2">
+                <p className="text-[14px] leading-[18px] text-white">{m.message}</p>
+              </div>
             </div>
           </div>
         ))}
@@ -377,10 +398,10 @@ export default function ChatPanel({ onClose }: Props) {
               type="button"
               onClick={() => void handleSend()}
               disabled={sending}
-              className={`chat-red-icon-btn ${sending ? "opacity-100" : "opacity-90 hover:opacity-100"}`}
+              className={`chat-send-btn ${sending ? "opacity-100" : "opacity-95 hover:opacity-100"}`}
               title="Send message"
             >
-              <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[42px] w-[42px] rounded-[8px]" />
+              <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[22px] w-[22px]" />
             </button>
           </div>
         </div>
@@ -400,6 +421,27 @@ export default function ChatPanel({ onClose }: Props) {
         }
 
         .chat-red-icon-btn:active {
+          transform: translateY(1px);
+        }
+
+        .chat-send-btn {
+          width: 42px;
+          height: 42px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 95, 99, 0.65);
+          background: linear-gradient(180deg, #8f2526 0%, #d94547 56%, #f24f51 100%);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 1px 0 rgba(255, 175, 175, 0.4), inset 0 -1px 0 rgba(128, 19, 20, 0.8);
+          transition: filter 180ms ease, transform 180ms ease;
+        }
+
+        .chat-send-btn:hover {
+          filter: brightness(1.05);
+        }
+
+        .chat-send-btn:active {
           transform: translateY(1px);
         }
 
