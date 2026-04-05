@@ -354,12 +354,12 @@ export default function ChatPanel({ onClose }: Props) {
             <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
             <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-        </div>
-        <div className="flex w-fit items-center gap-[6px]">
-          <div className="flex w-fit translate-x-[2px] items-center gap-2 px-[2px] py-[2px]">
+          <div className="ml-[8px] flex w-fit items-center gap-2 px-[2px] py-[2px]">
             <span className="chat-online-dot h-[10px] w-[10px] rounded-full bg-[#39ff8c]" />
             <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
+        </div>
+        <div className="flex w-fit items-center">
           <button onClick={onClose} className="chat-red-icon-btn mr-[2px]" title="Close chat">
             <img
               src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
@@ -559,7 +559,7 @@ export default function ChatPanel({ onClose }: Props) {
 
         .chat-online-dot {
           box-shadow: 0 0 10px rgba(57, 255, 140, 0.9);
-          animation: chatOnlineBlink 1.2s steps(1, end) infinite;
+          animation: chatOnlinePulse 1.7s ease-in-out infinite;
         }
 
         .chat-send-btn {
@@ -584,16 +584,17 @@ export default function ChatPanel({ onClose }: Props) {
           transform: translateY(1px);
         }
 
-        @keyframes chatOnlineBlink {
+        @keyframes chatOnlinePulse {
           0%,
-          49% {
+          100% {
             opacity: 1;
             box-shadow: 0 0 10px rgba(57, 255, 140, 0.9);
+            transform: scale(1);
           }
-          50%,
-          100% {
-            opacity: 0.2;
-            box-shadow: 0 0 3px rgba(57, 255, 140, 0.35);
+          50% {
+            opacity: 0.35;
+            box-shadow: 0 0 4px rgba(57, 255, 140, 0.4);
+            transform: scale(0.92);
           }
         }
 
