@@ -249,7 +249,7 @@ export default function ChatPanel({ onClose }: Props) {
             <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
             <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-          <div className="flex w-fit items-center gap-2 rounded-[8px] border border-[#39ff8c] bg-[#0f261a] px-[11px] py-2 shadow-[inset_0_1px_0_rgba(171,255,211,0.2),0_0_14px_rgba(57,255,140,0.42)]">
+          <div className="flex w-fit items-center gap-2 px-[2px] py-[2px]">
             <span className="h-[10px] w-[10px] rounded-full bg-[#39ff8c] shadow-[0_0_10px_rgba(57,255,140,0.9)]" />
             <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
