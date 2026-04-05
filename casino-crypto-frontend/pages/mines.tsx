@@ -7,7 +7,6 @@ const A = "/assets/";
 const TILE = `${A}09d0723a9bfccbed73637ba3ba799693.svg`;
 const GEM = `${A}7314404ef65e3d5b3dc26009de5d710c.svg`;
 const MINE_TILE = `${A}903011fe39cdcfe98c260e419ff22c1c.svg`;
-const DIV = `${A}5edaa698796fe2f18fcc3c6a7ec12584.svg`;
 const RL = `${A}53afd2537d26b04bd54b538a8d997e24.svg`;
 const RR = `${A}b4fbfa3ebe2ac32ca7bc3136b2647ee7.svg`;
 const P1 = `${A}b6d6c3347b8703c97896883a1403de0b.svg`;
@@ -32,6 +31,7 @@ export default function MinesPage() {
   const [maxBal, setMaxBal] = useState(5000);
   const [skinUrl, setSkinUrl] = useState<string | null>(null);
   const [draggingBet, setDraggingBet] = useState(false);
+  const [skinAnimTick, setSkinAnimTick] = useState(0);
 
   useEffect(() => {
     getWallets().then((w) => {
@@ -61,6 +61,12 @@ export default function MinesPage() {
       setSkinUrl(res.preview?.imageUrl || null);
     } catch { setSkinUrl(null); }
   }, []);
+
+  useEffect(() => {
+    if (skinUrl) {
+      setSkinAnimTick((prev) => prev + 1);
+    }
+  }, [skinUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,15 +199,15 @@ export default function MinesPage() {
             }}
           >
             <div style={{
-              width: `${(betPct * 100).toFixed(3)}%`,
+              width: "100%",
               height: 6,
               borderRadius: 999,
               background: "linear-gradient(90deg,#ac2e30,#f75154)",
               position: "absolute",
               top: 6,
-              left: 0
+              left: 0,
+              boxShadow: "0 0 8px rgba(247,81,84,0.45)"
             }} />
-            <img src={DIV} alt="" style={{ width: "100%", height: 6, display: "block", position: "absolute", top: 6, left: 0 }} />
             <div style={{
               position: "absolute",
               left: `${(betPct * 100).toFixed(3)}%`,
@@ -256,7 +262,13 @@ export default function MinesPage() {
               <img src={P2} alt="" style={{ position: "absolute", width: "44%", height: "auto", opacity: 0.15 }} />
               <img src={P3} alt="" style={{ position: "absolute", width: "30%", height: "auto", opacity: 0.1 }} />
               {skinUrl && (
-                <img src={skinUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1, filter: lost ? "brightness(0.4)" : "none" }} />
+                <img
+                  key={`${skinUrl}-${skinAnimTick}`}
+                  src={skinUrl}
+                  alt=""
+                  className={`mines-skin-preview ${lost ? "is-lost" : ""}`}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1 }}
+                />
               )}
             </div>
             <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 6, position: "relative", zIndex: 1 }}>
@@ -312,6 +324,54 @@ export default function MinesPage() {
           })}
         </div>
       </div>
+      <style jsx>{`
+        .mines-skin-preview {
+          filter: brightness(1);
+          transform-origin: center center;
+          will-change: transform, opacity, filter;
+          animation:
+            minesSkinAppear 320ms cubic-bezier(0.22, 1, 0.36, 1),
+            minesSkinFloat 3.1s ease-in-out 320ms infinite;
+        }
+
+        .mines-skin-preview.is-lost {
+          animation: minesSkinLost 220ms ease-out forwards;
+        }
+
+        @keyframes minesSkinAppear {
+          0% {
+            opacity: 0;
+            transform: scale(0.72);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes minesSkinFloat {
+          0% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-4px);
+          }
+          100% {
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes minesSkinLost {
+          0% {
+            filter: brightness(1);
+            transform: translateY(0) scale(1);
+          }
+          100% {
+            filter: brightness(0.4);
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
