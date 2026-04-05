@@ -403,9 +403,9 @@ export default function ChatPanel({ onClose }: Props) {
           );
           filter: blur(6px);
           mix-blend-mode: screen;
-          opacity: 0.78;
-          transform: translateX(-22%);
-          animation: rainGoldSweep 3s linear infinite;
+          opacity: 0;
+          transform: translateX(28%);
+          animation: rainGoldSweep 2.8s linear infinite;
         }
 
         @keyframes rainGoldFlow {
@@ -425,16 +425,19 @@ export default function ChatPanel({ onClose }: Props) {
 
         @keyframes rainGoldSweep {
           0% {
-            transform: translateX(-24%);
-            opacity: 0.45;
+            transform: translateX(34%);
+            opacity: 0;
           }
-          50% {
-            transform: translateX(20%);
+          12% {
+            opacity: 0.9;
+          }
+          82% {
+            transform: translateX(-34%);
             opacity: 0.88;
           }
           100% {
-            transform: translateX(-24%);
-            opacity: 0.45;
+            transform: translateX(-48%);
+            opacity: 0;
           }
         }
       `}</style>
