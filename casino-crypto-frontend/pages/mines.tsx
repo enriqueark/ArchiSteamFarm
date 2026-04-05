@@ -31,6 +31,7 @@ export default function MinesPage() {
   const [, setLR] = useState<MinesRevealResponse["reveal"] | null>(null);
   const [maxBal, setMaxBal] = useState(5000);
   const [skinUrl, setSkinUrl] = useState<string | null>(null);
+  const [draggingBet, setDraggingBet] = useState(false);
 
   useEffect(() => {
     getWallets().then((w) => {
@@ -41,8 +42,17 @@ export default function MinesPage() {
 
   const act = game?.status === "ACTIVE";
   const lost = game?.status === "LOST";
-  const betNum = parseFloat(bet || "0");
+  const parsedBet = Number.parseFloat(bet || "0");
+  const betNum = Number.isFinite(parsedBet) ? parsedBet : 0;
   const ba = String(Math.round(betNum * 1e6));
+  const betPct = maxBal > 0 ? Math.max(0, Math.min(1, betNum / maxBal)) : 0;
+
+  const setBetFromClientX = useCallback((clientX: number, sliderEl: HTMLDivElement) => {
+    if (act || maxBal <= 0) return;
+    const rect = sliderEl.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setBet((pct * maxBal).toFixed(2));
+  }, [act, maxBal]);
 
   const fetchSkin = useCallback(async (amountAtomic: string | null | undefined) => {
     if (!amountAtomic || amountAtomic === "0") { setSkinUrl(null); return; }
@@ -104,8 +114,6 @@ export default function MinesPage() {
       r.revealedCells?.forEach((i) => { if (n[i] === "hidden") n[i] = "safe"; }); setCells(n);
       if (!r.reveal.hitMine && r.status === "ACTIVE") {
         fetchSkin(r.potentialPayoutAtomic);
-      } else {
-        setSkinUrl(null);
       }
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
@@ -161,15 +169,50 @@ export default function MinesPage() {
             </div>
           </div>
 
-          {/* Red bar slider */}
-          <div style={{ cursor: act ? "default" : "pointer" }}
-            onClick={(e) => {
+          {/* Red bar slider (supports click + drag) */}
+          <div
+            onPointerDown={(e) => {
               if (act) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-              setBet((pct * maxBal).toFixed(2));
-            }}>
-            <img src={DIV} alt="" style={{ width: "100%", display: "block" }} />
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDraggingBet(true);
+              setBetFromClientX(e.clientX, e.currentTarget);
+            }}
+            onPointerMove={(e) => {
+              if (!draggingBet || act) return;
+              setBetFromClientX(e.clientX, e.currentTarget);
+            }}
+            onPointerUp={() => setDraggingBet(false)}
+            onPointerCancel={() => setDraggingBet(false)}
+            style={{
+              position: "relative",
+              height: 18,
+              cursor: act ? "default" : "pointer",
+              touchAction: "none",
+              opacity: act ? 0.5 : 1
+            }}
+          >
+            <div style={{
+              width: `${(betPct * 100).toFixed(3)}%`,
+              height: 6,
+              borderRadius: 999,
+              background: "linear-gradient(90deg,#ac2e30,#f75154)",
+              position: "absolute",
+              top: 6,
+              left: 0
+            }} />
+            <img src={DIV} alt="" style={{ width: "100%", height: 6, display: "block", position: "absolute", top: 6, left: 0 }} />
+            <div style={{
+              position: "absolute",
+              left: `${(betPct * 100).toFixed(3)}%`,
+              top: "50%",
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              background: "#ffffff",
+              boxShadow: "0 0 0 2px rgba(172,46,48,0.5), 0 2px 8px rgba(0,0,0,0.35)",
+              transform: "translate(-50%, -50%)"
+            }} />
           </div>
 
           {/* Number of mines */}
