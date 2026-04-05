@@ -19,6 +19,8 @@ const addHours = (date: Date, hours: number): Date => {
   return copy;
 };
 
+const RAIN_JOIN_WINDOW_MS = 60_000;
+
 const userLabel = (email: string): string => {
   const local = email.split("@")[0]?.trim();
   if (!local) {
@@ -214,6 +216,13 @@ export const joinRain = async (userId: string): Promise<RainRoundState> => {
   const state = await prisma.$transaction(async (tx) => {
     await settlePreviousRoundIfNeeded(tx, now);
     const round = await ensureCurrentRainRound(tx, now);
+    const msUntilRoundEnd = round.endsAt.getTime() - now.getTime();
+    if (msUntilRoundEnd > RAIN_JOIN_WINDOW_MS) {
+      throw new AppError("You can only join rain in the last minute", 422, "RAIN_JOIN_WINDOW_CLOSED");
+    }
+    if (msUntilRoundEnd <= 0) {
+      throw new AppError("Rain round already ended", 422, "RAIN_ROUND_ENDED");
+    }
     await tx.rainJoin.create({
       data: {
         roundId: round.id,

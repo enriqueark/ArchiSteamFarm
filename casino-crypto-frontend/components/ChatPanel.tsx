@@ -243,6 +243,10 @@ export default function ChatPanel({ onClose }: Props) {
 
   const handleJoinRain = async () => {
     if (!rain || joiningRain) return;
+    if (!isJoinWindow) {
+      setError("You can only join rain in the last minute.");
+      return;
+    }
     setJoiningRain(true);
     setError(null);
     try {
@@ -311,18 +315,18 @@ export default function ChatPanel({ onClose }: Props) {
           role="button"
           tabIndex={0}
           onClick={() => {
-            if (!joiningRain) {
+            if (!joiningRain && isJoinWindow) {
               void handleJoinRain();
             }
           }}
           onKeyDown={(e) => {
-            if ((e.key === "Enter" || e.key === " ") && !joiningRain) {
+            if ((e.key === "Enter" || e.key === " ") && !joiningRain && isJoinWindow) {
               e.preventDefault();
               void handleJoinRain();
             }
           }}
           className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#5a4723] ${
-            joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
+            joiningRain ? "cursor-wait opacity-80" : isJoinWindow ? "cursor-pointer" : "cursor-default"
           }`}
           style={{
             background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 62%, rgba(255, 195, 83, 0.2) 100%)",
@@ -342,7 +346,7 @@ export default function ChatPanel({ onClose }: Props) {
               />
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[10px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[12px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
