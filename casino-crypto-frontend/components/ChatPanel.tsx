@@ -39,34 +39,26 @@ function formatRainAmount(atomic: string): string {
   return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function getNextHalfHourBoundaryCET(now = new Date()): Date {
+function getMsUntilNextHalfHourBoundaryCET(now = new Date()): number {
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false
   });
   const parts = formatter.formatToParts(now);
   const byType = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
-  const year = Number(byType("year"));
-  const month = Number(byType("month"));
-  const day = Number(byType("day"));
-  const hour = Number(byType("hour"));
   const minute = Number(byType("minute"));
+  const second = Number(byType("second"));
 
-  // Build an approximate UTC date matching the CET wall-clock parts,
-  // then choose next :00/:30 boundary in that wall-clock space.
-  const approxUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
-  const next = new Date(approxUtc);
-  if (minute < 30) {
-    next.setUTCMinutes(30, 0, 0);
-  } else {
-    next.setUTCHours(next.getUTCHours() + 1, 0, 0, 0);
+  if (!Number.isFinite(minute) || !Number.isFinite(second)) {
+    return 0;
   }
-  return next;
+
+  const HALF_HOUR_MS = 30 * 60 * 1000;
+  const elapsedInCurrentWindowMs = ((minute % 30) * 60 + second) * 1000 + now.getMilliseconds();
+  const remaining = HALF_HOUR_MS - elapsedInCurrentWindowMs;
+  return Math.max(0, Math.min(HALF_HOUR_MS, remaining));
 }
 
 function formatNextRainCountdown(msLeft: number): string {
@@ -229,8 +221,7 @@ export default function ChatPanel({ onClose }: Props) {
     return Math.min(9999, fallbackByMessages);
   }, [connectedUsers, messages.length]);
 
-  const nextRainAt = useMemo(() => getNextHalfHourBoundaryCET(new Date(nowMs)), [nowMs]);
-  const msUntilNextRain = Math.max(0, nextRainAt.getTime() - nowMs);
+  const msUntilNextRain = useMemo(() => getMsUntilNextHalfHourBoundaryCET(new Date(nowMs)), [nowMs]);
   const isJoinWindow = msUntilNextRain <= 60_000;
   const nextRainLabel = useMemo(() => formatNextRainCountdown(msUntilNextRain), [msUntilNextRain]);
 
@@ -351,7 +342,7 @@ export default function ChatPanel({ onClose }: Props) {
               />
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[8px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[10px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
