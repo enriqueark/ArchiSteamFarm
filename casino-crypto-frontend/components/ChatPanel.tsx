@@ -240,7 +240,7 @@ export default function ChatPanel({ onClose }: Props) {
         </button>
       </div>
 
-      {/* Live Rain card (keep chat structure stable, tune visuals only here) */}
+      {/* Live Rain card (layout matched to reference: icon left, text center, amount/right controls) */}
       <div className="mx-auto my-4 w-[265px]">
         <div
           role="button"
@@ -256,55 +256,51 @@ export default function ChatPanel({ onClose }: Props) {
               void handleJoinRain();
             }
           }}
-          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#7f5f24] ${
+          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#5a4723] ${
             joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
           }`}
           style={{
-            background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 54%, #241f15 100%)",
-            boxShadow: "inset 0 0 0 1px rgba(255, 195, 83, 0.2), 0 0 14px rgba(255, 195, 83, 0.08)"
+            background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 62%, rgba(255, 195, 83, 0.2) 100%)",
+            boxShadow: "inset 0 0 0 1px rgba(255, 195, 83, 0.12), 0 0 10px rgba(255, 195, 83, 0.08)"
           }}
           title="Join rain"
         >
-          <div className="rain-gold-border pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
-          <div className="rain-gold-flow pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-[124px] bg-gradient-to-l from-[rgba(255,195,83,0.22)] via-[rgba(255,195,83,0.08)] to-transparent" />
           <div className="rain-gold-sweep pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
-          <div className="pointer-events-none absolute -left-5 -top-5 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[160px]" />
-          <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[70px]" />
 
-          <div className="relative z-10 flex items-center gap-[10px] px-[8px] py-[7px]">
-            <img
-              src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
-              alt="Live rain"
-              className="h-[62px] w-[62px] shrink-0 object-cover"
-            />
-
-            <div className="min-w-0">
-              <div className="mb-[4px] flex min-h-[36px] w-fit items-center gap-[8px] rounded-[8px] bg-[#161616] p-[5px]">
-                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
-                  {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
-                </p>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleTipRain();
-                  }}
-                  disabled={tippingRain}
-                  className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
-                  style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
-                  title="Tip rain"
-                >
-                  +
-                </button>
-              </div>
-
-              <div className="w-[83px]">
+          <div className="relative z-10 flex min-h-[76px] items-center justify-between px-[10px]">
+            <div className="flex min-w-0 items-center gap-[9px]">
+              <img
+                src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
+                alt="Live rain"
+                className="h-[30px] w-[30px] shrink-0 object-cover"
+              />
+              <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[4px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {rain ? `${formatRelative(rain.startsAt)} • ${rain.joinedCount} joined` : "No active rain"}
                   {rain?.hasJoined ? " · joined" : ""}
                 </p>
               </div>
+            </div>
+
+            <div className="ml-2 flex shrink-0 items-center gap-[6px]">
+              <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
+                {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleTipRain();
+                }}
+                disabled={tippingRain}
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
+                style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
+                title="Tip rain"
+              >
+                +
+              </button>
             </div>
           </div>
         </div>
@@ -365,8 +361,17 @@ export default function ChatPanel({ onClose }: Props) {
             className="flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
           />
           <div className="flex items-center gap-[7px]">
-            <button type="button" className="cursor-pointer opacity-70 transition-opacity hover:opacity-100" title="Emoji">
-              <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="h-6 w-6" />
+            <button
+              type="button"
+              className="flex h-6 w-6 shrink-0 items-center justify-center cursor-pointer opacity-95 transition-opacity hover:opacity-100"
+              title="Emoji"
+            >
+              <img
+                src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg"
+                alt="emoji"
+                className="h-6 w-6"
+                style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.18))" }}
+              />
             </button>
             <button
               type="button"
