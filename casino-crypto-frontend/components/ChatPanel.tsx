@@ -216,7 +216,7 @@ export default function ChatPanel({ onClose }: Props) {
       className="w-[297px] shrink-0 rounded-[16px] flex flex-col overflow-hidden"
       style={{ background: "linear-gradient(180deg, #121212 0%, #0d0d0d 100%)" }}
     >
-      {/* Header */}
+      {/* Header (matched to exported main-gl sizing) */}
       <div
         className="flex w-full items-center justify-between gap-[26px] overflow-hidden px-4 py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #1a1a1a 0%, #282828 100%)" }}
@@ -231,17 +231,17 @@ export default function ChatPanel({ onClose }: Props) {
             <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
         </div>
-        <button onClick={onClose} className="chat-red-btn chat-red-btn-sm mr-[2px]" title="Close chat">
+        <button onClick={onClose} className="chat-red-icon-btn mr-[2px]" title="Close chat">
           <img
             src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
             alt="close"
-            className="h-[22px] w-[22px] opacity-95"
+            className="h-[42px] w-[42px] rounded-[8px] opacity-95"
           />
         </button>
       </div>
 
       {/* Live Rain card (keep chat structure stable, tune visuals only here) */}
-      <div className="pl-3 pr-4 pt-3 pb-2">
+      <div className="mx-auto my-4 w-[265px]">
         <div
           role="button"
           tabIndex={0}
@@ -256,7 +256,7 @@ export default function ChatPanel({ onClose }: Props) {
               void handleJoinRain();
             }
           }}
-          className={`relative min-h-[76px] w-[269px] overflow-hidden rounded-[12px] border border-[#7f5f24] ${
+          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#7f5f24] ${
             joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
           }`}
           style={{
@@ -283,14 +283,15 @@ export default function ChatPanel({ onClose }: Props) {
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
                   {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
                 </p>
-                  <button
+                <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     void handleTipRain();
                   }}
                   disabled={tippingRain}
-                  className="chat-red-btn chat-red-btn-xs disabled:opacity-60"
+                  className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
+                  style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                   title="Tip rain"
                 >
                   +
@@ -345,12 +346,12 @@ export default function ChatPanel({ onClose }: Props) {
         ))}
       </div>
 
-      {/* Input */}
+      {/* Input (matched to exported main-gl sizing) */}
       <div
         className="w-full shrink-0 overflow-hidden rounded-b-[16px] px-[10px] py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #282828 0%, #1a1a1a 100%)" }}
       >
-        <div className="flex items-center gap-2 rounded-[14px] bg-[#0d0d0d] p-[6px]">
+        <div className="flex items-center justify-between rounded-[14px] bg-[#0d0d0d] p-[6px]">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -363,68 +364,38 @@ export default function ChatPanel({ onClose }: Props) {
             placeholder="Write message..."
             className="flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
           />
-          <button type="button" className="chat-red-btn chat-red-btn-sm" title="Emoji">
-            <img
-              src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg"
-              alt="emoji"
-              className="h-[20px] w-[20px] opacity-95"
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={sending}
-            className={`chat-red-btn chat-red-btn-sm ${sending ? "opacity-100" : "opacity-90 hover:opacity-100"}`}
-            title="Send message"
-          >
-            <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[22px] w-[22px]" />
-          </button>
+          <div className="flex items-center gap-[7px]">
+            <button type="button" className="cursor-pointer opacity-70 transition-opacity hover:opacity-100" title="Emoji">
+              <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="h-6 w-6" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={sending}
+              className={`chat-red-icon-btn ${sending ? "opacity-100" : "opacity-90 hover:opacity-100"}`}
+              title="Send message"
+            >
+              <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[42px] w-[42px] rounded-[8px]" />
+            </button>
+          </div>
         </div>
         {error && <p className="mt-2 text-[11px] text-accent-red">{error}</p>}
       </div>
       <style jsx>{`
-        .chat-red-btn {
+        .chat-red-icon-btn {
           display: inline-flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          border: 1px solid rgba(255, 96, 98, 0.58);
-          background: linear-gradient(180deg, #8c2425 0%, #d83f42 54%, #f24f51 100%);
-          box-shadow:
-            inset 0 1px 0 rgba(255, 168, 168, 0.35),
-            inset 0 -1px 0 rgba(110, 13, 14, 0.72),
-            0 0 12px rgba(242, 79, 81, 0.32),
-            0 0 22px rgba(242, 79, 81, 0.22);
-          transition: box-shadow 180ms ease, filter 180ms ease, transform 180ms ease;
+          transition: filter 180ms ease, transform 180ms ease;
         }
 
-        .chat-red-btn:hover {
+        .chat-red-icon-btn:hover {
           filter: brightness(1.06);
-          box-shadow:
-            inset 0 1px 0 rgba(255, 179, 179, 0.42),
-            inset 0 -1px 0 rgba(121, 15, 16, 0.76),
-            0 0 16px rgba(242, 79, 81, 0.42),
-            0 0 30px rgba(242, 79, 81, 0.28);
         }
 
-        .chat-red-btn:active {
+        .chat-red-icon-btn:active {
           transform: translateY(1px);
-        }
-
-        .chat-red-btn-sm {
-          width: 46px;
-          height: 46px;
-          border-radius: 8px;
-        }
-
-        .chat-red-btn-xs {
-          width: 28px;
-          height: 28px;
-          border-radius: 5px;
-          color: #fff;
-          font-size: 18px;
-          font-weight: 700;
-          line-height: 1;
         }
 
         .rain-gold-border {
