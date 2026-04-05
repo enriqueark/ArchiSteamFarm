@@ -218,21 +218,25 @@ export default function ChatPanel({ onClose }: Props) {
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3"
+        className="flex w-full items-center justify-between gap-[26px] overflow-hidden px-4 py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #1a1a1a 0%, #282828 100%)" }}
       >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="w-5 h-5" />
-            <span className="text-sm font-medium text-accent-red">Chat</span>
+        <div className="flex w-fit items-center gap-3">
+          <div className="flex w-fit items-center gap-2">
+            <img src="/assets/a4366a4ae3e473020ab9cbb4e6f51869.svg" alt="chat" className="h-8 w-8" />
+            <span className="text-[18px] font-medium leading-[18px] text-white">Chat</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#161616] rounded-md px-2 py-1">
-            <img src="/assets/7633b71f35a53e0231fddc5fed059472.svg" alt="" className="w-3.5 h-3.5" />
-            <span className="text-xs text-muted">{onlineCount}</span>
+          <div className="flex w-fit items-center gap-2 rounded-[8px] bg-[#161616] px-[11px] py-2">
+            <span className="h-[10px] w-[10px] rounded-full bg-[#8aff53]" />
+            <span className="text-[18px] font-medium leading-[18px] text-white">{onlineCount}</span>
           </div>
         </div>
         <button onClick={onClose}>
-          <img src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg" alt="close" className="w-5 h-5 opacity-60 hover:opacity-100 transition-opacity" />
+          <img
+            src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
+            alt="close"
+            className="h-[42px] w-[42px] rounded-[8px] opacity-60 shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] transition-opacity hover:opacity-100"
+          />
         </button>
       </div>
 
@@ -252,12 +256,12 @@ export default function ChatPanel({ onClose }: Props) {
               void handleJoinRain();
             }
           }}
-          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#70551f] ${
+          className={`relative min-h-[76px] w-[265px] overflow-hidden rounded-[12px] border border-[#7f5f24] ${
             joiningRain ? "cursor-wait opacity-80" : "cursor-pointer"
           }`}
           style={{
-            background: "linear-gradient(90deg, #1a1a1a 0%, #181818 58%, #211d15 100%)",
-            boxShadow: "inset 0 0 0 1px rgba(255, 195, 83, 0.16), 0 0 12px rgba(255, 195, 83, 0.06)"
+            background: "linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 54%, #241f15 100%)",
+            boxShadow: "inset 0 0 0 1px rgba(255, 195, 83, 0.2), 0 0 14px rgba(255, 195, 83, 0.08)"
           }}
           title="Join rain"
         >
@@ -344,10 +348,10 @@ export default function ChatPanel({ onClose }: Props) {
 
       {/* Input */}
       <div
-        className="px-3 py-3"
+        className="w-full shrink-0 overflow-hidden rounded-b-[16px] px-[10px] py-4 shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
         style={{ background: "linear-gradient(180deg, #282828 0%, #1a1a1a 100%)" }}
       >
-        <div className="flex items-center gap-2 bg-[#161616] rounded-btn px-3 py-2.5">
+        <div className="flex items-center justify-between rounded-[14px] bg-[#0d0d0d] p-[6px]">
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -358,14 +362,18 @@ export default function ChatPanel({ onClose }: Props) {
               }
             }}
             placeholder="Write message..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-muted outline-none"
+            className="flex-1 bg-transparent px-3 text-[16px] font-medium leading-5 text-white placeholder-[#828282] outline-none"
           />
-          <img src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg" alt="emoji" className="w-5 h-5 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" />
+          <img
+            src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg"
+            alt="emoji"
+            className="h-6 w-6 cursor-pointer opacity-50 transition-opacity hover:opacity-100"
+          />
           <img
             src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg"
             alt="send"
             onClick={() => void handleSend()}
-            className={`w-5 h-5 cursor-pointer hover:opacity-100 transition-opacity ${
+            className={`h-[42px] w-[42px] cursor-pointer rounded-[8px] shadow-[inset_0_1px_0_#f24f51,inset_0_-1px_0_#ff7476] transition-opacity hover:opacity-100 ${
               sending ? "opacity-100" : "opacity-50"
             }`}
           />
