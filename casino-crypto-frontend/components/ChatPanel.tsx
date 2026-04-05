@@ -235,7 +235,7 @@ export default function ChatPanel({ onClose }: Props) {
           <img
             src="/assets/ff7b4a95d6ca0ac94428eb89d87fdc5a.svg"
             alt="close"
-            className="h-[18px] w-[18px] opacity-95"
+            className="h-[22px] w-[22px] opacity-95"
           />
         </button>
       </div>
@@ -283,7 +283,7 @@ export default function ChatPanel({ onClose }: Props) {
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
                   {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
                 </p>
-                <button
+                  <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -367,7 +367,7 @@ export default function ChatPanel({ onClose }: Props) {
             <img
               src="/assets/bef874df2fc950fc61f328c3bb49b78f.svg"
               alt="emoji"
-              className="h-[16px] w-[16px] opacity-90"
+              className="h-[20px] w-[20px] opacity-95"
             />
           </button>
           <button
@@ -377,7 +377,7 @@ export default function ChatPanel({ onClose }: Props) {
             className={`chat-red-btn chat-red-btn-sm ${sending ? "opacity-100" : "opacity-90 hover:opacity-100"}`}
             title="Send message"
           >
-            <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[18px] w-[18px]" />
+            <img src="/assets/e4d41a686d7d0a9814458dd69c7d611d.svg" alt="send" className="h-[22px] w-[22px]" />
           </button>
         </div>
         {error && <p className="mt-2 text-[11px] text-accent-red">{error}</p>}
@@ -387,6 +387,7 @@ export default function ChatPanel({ onClose }: Props) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
           border: 1px solid rgba(255, 96, 98, 0.58);
           background: linear-gradient(180deg, #8c2425 0%, #d83f42 54%, #f24f51 100%);
           box-shadow:
@@ -411,17 +412,17 @@ export default function ChatPanel({ onClose }: Props) {
         }
 
         .chat-red-btn-sm {
-          width: 42px;
-          height: 42px;
+          width: 46px;
+          height: 46px;
           border-radius: 8px;
         }
 
         .chat-red-btn-xs {
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           border-radius: 5px;
           color: #fff;
-          font-size: 16px;
+          font-size: 18px;
           font-weight: 700;
           line-height: 1;
         }
