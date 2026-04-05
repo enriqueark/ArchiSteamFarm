@@ -32,10 +32,8 @@ function fromAtomicToCoins(atomic: string): string {
   return (n / 1e8).toFixed(2);
 }
 
-function formatRainAmount(atomic: string): string {
-  const n = Number(atomic || "0");
-  if (!Number.isFinite(n)) return "$0";
-  const coins = n / 1e8;
+function formatRainAmountFromCoins(coins: number): string {
+  if (!Number.isFinite(coins)) return "$0.00";
   return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -101,8 +99,12 @@ export default function ChatPanel({ onClose }: Props) {
   const [tippingRain, setTippingRain] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [animatedRainAmountCoins, setAnimatedRainAmountCoins] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<CasinoSocket | null>(null);
+  const rainAmountAnimationFrameRef = useRef<number | null>(null);
+  const animatedRainAmountCoinsRef = useRef(0);
+  const rainAmountInitializedRef = useRef(false);
 
   const upsertMessage = (incoming: ChatMessage) => {
     setMessages((prev) => {
@@ -212,6 +214,63 @@ export default function ChatPanel({ onClose }: Props) {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!rain?.totalAmountAtomic) {
+      return;
+    }
+    const targetAtomic = Number(rain?.totalAmountAtomic ?? "0");
+    const targetCoins = Number.isFinite(targetAtomic) ? targetAtomic / 1e8 : 0;
+
+    if (!rainAmountInitializedRef.current) {
+      rainAmountInitializedRef.current = true;
+      animatedRainAmountCoinsRef.current = targetCoins;
+      setAnimatedRainAmountCoins(targetCoins);
+      return;
+    }
+
+    const startCoins = animatedRainAmountCoinsRef.current;
+    const deltaCoins = Math.abs(targetCoins - startCoins);
+    if (deltaCoins < 0.01) {
+      animatedRainAmountCoinsRef.current = targetCoins;
+      setAnimatedRainAmountCoins(targetCoins);
+      return;
+    }
+
+    if (rainAmountAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(rainAmountAnimationFrameRef.current);
+      rainAmountAnimationFrameRef.current = null;
+    }
+
+    // Duration grows with delta to make larger tips feel more "proportional".
+    const durationMs = Math.max(320, Math.min(1800, 320 + deltaCoins * 170));
+    const startedAt = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      const eased = 1 - (1 - progress) ** 3;
+      const nextCoins = startCoins + (targetCoins - startCoins) * eased;
+      animatedRainAmountCoinsRef.current = nextCoins;
+      setAnimatedRainAmountCoins(nextCoins);
+
+      if (progress < 1) {
+        rainAmountAnimationFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        rainAmountAnimationFrameRef.current = null;
+      }
+    };
+
+    rainAmountAnimationFrameRef.current = requestAnimationFrame(tick);
+  }, [rain?.totalAmountAtomic]);
+
+  useEffect(
+    () => () => {
+      if (rainAmountAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(rainAmountAnimationFrameRef.current);
+      }
+    },
+    []
+  );
 
   const onlineCount = useMemo(() => {
     const fallbackByMessages = Math.max(15, messages.length);
@@ -357,7 +416,7 @@ export default function ChatPanel({ onClose }: Props) {
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
               <div className="rounded-[8px] bg-[#111111] px-[8px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
-                  {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0.00"}
+                  {rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "$0.00"}
                 </p>
               </div>
               <button
