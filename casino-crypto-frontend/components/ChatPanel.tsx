@@ -36,7 +36,7 @@ function formatRainAmount(atomic: string): string {
   const n = Number(atomic || "0");
   if (!Number.isFinite(n)) return "$0";
   const coins = n / 1e8;
-  return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function userColor(label: string): string {
@@ -287,7 +287,7 @@ export default function ChatPanel({ onClose }: Props) {
               <img
                 src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png"
                 alt="Live rain"
-                className="h-[30px] w-[30px] shrink-0 object-cover"
+                className="h-[38px] w-[38px] shrink-0 object-cover"
               />
               <div className="min-w-0">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
@@ -302,9 +302,11 @@ export default function ChatPanel({ onClose }: Props) {
             </div>
 
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
-              <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
-                {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0"}
-              </p>
+              <div className="rounded-[8px] bg-[#111111] px-[8px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
+                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
+                  {rain ? formatRainAmount(rain.totalAmountAtomic) : "$0.00"}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={(e) => {
