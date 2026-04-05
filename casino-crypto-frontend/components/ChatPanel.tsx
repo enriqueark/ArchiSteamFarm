@@ -263,6 +263,7 @@ export default function ChatPanel({ onClose }: Props) {
         >
           <div className="rain-gold-border pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
           <div className="rain-gold-flow pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
+          <div className="rain-gold-sweep pointer-events-none absolute inset-0 z-[1] rounded-[12px]" />
           <div className="pointer-events-none absolute -left-5 -top-5 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[160px]" />
           <div className="pointer-events-none absolute right-0 top-0 h-[110px] w-[110px] rounded-full bg-[#ffc353] blur-[70px]" />
 
@@ -385,8 +386,26 @@ export default function ChatPanel({ onClose }: Props) {
             linear-gradient(90deg, rgba(255, 195, 83, 0.34) 0%, rgba(255, 195, 83, 0.2) 24%, rgba(255, 195, 83, 0.11) 44%, rgba(255, 195, 83, 0) 74%);
           background-repeat: no-repeat;
           background-size: 100% 100%, 110% 100%;
-          animation: rainGoldFlow 3.2s ease-in-out infinite;
+          animation: rainGoldFlow 2.4s ease-in-out infinite;
           opacity: 0.92;
+        }
+
+        .rain-gold-sweep {
+          left: -35%;
+          right: -35%;
+          background: linear-gradient(
+            108deg,
+            rgba(255, 195, 83, 0) 28%,
+            rgba(255, 195, 83, 0.08) 36%,
+            rgba(255, 195, 83, 0.44) 49%,
+            rgba(255, 195, 83, 0.18) 58%,
+            rgba(255, 195, 83, 0) 70%
+          );
+          filter: blur(6px);
+          mix-blend-mode: screen;
+          opacity: 0.78;
+          transform: translateX(-22%);
+          animation: rainGoldSweep 3s linear infinite;
         }
 
         @keyframes rainGoldFlow {
@@ -401,6 +420,21 @@ export default function ChatPanel({ onClose }: Props) {
           100% {
             background-position: 0% 50%, -8% 50%;
             opacity: 0.82;
+          }
+        }
+
+        @keyframes rainGoldSweep {
+          0% {
+            transform: translateX(-24%);
+            opacity: 0.45;
+          }
+          50% {
+            transform: translateX(20%);
+            opacity: 0.88;
+          }
+          100% {
+            transform: translateX(-24%);
+            opacity: 0.45;
           }
         }
       `}</style>
