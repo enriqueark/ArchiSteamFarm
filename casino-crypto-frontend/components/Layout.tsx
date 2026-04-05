@@ -10,7 +10,7 @@ const sideLinks = [
   { href: "/cases", src: "/assets/e2aff152f333aa01b1f9280bef464454.svg", label: "Cases" },
   { href: "/case-battles", src: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg", label: "Case Battle" },
   { href: "/roulette", src: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg", label: "Roulette" },
-  { href: "/mines", src: "/assets/50a1a1ae813369ada622b0018ecaa16f.svg", label: "Mines" },
+  { href: "/mines", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Mines" },
   { href: "/blackjack", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
 
@@ -87,6 +87,16 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
           const active = router.pathname === item.href;
           const hovered = hoveredSideHref === item.href;
           const highlighted = active || hovered;
+          const background = active
+            ? "linear-gradient(180deg, #ac2e30 0%, #f75154 100%)"
+            : hovered
+              ? "linear-gradient(180deg, #7e2b2e 0%, #bf4246 100%)"
+              : "transparent";
+          const boxShadow = active
+            ? "0 0 14px rgba(247,81,84,0.35)"
+            : hovered
+              ? "0 0 10px rgba(247,81,84,0.18)"
+              : "none";
           return (
             <Link
               key={item.label}
@@ -97,11 +107,11 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
                 display: "flex", alignItems: "center", gap: 14,
                 width: "100%", padding: sidebarOpen ? "8px 12px" : "0",
                 borderRadius: 8, textDecoration: "none",
-                background: highlighted ? "linear-gradient(180deg, #ac2e30 0%, #f75154 100%)" : "transparent",
-                boxShadow: highlighted ? "0 0 14px rgba(247,81,84,0.35)" : "none",
+                background,
+                boxShadow,
                 justifyContent: sidebarOpen ? "flex-start" : "center",
                 transition: "background 160ms ease, box-shadow 160ms ease, transform 160ms ease",
-                transform: highlighted ? "translateX(1px)" : "translateX(0)"
+                transform: active ? "translateX(1px)" : hovered ? "translateX(0.5px)" : "translateX(0)"
               }}
             >
               <img
@@ -110,12 +120,11 @@ export default function Layout({ children, onLogout, userEmail }: Props) {
                 style={{
                   width: 42,
                   height: 42,
-                  borderRadius: 8,
+                  borderRadius: 0,
                   display: "block",
                   flexShrink: 0,
-                  filter: highlighted
-                    ? "invert(20%) sepia(97%) saturate(3234%) hue-rotate(340deg) brightness(109%) contrast(93%)"
-                    : "grayscale(1) brightness(0.68)"
+                  opacity: highlighted ? 1 : 0.74,
+                  transition: "opacity 160ms ease"
                 }}
               />
               {sidebarOpen && (
