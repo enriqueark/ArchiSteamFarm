@@ -344,7 +344,7 @@ export default function ChatPanel({ onClose }: Props) {
                 alt="Live rain"
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
-              <div className="min-w-0 pt-[2px]">
+              <div className="min-w-0 pt-[4px]">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
                 <p className="mt-[22px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
@@ -499,7 +499,7 @@ export default function ChatPanel({ onClose }: Props) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow: inset 0 1px 0 rgba(255, 175, 175, 0.4), inset 0 -1px 0 rgba(128, 19, 20, 0.8);
+          box-shadow: 0 0 10px rgba(242, 79, 81, 0.22);
           transition: filter 180ms ease, transform 180ms ease;
         }
 
