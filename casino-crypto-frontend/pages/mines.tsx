@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 
 const BOARD = 25;
@@ -32,6 +32,9 @@ export default function MinesPage() {
   const [skinUrl, setSkinUrl] = useState<string | null>(null);
   const [draggingBet, setDraggingBet] = useState(false);
   const [skinAnimTick, setSkinAnimTick] = useState(0);
+  const [cellAnim, setCellAnim] = useState<Record<number, "safe" | "mine">>({});
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const cellAnimTimeoutsRef = useRef<number[]>([]);
 
   useEffect(() => {
     getWallets().then((w) => {
@@ -53,6 +56,116 @@ export default function MinesPage() {
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     setBet((pct * maxBal).toFixed(2));
   }, [act, maxBal]);
+
+  const getAudioContext = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const Ctor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new Ctor();
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      void audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  const playGemSfx = useCallback(() => {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.exponentialRampToValueAtTime(0.028, now + 0.03);
+    out.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+    out.connect(ctx.destination);
+
+    const notes = [720, 980];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const start = now + idx * 0.07;
+      const end = start + 0.16;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.8, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(start);
+      osc.stop(end);
+    });
+  }, [getAudioContext]);
+
+  const playMineSfx = useCallback(() => {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.exponentialRampToValueAtTime(0.034, now + 0.03);
+    out.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+    out.connect(ctx.destination);
+
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.23), ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) {
+      const falloff = 1 - i / data.length;
+      data[i] = (Math.random() * 2 - 1) * falloff;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "lowpass";
+    noiseFilter.frequency.setValueAtTime(1250, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(320, now + 0.24);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.9, now + 0.02);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(out);
+    noise.start(now);
+    noise.stop(now + 0.26);
+
+    const boom = ctx.createOscillator();
+    const boomGain = ctx.createGain();
+    boom.type = "sine";
+    boom.frequency.setValueAtTime(120, now);
+    boom.frequency.exponentialRampToValueAtTime(52, now + 0.28);
+    boomGain.gain.setValueAtTime(0.0001, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.75, now + 0.03);
+    boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    boom.connect(boomGain);
+    boomGain.connect(out);
+    boom.start(now);
+    boom.stop(now + 0.35);
+  }, [getAudioContext]);
+
+  const triggerCellAnimation = useCallback((safeIndices: number[], mineIndex: number | null) => {
+    const nextKeys = [...safeIndices];
+    if (mineIndex !== null) nextKeys.push(mineIndex);
+    if (!nextKeys.length) return;
+    setCellAnim((prev) => {
+      const copy = { ...prev };
+      safeIndices.forEach((i) => { copy[i] = "safe"; });
+      if (mineIndex !== null) copy[mineIndex] = "mine";
+      return copy;
+    });
+    const timeout = window.setTimeout(() => {
+      setCellAnim((prev) => {
+        const copy = { ...prev };
+        nextKeys.forEach((i) => { delete copy[i]; });
+        return copy;
+      });
+    }, mineIndex !== null ? 820 : 620);
+    cellAnimTimeoutsRef.current.push(timeout);
+  }, []);
 
   const fetchSkin = useCallback(async (amountAtomic: string | null | undefined) => {
     if (!amountAtomic || amountAtomic === "0") { setSkinUrl(null); return; }
@@ -116,8 +229,29 @@ export default function MinesPage() {
     setErr(null); setLd(true);
     try {
       const r = await revealMine(game.gameId, idx); setGame(r); setLR(r.reveal);
-      const n = [...cells]; n[idx] = r.reveal.hitMine ? "mine" : "safe";
-      r.revealedCells?.forEach((i) => { if (n[i] === "hidden") n[i] = "safe"; }); setCells(n);
+      const n = [...cells];
+      const newlySafe: number[] = [];
+      let mineIdx: number | null = null;
+      if (r.reveal.hitMine) {
+        n[idx] = "mine";
+        mineIdx = idx;
+      } else {
+        n[idx] = "safe";
+        newlySafe.push(idx);
+      }
+      r.revealedCells?.forEach((i) => {
+        if (n[i] === "hidden") {
+          n[i] = "safe";
+          newlySafe.push(i);
+        }
+      });
+      setCells(n);
+      triggerCellAnimation(newlySafe, mineIdx);
+      if (mineIdx !== null || r.status === "LOST") {
+        playMineSfx();
+      } else if (newlySafe.length > 0) {
+        playGemSfx();
+      }
       if (!r.reveal.hitMine && r.status === "ACTIVE") {
         fetchSkin(r.potentialPayoutAtomic);
       }
@@ -318,10 +452,12 @@ export default function MinesPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, width: "100%", maxWidth: 600 }}>
           {cells.map((st, i) => {
             if (st === "mine") return (
-              <img key={i} src={MINE_TILE} alt="mine" style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, display: "block" }} />
+              <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden" }}>
+                <img src={MINE_TILE} alt="mine" style={{ width: "100%", height: "100%", borderRadius: 12, display: "block" }} />
+              </div>
             );
             if (st === "safe") return (
-              <div key={i} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
                 <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{pay}</p>
               </div>
@@ -378,6 +514,77 @@ export default function MinesPage() {
           100% {
             filter: brightness(0.4);
             transform: translateY(0) scale(1);
+          }
+        }
+
+        .mines-cell-safe,
+        .mines-cell-mine {
+          will-change: transform, opacity, filter, box-shadow;
+          transform-origin: center center;
+        }
+
+        .mines-cell-safe.is-reveal {
+          animation: minesGemReveal 560ms cubic-bezier(0.18, 0.89, 0.32, 1.22);
+        }
+
+        .mines-cell-mine {
+          position: relative;
+        }
+
+        .mines-cell-mine.is-reveal {
+          animation: minesMineReveal 620ms cubic-bezier(0.2, 0.85, 0.28, 1);
+        }
+
+        .mines-cell-mine.is-reveal::after {
+          content: "";
+          position: absolute;
+          inset: 15%;
+          border-radius: 999px;
+          pointer-events: none;
+          background: radial-gradient(circle, rgba(255, 151, 108, 0.65) 0%, rgba(255, 90, 72, 0.22) 46%, rgba(255, 90, 72, 0) 74%);
+          animation: minesMineBlast 520ms ease-out forwards;
+        }
+
+        @keyframes minesGemReveal {
+          0% {
+            opacity: 0;
+            transform: translateY(14px) scale(0.74);
+          }
+          55% {
+            opacity: 1;
+            transform: translateY(-4px) scale(1.05);
+          }
+          100% {
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes minesMineReveal {
+          0% {
+            opacity: 0;
+            transform: scale(0.68);
+            filter: saturate(1.35) brightness(1.2);
+          }
+          45% {
+            opacity: 1;
+            transform: scale(1.08);
+            filter: saturate(1.2) brightness(1.06);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+            filter: saturate(1) brightness(1);
+          }
+        }
+
+        @keyframes minesMineBlast {
+          0% {
+            transform: scale(0.42);
+            opacity: 0.85;
+          }
+          100% {
+            transform: scale(1.6);
+            opacity: 0;
           }
         }
       `}</style>
