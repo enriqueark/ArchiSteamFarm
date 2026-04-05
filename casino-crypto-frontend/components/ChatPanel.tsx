@@ -344,9 +344,9 @@ export default function ChatPanel({ onClose }: Props) {
                 alt="Live rain"
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
-              <div className="min-w-0">
+              <div className="min-w-0 pt-[2px]">
                 <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[20px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[22px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
