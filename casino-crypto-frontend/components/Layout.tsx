@@ -291,37 +291,37 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+          <div className="flex items-center gap-2.5 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[38px] items-center gap-2 rounded-[12px] border border-[#272727] bg-[#0e0e0e] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.2)]">
-                  <span className="inline-flex h-[14px] w-[14px] items-center justify-center rounded-full bg-[#171717] text-[9px] text-[#f6c453]">
+                <div className="inline-flex h-[42px] items-center gap-2 rounded-[12px] border border-[#272727] bg-[#0e0e0e] px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.2)]">
+                  <span className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full bg-[#171717] text-[10px] text-[#f6c453]">
                     ✦
                   </span>
-                  <span className="text-[11px] font-bold leading-none text-[#f6f6f6]">
+                  <span className="text-[12px] font-bold leading-none text-[#f6f6f6]">
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
                 <Link
                   href="/deposit"
-                  className="inline-flex h-[40px] items-center rounded-[12px] border border-[#ef7f83] bg-gradient-to-b from-[#f86b70] to-[#bb383d] px-5 text-[12px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_rgba(0,0,0,0.38)] hover:brightness-105 transition-all"
+                  className="inline-flex h-[44px] min-w-[86px] items-center justify-center rounded-[12px] border border-[#ef7f83] bg-gradient-to-b from-[#f86b70] to-[#bb383d] px-6 text-[12px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_rgba(0,0,0,0.38)] hover:brightness-105 transition-all"
                 >
                   Deposit
                 </Link>
-                <div className="mx-1 h-[28px] w-px bg-[#2b2b2b]" />
+                <div className="mx-1 h-[30px] w-px bg-[#2b2b2b]" />
               </>
             )}
-            <div ref={profileMenuRef} className="relative flex items-center gap-1">
-              <div className="inline-flex h-[30px] items-center rounded-[9px] border border-[#252525] bg-[#101010] px-2.5">
-                <span className="max-w-[88px] truncate text-[10px] font-semibold text-[#f2f2f2]">{displayUsername}</span>
+            <div ref={profileMenuRef} className="relative flex items-center gap-1.5">
+              <div className="inline-flex h-[34px] items-center rounded-[9px] border border-[#252525] bg-[#101010] px-3">
+                <span className="max-w-[90px] truncate text-[11px] font-semibold text-[#f2f2f2]">{displayUsername}</span>
               </div>
-              <span className="inline-flex h-[18px] min-w-[24px] items-center justify-center rounded-[6px] border border-[#4f6f8f] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[9px] font-bold leading-none text-[#d8ecff]">
+              <span className="inline-flex h-[20px] min-w-[26px] items-center justify-center rounded-[6px] border border-[#4f6f8f] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[9px] font-bold leading-none text-[#d8ecff]">
                 {Math.max(1, userLevel || 80)}
               </span>
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="relative h-[30px] w-[30px] shrink-0 rounded-full"
+                className="relative h-[32px] w-[32px] shrink-0 rounded-full"
                 title="Open profile options"
               >
                 <div className="absolute inset-0 rounded-full border border-[#f2cb6a]/50 shadow-[0_0_8px_rgba(242,203,106,0.32)]" />
@@ -341,17 +341,17 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full border border-[#2a2a2a] bg-[#101010]"
+                className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-[#2a2a2a] bg-[#101010]"
                 title="Open profile options"
               >
                 <img src="/assets/d10470470dfa642abeeb09a45b975af3.svg" alt="menu arrow" className="h-[6px] w-[10px]" />
               </button>
               <button
                 type="button"
-                className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2a2a2a] bg-[#111111]"
+                className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[#2a2a2a] bg-[#111111]"
                 title="Notifications"
               >
-                <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="h-[26px] w-[26px]" />
+                <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="h-[28px] w-[28px]" />
               </button>
               {profileMenuOpen && (
                 <div className="absolute right-0 top-[44px] z-50 w-[260px] rounded-[14px] border border-[#1f2a38] bg-[#0b1622] shadow-[0_10px_32px_rgba(0,0,0,0.55)] p-2">
