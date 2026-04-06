@@ -304,16 +304,14 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   href="/deposit"
                   className="inline-flex items-center justify-center text-white transition-all hover:brightness-110"
                   style={{
-                    height: 44,
-                    minWidth: 90,
-                    paddingLeft: 20,
-                    paddingRight: 20,
-                    borderRadius: 12,
-                    backgroundImage: "linear-gradient(180deg, #34c759 0%, #248a3d 100%)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.3)",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    letterSpacing: "0.3px",
+                    height: 36,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    borderRadius: 10,
+                    backgroundImage: "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)",
+                    boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476",
+                    fontSize: 14,
+                    fontWeight: 600,
                   }}
                 >
                   Deposit
