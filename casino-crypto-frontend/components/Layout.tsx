@@ -294,21 +294,21 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[32px] items-center gap-1.5 rounded-[10px] border border-[#272727] bg-[#0e0e0e] px-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.2)]">
+                <div className="inline-flex h-[38px] items-center gap-2 rounded-[12px] border border-[#272727] bg-[#0e0e0e] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.2)]">
                   <span className="inline-flex h-[14px] w-[14px] items-center justify-center rounded-full bg-[#171717] text-[9px] text-[#f6c453]">
                     ✦
                   </span>
-                  <span className="text-[10px] font-bold leading-none text-[#f6f6f6]">
+                  <span className="text-[11px] font-bold leading-none text-[#f6f6f6]">
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
                 <Link
                   href="/deposit"
-                  className="inline-flex h-[30px] items-center rounded-[10px] border border-[#d86d71] bg-gradient-to-b from-[#f36b70] to-[#bf3c40] px-3 text-[10px] font-semibold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_2px_7px_rgba(0,0,0,0.35)] hover:brightness-105 transition-all"
+                  className="inline-flex h-[40px] items-center rounded-[12px] border border-[#ef7f83] bg-gradient-to-b from-[#f86b70] to-[#bb383d] px-5 text-[12px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_rgba(0,0,0,0.38)] hover:brightness-105 transition-all"
                 >
                   Deposit
                 </Link>
-                <div className="mx-1 h-[22px] w-px bg-[#2b2b2b]" />
+                <div className="mx-1 h-[28px] w-px bg-[#2b2b2b]" />
               </>
             )}
             <div ref={profileMenuRef} className="relative flex items-center gap-1">
