@@ -302,7 +302,20 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </div>
                 <Link
                   href="/deposit"
-                  className="inline-flex h-[52px] min-w-[118px] items-center justify-center rounded-[14px] border border-[#ff9599] bg-gradient-to-b from-[#ff7a7f] to-[#c3353a] px-7 text-[13px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.36),0_6px_16px_rgba(0,0,0,0.44)] hover:brightness-105 transition-all"
+                  className="inline-flex items-center justify-center text-white transition-all hover:brightness-105"
+                  style={{
+                    height: 36,
+                    minWidth: 74,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    borderRadius: 10,
+                    border: "1px solid #f2686a",
+                    backgroundImage: "linear-gradient(180deg, #f75a5d 0%, #b73437 100%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.24), 0 2px 8px rgba(0,0,0,0.32)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: "11px"
+                  }}
                 >
                   Deposit
                 </Link>
