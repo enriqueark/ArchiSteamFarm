@@ -290,9 +290,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-3.5 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[40px] items-center gap-2 rounded-[12px] border border-[#252525] bg-[#0d0d0d] px-4">
+                <div className="inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#1a1a1a] px-4">
                   <span className="inline-flex h-[10px] w-[10px] rounded-full bg-[#f6c453] shadow-[0_0_6px_rgba(246,196,83,0.5)]" />
-                  <span className="text-[14px] font-semibold leading-none text-white">
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", fontFamily: '"DM Sans","Gotham",sans-serif' }}>
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
@@ -300,24 +300,25 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   href="/deposit"
                   className="inline-flex items-center justify-center text-white transition-all hover:brightness-110"
                   style={{
-                    height: 40,
-                    paddingLeft: 20,
-                    paddingRight: 20,
-                    borderRadius: 12,
+                    height: 36,
+                    paddingLeft: 28,
+                    paddingRight: 28,
+                    borderRadius: 10,
                     backgroundImage: "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)",
                     boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476",
                     fontSize: 14,
                     fontWeight: 600,
+                    fontFamily: '"DM Sans","Gotham",sans-serif',
                   }}
                 >
                   Deposit
                 </Link>
-                <div className="mx-1 h-[30px] w-px bg-[#2a2a2a]" />
+                <div className="mx-3 h-[30px] w-px bg-[#2a2a2a]" />
               </>
             )}
-            <div ref={profileMenuRef} className="relative flex items-center gap-2.5">
+            <div ref={profileMenuRef} className="relative flex items-center gap-3.5">
               <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[13px] font-semibold text-[#f2f2f2] leading-none">{displayUsername}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", fontFamily: '"DM Sans","Gotham",sans-serif', lineHeight: "1" }}>{displayUsername}</span>
                 <span className="inline-flex h-[18px] min-w-[24px] items-center justify-center rounded-[5px] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[10px] font-bold leading-none text-[#d8ecff]">
                   {Math.max(1, userLevel || 80)}
                 </span>
