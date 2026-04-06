@@ -161,11 +161,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
           <div className="flex items-center gap-6 justify-center">
             <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
-              <img src="/assets/9c5bb018d55a11c0b094ee2c9833d52f.svg" alt="" className="w-5 h-5" />
+              <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[22px] h-[22px]" />
               <span>Rewards</span>
             </Link>
             <Link href="/cases" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
-              <img src="/assets/83d81222ca9a94fcdf1e086fa398eed1.svg" alt="" className="w-5 h-5" />
+              <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[22px] h-[22px]" />
               <span>Affiliates</span>
             </Link>
             <Link href="/roulette" className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2 cursor-pointer">
@@ -177,10 +177,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 flex-1 justify-end">
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-btn bg-[#121212] border border-[#2a2a2a] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-btn bg-[#121212] border border-[#2a2a2a] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <span className="inline-block h-[8px] w-[8px] rounded-full bg-[#f6c453] shadow-[0_0_8px_rgba(246,196,83,0.65)]" />
                   <span className="text-sm font-semibold text-white">
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
@@ -194,13 +194,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </Link>
               </>
             )}
-            <div className="hidden xl:flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5">
-              <div className="min-w-0 max-w-[120px]">
-                <p className="m-0 truncate text-[13px] font-semibold text-white leading-[13px]">
+            <div className="flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5 max-w-[230px]">
+              <div className="min-w-0 max-w-[120px] shrink">
+                <div className="flex items-center gap-1.5">
+                  <p className="m-0 truncate text-[13px] font-semibold text-white leading-[13px]">
                   {(userEmail?.split("@")[0] || "WildHub").slice(0, 16)}
-                </p>
-                <div className="mt-[3px] inline-flex h-[14px] min-w-[20px] items-center justify-center rounded-full bg-[#1b1b1b] border border-[#3a3a3a] px-[4px]">
-                  <span className="text-[9px] leading-[9px] font-bold text-[#f2cb6a]">
+                  </p>
+                  <span className="inline-flex h-[14px] min-w-[20px] items-center justify-center rounded-full bg-[#3a1112] border border-[#f34950] px-[4px] text-[9px] leading-[9px] font-bold text-[#ff8c8f]">
                     {Math.max(1, userLevel || 80)}
                   </span>
                 </div>
@@ -212,7 +212,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                     <img src={userAvatarUrl} alt="avatar" className="h-full w-full object-cover" />
                   ) : (
                     <img
-                      src="/assets head/69a77514d4212f89fc13bd58f30d7dcf.png"
+                      src="/assets/69a77514d4212f89fc13bd58f30d7dcf.png"
                       alt="avatar"
                       className="h-full w-full object-cover"
                     />
@@ -225,14 +225,14 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-transparent"
                 title="Open profile options"
               >
-                <img src="/assets head/d10470470dfa642abeeb09a45b975af3.svg" alt="menu arrow" className="w-[14px] h-[8px]" />
+                <img src="/assets/d10470470dfa642abeeb09a45b975af3.svg" alt="menu arrow" className="w-[14px] h-[8px]" />
               </button>
               <button
                 type="button"
                 className="inline-flex h-[32px] w-[32px] items-center justify-center rounded-full bg-transparent"
                 title="Notifications"
               >
-                <img src="/assets head/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="w-[32px] h-[32px]" />
+                <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="w-[32px] h-[32px]" />
               </button>
             </div>
             {onLogout && (
