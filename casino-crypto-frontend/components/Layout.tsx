@@ -302,7 +302,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </div>
                 <Link
                   href="/deposit"
-                  className="inline-flex h-[44px] min-w-[94px] items-center justify-center rounded-[12px] border border-[#f57b80] bg-gradient-to-b from-[#f97075] to-[#b9383d] px-6 text-[12px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_rgba(0,0,0,0.36)] hover:brightness-105 transition-all"
+                  className="inline-flex h-[40px] min-w-[78px] items-center justify-center rounded-[10px] border border-[#d86c70] bg-gradient-to-b from-[#f36f73] to-[#b4373b] px-4 text-[11px] font-semibold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_3px_9px_rgba(0,0,0,0.34)] hover:brightness-105 transition-all"
                 >
                   Deposit
                 </Link>
