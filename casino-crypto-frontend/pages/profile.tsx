@@ -38,6 +38,20 @@ export default function ProfilePage() {
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
         {data ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3 md:col-span-2 flex items-center gap-3">
+              <div className="relative h-14 w-14 shrink-0">
+                <div className="absolute inset-0 rounded-full border border-[#f2cb6a]/40 shadow-[0_0_8px_rgba(242,203,106,0.3)]" />
+                <img
+                  src="/assets/69a77514d4212f89fc13bd58f30d7dcf.png"
+                  alt="profile avatar"
+                  className="h-full w-full rounded-full object-cover"
+                />
+              </div>
+              <div>
+                <p className="m-0 text-gray-400">Profile photo</p>
+                <p className="m-0 mt-1 text-xs text-gray-500">Custom avatar integration can be connected when backend avatar URL is exposed.</p>
+              </div>
+            </div>
             <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
               <p className="m-0 text-gray-400">Username</p>
               <p className="m-0 mt-1 text-white font-semibold">{data.user.email.split("@")[0]}</p>
