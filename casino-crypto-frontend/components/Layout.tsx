@@ -202,39 +202,45 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 Withdraw
               </Link>
             </div>
-            <div className="hidden xl:flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2.5 py-1.5">
-              <div className="relative h-8 w-8 shrink-0 rounded-full p-[2px] bg-gradient-to-b from-[#ffd066] to-[#8f5d00] shadow-[0_0_10px_rgba(255,199,87,0.35)]">
+            <div className="hidden xl:flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5">
+              <div className="min-w-0 max-w-[120px]">
+                <p className="m-0 truncate text-[13px] font-semibold text-white leading-[13px]">
+                  {(userEmail?.split("@")[0] || "WildHub").slice(0, 16)}
+                </p>
+                <div className="mt-[3px] inline-flex h-[14px] min-w-[20px] items-center justify-center rounded-full bg-[#1b1b1b] border border-[#3a3a3a] px-[4px]">
+                  <span className="text-[9px] leading-[9px] font-bold text-[#f2cb6a]">
+                    {Math.max(1, userLevel || 80)}
+                  </span>
+                </div>
+              </div>
+              <div className="relative h-[32px] w-[32px] shrink-0">
+                <div className="absolute inset-0 rounded-full border border-[#f2cb6a]/40 shadow-[0_0_8px_rgba(242,203,106,0.3)]" />
                 <div className="h-full w-full overflow-hidden rounded-full bg-[#1b1b1b]">
                   {userAvatarUrl ? (
                     <img src={userAvatarUrl} alt="avatar" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center text-[11px] font-bold text-[#f5f5f5]">
-                      {(userEmail || "U").slice(0, 1).toUpperCase()}
-                    </div>
+                    <img
+                      src="/assets head/69a77514d4212f89fc13bd58f30d7dcf.png"
+                      alt="avatar"
+                      className="h-full w-full object-cover"
+                    />
                   )}
                 </div>
-                <span className="absolute -bottom-1 -right-1 h-[15px] min-w-[15px] px-[3px] rounded-full bg-[#151515] border border-[#3a3a3a] text-[9px] font-bold text-[#f2cb6a] leading-[13px] text-center">
-                  {Math.max(1, userLevel || 1)}
-                </span>
-              </div>
-              <div className="min-w-0 max-w-[126px]">
-                <p className="m-0 truncate text-[12px] font-semibold text-white leading-[12px]">
-                  {(userEmail?.split("@")[0] || "Player").slice(0, 16)}
-                </p>
-                {userEmail && <p className="m-0 mt-[3px] truncate text-[10px] text-[#8e8e8e] leading-[10px]">{userEmail}</p>}
+                <span className="absolute right-[-1px] top-[-1px] h-[8px] w-[8px] rounded-full border border-[#101010] bg-[#f34950]" />
               </div>
               <button
                 type="button"
-                className="relative ml-1 inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2f2f2f] bg-[#191919] hover:bg-[#202020] transition-colors"
+                className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-transparent"
+                title="Open profile options"
+              >
+                <img src="/assets head/d10470470dfa642abeeb09a45b975af3.svg" alt="menu arrow" className="w-[14px] h-[8px]" />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-[32px] w-[32px] items-center justify-center rounded-full bg-transparent"
                 title="Notifications"
               >
-                <span className="absolute right-[4px] top-[4px] h-[6px] w-[6px] rounded-full bg-[#ff4f51] shadow-[0_0_6px_rgba(255,79,81,0.8)]" />
-                <svg viewBox="0 0 24 24" className="h-[14px] w-[14px] text-[#cfcfcf]" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M12 22a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.71V3a2 2 0 1 0-4 0v1.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"
-                  />
-                </svg>
+                <img src="/assets head/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="w-[32px] h-[32px]" />
               </button>
             </div>
             {onLogout && (
