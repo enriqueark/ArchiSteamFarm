@@ -194,14 +194,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </Link>
               </>
             )}
-            <div className="hidden lg:flex items-center gap-1">
-              <Link
-                href="/withdraw"
-                className="px-3 py-2 rounded-btn text-xs font-semibold bg-[#1a1a1a] text-white border border-[#2a2a2a] hover:bg-[#222] transition-colors"
-              >
-                Withdraw
-              </Link>
-            </div>
             <div className="hidden xl:flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5">
               <div className="min-w-0 max-w-[120px]">
                 <p className="m-0 truncate text-[13px] font-semibold text-white leading-[13px]">
@@ -246,7 +238,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="px-6 py-2 rounded-btn bg-panel text-white text-sm font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] hover:bg-[#222] transition-colors"
+                className="hidden px-6 py-2 rounded-btn bg-panel text-white text-sm font-medium shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424] hover:bg-[#222] transition-colors"
               >
                 Sign out
               </button>
