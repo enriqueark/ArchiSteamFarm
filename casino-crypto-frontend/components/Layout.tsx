@@ -27,13 +27,13 @@ function formatAtomic(val: string, decimals = 8): string {
   return n.toFixed(2);
 }
 function formatCoins(balanceCoins?: string, balanceAtomic?: string): string {
+  let n = 0;
   if (balanceCoins && Number.isFinite(Number(balanceCoins))) {
-    return Number(balanceCoins).toFixed(2);
+    n = Number(balanceCoins);
+  } else if (balanceAtomic) {
+    n = Number(balanceAtomic) / Math.pow(10, 8);
   }
-  if (balanceAtomic) {
-    return formatAtomic(balanceAtomic, 8);
-  }
-  return "0.00";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const atomicToCoinsString = (atomic: string, decimals = 2): string => {
@@ -300,13 +300,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   href="/deposit"
                   className="inline-flex items-center justify-center text-white transition-all hover:brightness-110"
                   style={{
-                    height: 36,
-                    paddingLeft: 28,
-                    paddingRight: 28,
-                    borderRadius: 10,
+                    height: 32,
+                    paddingLeft: 22,
+                    paddingRight: 22,
+                    borderRadius: 8,
                     backgroundImage: "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)",
                     boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476",
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: 600,
                     fontFamily: '"DM Sans","Gotham",sans-serif',
                   }}
@@ -345,14 +345,14 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
                 title="Open profile options"
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+                style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", display: "flex", alignItems: "center" }}
               >
                 <img src="/assets/d10470470dfa642abeeb09a45b975af3.svg" alt="menu arrow" className="h-[7px] w-[12px] opacity-60" />
               </button>
               <button
                 type="button"
                 title="Notifications"
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+                style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", display: "flex", alignItems: "center", marginLeft: 4 }}
               >
                 <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="h-[24px] w-[24px]" />
               </button>
