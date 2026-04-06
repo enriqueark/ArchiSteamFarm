@@ -91,10 +91,10 @@ export default function HomePage() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`px-5 py-2 rounded-btn text-sm font-medium transition-colors ${
+              className={`h-[34px] rounded-[10px] px-4 text-[12px] font-medium leading-[12px] transition-all ${
                 tab === key
-                  ? "bg-panel text-white shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]"
-                  : "text-muted hover:text-white"
+                  ? "text-white border border-[#2f3640] bg-gradient-to-b from-[#1a1a1a] to-[#111111] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_0_rgba(0,0,0,0.35)]"
+                  : "text-[#7f7f7f] border border-transparent bg-transparent hover:text-white"
               }`}
             >
               {label}

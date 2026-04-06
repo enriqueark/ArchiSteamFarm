@@ -266,20 +266,27 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             </Link>
           </div>
 
-          <div className="flex items-center gap-6 justify-center">
-            <Link href="/wallet" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
-              <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[22px] h-[22px]" />
-              <span>Rewards</span>
+          <div className="flex items-center gap-4 justify-center">
+            <Link href="/wallet" className="group flex items-center gap-2">
+              <span className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
+                <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[14px] h-[14px] opacity-80 group-hover:opacity-100" />
+              </span>
+              <span className="text-[12px] font-medium text-[#828282] group-hover:text-[#d0d0d0] transition-colors">Rewards</span>
             </Link>
-            <Link href="/affiliates" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
-              <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[22px] h-[22px]" />
-              <span>Affiliates</span>
+            <Link href="/affiliates" className="group flex items-center gap-2">
+              <span className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
+                <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[14px] h-[14px] opacity-80 group-hover:opacity-100" />
+              </span>
+              <span className="text-[12px] font-medium text-[#828282] group-hover:text-[#d0d0d0] transition-colors">Affiliates</span>
             </Link>
-            <Link href="/roulette" className="flex items-center gap-2 bg-gradient-to-r from-[#b57601] to-[#ffc353] rounded-btn px-4 py-2 cursor-pointer">
-              <img src="/assets/d9129866945bfa6765d5ea9981de3f1c.png" alt="" className="w-8 h-8" />
-              <div className="leading-tight">
-                <p className="text-xs font-bold text-[#382400]">WEEKLY</p>
-                <p className="text-xs font-bold text-[#382400]">LEADERBOARD</p>
+            <Link
+              href="/roulette"
+              className="group relative flex h-[36px] items-center gap-2 overflow-hidden rounded-[10px] border border-[#e0a545] bg-gradient-to-r from-[#dca346] to-[#f0b54d] pl-1.5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_2px_8px_rgba(0,0,0,0.28)]"
+            >
+              <img src="/assets/d9129866945bfa6765d5ea9981de3f1c.png" alt="" className="h-[34px] w-[34px] -rotate-[11deg] object-contain" />
+              <div className="leading-[10px]">
+                <p className="m-0 text-[10px] font-bold text-[#382400]">WEEKLY</p>
+                <p className="m-0 text-[10px] font-bold text-[#382400]">LEADERBOARD</p>
               </div>
             </Link>
           </div>
@@ -295,7 +302,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </div>
                 <Link
                   href="/deposit"
-                  className="px-4 py-2 rounded-btn text-xs font-semibold bg-gradient-to-b from-[#f75a5d] to-[#b73437] text-white border border-[#f2686a] hover:brightness-105 transition-all"
+                  className="h-[34px] px-4 inline-flex items-center rounded-[10px] text-[11px] font-semibold bg-gradient-to-b from-[#f75a5d] to-[#b73437] text-white border border-[#f2686a] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_8px_rgba(0,0,0,0.25)] hover:brightness-105 transition-all"
                 >
                   Deposit
                 </Link>
