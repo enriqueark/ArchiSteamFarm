@@ -266,27 +266,23 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 justify-center">
+          <div className="flex items-center gap-6 justify-center">
             <Link href="/wallet" className="group flex items-center gap-2">
-              <span className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
-                <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[14px] h-[14px] opacity-80 group-hover:opacity-100" />
-              </span>
-              <span className="text-[12px] font-medium text-[#828282] group-hover:text-[#d0d0d0] transition-colors">Rewards</span>
+              <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[28px] h-[28px]" />
+              <span className="text-[14px] font-medium text-[#828282] group-hover:text-white transition-colors">Rewards</span>
             </Link>
             <Link href="/affiliates" className="group flex items-center gap-2">
-              <span className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] shadow-[inset_0_1px_0_#252525,inset_0_-1px_0_#242424]">
-                <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[14px] h-[14px] opacity-80 group-hover:opacity-100" />
-              </span>
-              <span className="text-[12px] font-medium text-[#828282] group-hover:text-[#d0d0d0] transition-colors">Affiliates</span>
+              <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[28px] h-[28px]" />
+              <span className="text-[14px] font-medium text-[#828282] group-hover:text-white transition-colors">Affiliates</span>
             </Link>
             <Link
               href="/roulette"
-              className="group relative flex h-[36px] items-center gap-2 overflow-hidden rounded-[10px] border border-[#e0a545] bg-gradient-to-r from-[#dca346] to-[#f0b54d] pl-1.5 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_2px_8px_rgba(0,0,0,0.28)]"
+              className="flex h-[46px] items-center gap-2.5 rounded-[12px] bg-gradient-to-r from-[#b57601] to-[#ffc353] px-4"
             >
-              <img src="/assets/d9129866945bfa6765d5ea9981de3f1c.png" alt="" className="h-[34px] w-[34px] -rotate-[11deg] object-contain" />
-              <div className="leading-[10px]">
-                <p className="m-0 text-[10px] font-bold text-[#382400]">WEEKLY</p>
-                <p className="m-0 text-[10px] font-bold text-[#382400]">LEADERBOARD</p>
+              <img src="/assets/e7f8abdf0ed47cf60ee551b7bc7251f0.png" alt="" className="h-[42px] w-[42px] object-contain" />
+              <div className="leading-tight">
+                <p className="m-0 text-[12px] font-bold text-[#382400]">WEEKLY</p>
+                <p className="m-0 text-[12px] font-bold text-[#382400]">LEADERBOARD</p>
               </div>
             </Link>
           </div>
@@ -294,9 +290,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-3.5 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[32px] items-center gap-2 rounded-[10px] bg-[#111111] px-3">
-                  <span className="inline-flex h-[8px] w-[8px] rounded-full bg-[#f6c453]" />
-                  <span className="text-[13px] font-semibold leading-none text-[#f5f5f5]">
+                <div className="inline-flex h-[40px] items-center gap-2 rounded-[12px] border border-[#252525] bg-[#0d0d0d] px-4">
+                  <span className="inline-flex h-[10px] w-[10px] rounded-full bg-[#f6c453] shadow-[0_0_6px_rgba(246,196,83,0.5)]" />
+                  <span className="text-[14px] font-semibold leading-none text-white">
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
@@ -304,25 +300,28 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   href="/deposit"
                   className="inline-flex items-center justify-center text-white transition-all hover:brightness-110"
                   style={{
-                    height: 32,
-                    paddingLeft: 18,
-                    paddingRight: 18,
-                    borderRadius: 10,
+                    height: 40,
+                    paddingLeft: 20,
+                    paddingRight: 20,
+                    borderRadius: 12,
                     backgroundImage: "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)",
                     boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476",
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: 600,
                   }}
                 >
                   Deposit
                 </Link>
+                <div className="mx-1 h-[30px] w-px bg-[#2a2a2a]" />
               </>
             )}
-            <div ref={profileMenuRef} className="relative flex items-center gap-2">
-              <span className="text-[13px] font-medium text-[#f2f2f2]">{displayUsername}</span>
-              <span className="inline-flex h-[20px] min-w-[24px] items-center justify-center rounded-[6px] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[10px] font-bold leading-none text-[#d8ecff]">
-                {Math.max(1, userLevel || 80)}
-              </span>
+            <div ref={profileMenuRef} className="relative flex items-center gap-2.5">
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-[13px] font-semibold text-[#f2f2f2] leading-none">{displayUsername}</span>
+                <span className="inline-flex h-[18px] min-w-[24px] items-center justify-center rounded-[5px] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[10px] font-bold leading-none text-[#d8ecff]">
+                  {Math.max(1, userLevel || 80)}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
