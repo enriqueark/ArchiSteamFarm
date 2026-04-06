@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ReactNode, useEffect, useState, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import Footer from "./Footer";
-import { getWallets, type Wallet } from "@/lib/api";
+import {
+  depositVault,
+  getVaultState,
+  getWallets,
+  type VaultLockDuration,
+  type VaultState,
+  type Wallet,
+  withdrawVault
+} from "@/lib/api";
 import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
 
 const sideLinks = [
@@ -28,6 +36,12 @@ function formatCoins(balanceCoins?: string, balanceAtomic?: string): string {
   return "0.00";
 }
 
+const atomicToCoinsString = (atomic: string, decimals = 2): string => {
+  const value = Number(atomic);
+  if (!Number.isFinite(value)) return "0.00";
+  return (value / 1e8).toFixed(decimals);
+};
+
 interface Props {
   children: ReactNode;
   onLogout?: () => void;
@@ -41,9 +55,19 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
   const [hoveredSideHref, setHoveredSideHref] = useState<string | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultState, setVaultState] = useState<VaultState | null>(null);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [vaultActionLoading, setVaultActionLoading] = useState(false);
+  const [vaultAmountCoins, setVaultAmountCoins] = useState("10");
+  const [vaultLockDuration, setVaultLockDuration] = useState<VaultLockDuration>("1H");
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [vaultInfo, setVaultInfo] = useState<string | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<RouletteRoundEvent[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -65,7 +89,90 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     return () => sock.disconnect();
   }, []);
 
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      const target = event.target as Node | null;
+      if (target && !profileMenuRef.current.contains(target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    setProfileMenuOpen(false);
+  }, [router.pathname]);
+
   const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
+  const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
+
+  const refreshWallets = () => {
+    getWallets().then(setWallets).catch(() => {});
+  };
+
+  const loadVaultState = async () => {
+    setVaultLoading(true);
+    setVaultError(null);
+    try {
+      const data = await getVaultState();
+      setVaultState(data);
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : "Failed to load vault");
+    } finally {
+      setVaultLoading(false);
+    }
+  };
+
+  const openVaultModal = async () => {
+    setProfileMenuOpen(false);
+    setVaultOpen(true);
+    setVaultInfo(null);
+    await loadVaultState();
+  };
+
+  const handleVaultDeposit = async () => {
+    setVaultError(null);
+    setVaultInfo(null);
+    const amount = Number(vaultAmountCoins);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setVaultError("Enter a valid amount");
+      return;
+    }
+    setVaultActionLoading(true);
+    try {
+      await depositVault(amount, vaultLockDuration);
+      setVaultInfo("Balance moved to vault successfully");
+      await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : "Vault deposit failed");
+    } finally {
+      setVaultActionLoading(false);
+    }
+  };
+
+  const handleVaultWithdraw = async () => {
+    setVaultError(null);
+    setVaultInfo(null);
+    const amount = Number(vaultAmountCoins);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setVaultError("Enter a valid amount");
+      return;
+    }
+    setVaultActionLoading(true);
+    try {
+      await withdrawVault(amount);
+      setVaultInfo("Vault withdraw completed");
+      await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : "Vault withdraw failed");
+    } finally {
+      setVaultActionLoading(false);
+    }
+  };
+
+  const availableVaultCoins = vaultState ? Number(atomicToCoinsString(vaultState.availableAtomic, 8)) : 0;
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
@@ -164,7 +271,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               <img src="/assets/73acd855750c13d5a2d86f87a7dd6581.svg" alt="" className="w-[22px] h-[22px]" />
               <span>Rewards</span>
             </Link>
-            <Link href="/cases" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
+            <Link href="/affiliates" className="flex items-center gap-2 text-sm text-muted hover:text-white transition-colors">
               <img src="/assets/504f38d3f4b6c086a29a570ab819be73.svg" alt="" className="w-[22px] h-[22px]" />
               <span>Affiliates</span>
             </Link>
@@ -194,18 +301,23 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 </Link>
               </>
             )}
-            <div className="flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5 max-w-[230px]">
+            <div ref={profileMenuRef} className="relative flex items-center gap-2 rounded-btn bg-[#111111] border border-[#232323] px-2 py-1.5 max-w-[230px]">
               <div className="min-w-0 max-w-[120px] shrink">
                 <div className="flex items-center gap-1.5">
                   <p className="m-0 truncate text-[13px] font-semibold text-white leading-[13px]">
-                  {(userEmail?.split("@")[0] || "WildHub").slice(0, 16)}
+                    {displayUsername}
                   </p>
                   <span className="inline-flex h-[14px] min-w-[20px] items-center justify-center rounded-full bg-[#3a1112] border border-[#f34950] px-[4px] text-[9px] leading-[9px] font-bold text-[#ff8c8f]">
                     {Math.max(1, userLevel || 80)}
                   </span>
                 </div>
               </div>
-              <div className="relative h-[32px] w-[32px] shrink-0">
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                className="relative h-[32px] w-[32px] shrink-0"
+                title="Open profile options"
+              >
                 <div className="absolute inset-0 rounded-full border border-[#f2cb6a]/40 shadow-[0_0_8px_rgba(242,203,106,0.3)]" />
                 <div className="h-full w-full overflow-hidden rounded-full bg-[#1b1b1b]">
                   {userAvatarUrl ? (
@@ -219,9 +331,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   )}
                 </div>
                 <span className="absolute right-[-1px] top-[-1px] h-[8px] w-[8px] rounded-full border border-[#101010] bg-[#f34950]" />
-              </div>
+              </button>
               <button
                 type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
                 className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-transparent"
                 title="Open profile options"
               >
@@ -234,6 +347,79 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               >
                 <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="w-[32px] h-[32px]" />
               </button>
+              {profileMenuOpen && (
+                <div className="absolute right-0 top-[44px] z-50 w-[260px] rounded-[14px] border border-[#1f2a38] bg-[#0b1622] shadow-[0_10px_32px_rgba(0,0,0,0.55)] p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void router.push("/profile");
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    PROFILE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openVaultModal();
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    VAULT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void router.push("/affiliates");
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    AFFILIATES
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void router.push("/transactions");
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    TRANSACTIONS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void router.push("/game-history");
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    GAME HISTORY
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void router.push("/support");
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
+                  >
+                    SUPPORT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      onLogout?.();
+                    }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#ff8d93] hover:bg-[#2a1720] transition-colors"
+                  >
+                    LOGOUT
+                  </button>
+                </div>
+              )}
             </div>
             {onLogout && (
               <button
@@ -309,6 +495,121 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           )}
         </div>
       </div>
+      {vaultOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-[560px] rounded-[16px] border border-[#2b3746] bg-[#091624] shadow-[0_22px_60px_rgba(0,0,0,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#223042] px-5 py-4">
+              <div>
+                <h2 className="m-0 text-[20px] font-bold text-white">Vault</h2>
+                <p className="m-0 mt-1 text-[12px] text-[#89a3bf]">Store your Coins and lock funds up to 7 days</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVaultOpen(false)}
+                className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#0e2335] text-[#9fb6cd] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              {vaultLoading ? (
+                <p className="text-sm text-[#9ab2c8]">Loading vault...</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
+                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Vault Total</p>
+                      <p className="m-0 mt-1 text-[18px] font-bold text-white">
+                        {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
+                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Available</p>
+                      <p className="m-0 mt-1 text-[18px] font-bold text-[#7de88f]">
+                        {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
+                      </p>
+                    </div>
+                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
+                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Locked</p>
+                      <p className="m-0 mt-1 text-[18px] font-bold text-[#ffd28d]">
+                        {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+                    <input
+                      value={vaultAmountCoins}
+                      onChange={(event) => setVaultAmountCoins(event.target.value)}
+                      placeholder="Amount in Coins"
+                      className="h-[42px] rounded-[10px] border border-[#233a50] bg-[#0a1b2b] px-3 text-[14px] text-white outline-none focus:border-[#3f5f7a]"
+                    />
+                    <select
+                      value={vaultLockDuration}
+                      onChange={(event) => setVaultLockDuration(event.target.value as VaultLockDuration)}
+                      className="h-[42px] rounded-[10px] border border-[#233a50] bg-[#0a1b2b] px-3 text-[14px] text-white outline-none"
+                    >
+                      <option value="1H">Lock 1 hour</option>
+                      <option value="1D">Lock 24 hours</option>
+                      <option value="3D">Lock 3 days</option>
+                      <option value="7D">Lock 7 days</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleVaultDeposit()}
+                      disabled={vaultActionLoading}
+                      className="rounded-btn border border-[#f2686a] bg-gradient-to-b from-[#f75a5d] to-[#b73437] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {vaultActionLoading ? "Processing..." : "Deposit to Vault"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleVaultWithdraw()}
+                      disabled={vaultActionLoading || availableVaultCoins <= 0}
+                      className="rounded-btn border border-[#2a9f6b] bg-gradient-to-b from-[#2bbf7b] to-[#1a8f5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      Withdraw from Vault
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVaultError(null);
+                        setVaultInfo(null);
+                        void loadVaultState();
+                      }}
+                      className="rounded-btn border border-[#35516d] bg-[#0d2234] px-4 py-2 text-sm font-semibold text-[#c9d7e5]"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {vaultError ? <p className="m-0 text-sm text-[#ff8d93]">{vaultError}</p> : null}
+                  {vaultInfo ? <p className="m-0 text-sm text-[#8df3a1]">{vaultInfo}</p> : null}
+
+                  <div className="rounded-[12px] border border-[#213447] bg-[#0a1b2b] p-3">
+                    <p className="m-0 mb-2 text-[12px] font-semibold uppercase text-[#8aa4be]">Active locks</p>
+                    {!vaultState?.locks?.length ? (
+                      <p className="m-0 text-sm text-[#7f97ae]">No active lock right now.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {vaultState.locks.map((lock) => (
+                          <div key={lock.id} className="flex items-center justify-between rounded-[8px] bg-[#0d2134] px-3 py-2">
+                            <span className="text-sm font-semibold text-white">{atomicToCoinsString(lock.amountAtomic)} COINS</span>
+                            <span className="text-xs text-[#90a8c1]">Unlocks at {new Date(lock.unlockAt).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

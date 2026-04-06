@@ -806,6 +806,250 @@ export async function getMe(): Promise<User> {
   return request<User>("/users/me");
 }
 
+// ── Profile / Vault / History ───────────────────────────────────────────
+
+export interface ProfileSummary {
+  user: {
+    id: string;
+    publicId: number | null;
+    email: string;
+    role: string;
+    status: string;
+    profileVisible: boolean;
+    level: number;
+    levelXpAtomic: string;
+    levelXp: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  wallet: {
+    walletId: string | null;
+    balanceAtomic: string;
+    balanceCoins: string;
+    lockedAtomic: string;
+    lockedCoins: string;
+    availableAtomic: string;
+    availableCoins: string;
+    currency: string;
+    updatedAt: string | null;
+  };
+  totals: {
+    depositsAtomic: string;
+    depositsCoins: string;
+    withdrawalsAtomic: string;
+    withdrawalsCoins: string;
+    withdrawalFeesAtomic: string;
+    withdrawalFeesCoins: string;
+    wageredAtomic: string;
+    wageredCoins: string;
+    payoutAtomic: string;
+    payoutCoins: string;
+    netGamingAtomic: string;
+    netGamingCoins: string;
+    bonusFromReferralAtomic: string;
+    bonusFromReferralCoins: string;
+    claimableAffiliateCommissionAtomic: string;
+    claimableAffiliateCommissionCoins: string;
+    claimedAffiliateCommissionAtomic: string;
+    claimedAffiliateCommissionCoins: string;
+    currency: string;
+  };
+  perGame: {
+    mines: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+    blackjack: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+    roulette: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+  };
+}
+
+export async function getProfileSummary(): Promise<ProfileSummary> {
+  return request<ProfileSummary>("/users/profile/summary");
+}
+
+export interface VaultLock {
+  id: string;
+  amountAtomic: string;
+  unlockAt: string;
+  createdAt: string;
+}
+
+export interface VaultState {
+  vaultId: string;
+  balanceAtomic: string;
+  availableAtomic: string;
+  lockedAtomic: string;
+  releasableAtomic: string;
+  locks: VaultLock[];
+}
+
+export type VaultLockDuration = "1H" | "1D" | "3D" | "7D";
+
+export async function getVaultState(): Promise<VaultState> {
+  return request<VaultState>("/vault");
+}
+
+export async function depositVault(amountCoins: number, lockDuration?: VaultLockDuration): Promise<void> {
+  await request(
+    "/vault/deposit",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amountCoins,
+        ...(lockDuration ? { lockDuration } : {})
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function withdrawVault(amountCoins: number): Promise<void> {
+  await request(
+    "/vault/withdraw",
+    {
+      method: "POST",
+      body: JSON.stringify({ amountCoins })
+    },
+    true,
+    true
+  );
+}
+
+export interface UserTransactionItem {
+  id: string;
+  kind: "DEPOSIT" | "WITHDRAWAL" | "ADMIN" | "TIP_SENT" | "TIP_RECEIVED" | "RAIN_TIP" | "RAIN_PAYOUT" | "GAME" | "VAULT" | "OTHER";
+  direction: "CREDIT" | "DEBIT";
+  reason: string;
+  amountAtomic: string;
+  amountCoins: string;
+  balanceBeforeAtomic: string;
+  balanceBeforeCoins: string;
+  balanceAfterAtomic: string;
+  balanceAfterCoins: string;
+  referenceId: string | null;
+  gameType: string | null;
+  counterpartyFrom: {
+    id: string;
+    publicId: number | null;
+    label: string;
+  } | null;
+  counterpartyTo: {
+    id: string;
+    publicId: number | null;
+    label: string;
+  } | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+}
+
+export async function getMyTransactions(limit = 50, offset = 0): Promise<PaginatedResponse<UserTransactionItem>> {
+  return request<PaginatedResponse<UserTransactionItem>>(`/users/me/transactions?limit=${limit}&offset=${offset}`);
+}
+
+export interface UserGameHistoryItem {
+  id: string;
+  gameMode: "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES";
+  status: string;
+  playedAt: string;
+  wagerAtomic: string;
+  wagerCoins: string;
+  payoutAtomic: string;
+  payoutCoins: string;
+  profitAtomic: string;
+  profitCoins: string;
+  reference: string | null;
+}
+
+export async function getMyGameHistory(
+  params: { limit?: number; offset?: number; mode?: "ALL" | "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES" } = {}
+): Promise<PaginatedResponse<UserGameHistoryItem>> {
+  const limit = params.limit ?? 50;
+  const offset = params.offset ?? 0;
+  const mode = params.mode ?? "ALL";
+  return request<PaginatedResponse<UserGameHistoryItem>>(
+    `/users/me/game-history?limit=${limit}&offset=${offset}&mode=${mode}`
+  );
+}
+
+export interface AffiliateDashboard {
+  myCode: {
+    code: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  appliedCode: {
+    code: string;
+    createdAt: string;
+    bonusReceivedAtomic: string;
+    bonusReceivedCoins: string;
+    referrer: {
+      publicId: number | null;
+      userLabel: string;
+    };
+  } | null;
+  stats: {
+    referralCount: number;
+    totalWageredAtomic: string;
+    totalWageredCoins: string;
+    totalCommissionAtomic: string;
+    totalCommissionCoins: string;
+    claimableCommissionAtomic: string;
+    claimableCommissionCoins: string;
+    claimedCommissionAtomic: string;
+    claimedCommissionCoins: string;
+    currency: string;
+  };
+  referrals: Array<{
+    referralId: string;
+    createdAt: string;
+    user: {
+      id: string;
+      publicId: number | null;
+      userLabel: string;
+      createdAt: string;
+    };
+    totalWageredAtomic: string;
+    totalWageredCoins: string;
+    totalCommissionAtomic: string;
+    totalCommissionCoins: string;
+    claimableCommissionAtomic: string;
+    claimableCommissionCoins: string;
+    claimedCommissionAtomic: string;
+    claimedCommissionCoins: string;
+    bonusReceivedAtomic: string;
+    bonusReceivedCoins: string;
+    active: boolean;
+  }>;
+}
+
+export async function getAffiliateDashboard(): Promise<AffiliateDashboard> {
+  return request<AffiliateDashboard>("/affiliates/dashboard");
+}
+
 export function getApiUrl() {
   return getApi();
 }
