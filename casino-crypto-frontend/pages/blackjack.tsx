@@ -26,12 +26,12 @@ function fmtCoins(v: string | null | undefined): string {
   return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function Card({ code, faceDown, idx }: { code: string; faceDown?: boolean; idx: number }) {
+function Card({ code, faceDown, idx, flipping }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean }) {
   const { rank, sym, clr } = parseCard(code);
   const left = idx * 30;
   const base: React.CSSProperties = {
     width: 70, height: 100, borderRadius: 8, position: "absolute", left, top: 0,
-    animation: `dealCard 0.5s ease-out ${idx * 1}s both`,
+    animation: flipping ? `flipCard 0.6s ease-in-out` : `dealCard 0.4s ease-out ${idx * 0.5}s both`,
   };
 
   if (faceDown) return (
@@ -68,7 +68,7 @@ export default function BlackjackPage() {
   useEffect(() => {
     if (ended && game?.dealerRevealed) {
       const dealerCardCount = (game.dealerCards || []).length;
-      const delay = Math.max(1, dealerCardCount - 1) * 1000 + 500;
+      const delay = Math.max(1, dealerCardCount - 1) * 500 + 800;
       const t = setTimeout(() => setShowResult(true), delay);
       return () => clearTimeout(t);
     } else {
@@ -140,13 +140,13 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", top: "10%", left: "52%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? dCards.length : 2) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
               {!game?.dealerRevealed ? (
                 <Card code="XX" idx={1} faceDown />
               ) : (
-                dCards.slice(1).map((c, i) => <Card key={`d${i + 1}`} code={c} idx={i + 1} />)
+                dCards.slice(1).map((c, i) => <Card key={`d${i + 1}`} code={c} idx={i + 1} flipping={i === 0} />)
               )}
             </div>
             <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{dealerVisibleVal}</span>
@@ -155,7 +155,7 @@ export default function BlackjackPage() {
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "52%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
