@@ -32,7 +32,7 @@ function Card({ code, faceDown, idx, flipping }: { code: string; faceDown?: bool
   const left = idx * 30;
   const base: React.CSSProperties = {
     width: 70, height: 100, borderRadius: 8, position: "absolute", left, top: 0,
-    animation: flipping ? `flipCard 0.6s ease-in-out` : `dealCard 0.4s ease-out ${idx * 0.5}s both`,
+    animation: flipping ? `flipCard 0.5s ease-in-out forwards` : `dealCard 0.35s ease-out ${idx * 0.35}s both`,
   };
 
   if (faceDown) return (
@@ -111,9 +111,9 @@ export default function BlackjackPage() {
       });
       setGame(g);
       playDealSound();
-      setTimeout(playDealSound, 500);
-      setTimeout(playDealSound, 1000);
-      setTimeout(playDealSound, 1500);
+      setTimeout(playDealSound, 350);
+      setTimeout(playDealSound, 700);
+      setTimeout(playDealSound, 1050);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLd(false); }
   };
@@ -160,7 +160,7 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "55%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-40%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
               {!game?.dealerRevealed ? (
@@ -171,17 +171,17 @@ export default function BlackjackPage() {
                 ))
               )}
             </div>
-            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{dealerVisibleVal}</span>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4, alignSelf: "center" }}>{dealerVisibleVal}</span>
           </div>
         )}
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "22%", left: "55%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-40%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
-            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{hand.value}</span>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4, alignSelf: "center" }}>{hand.value}</span>
           </div>
         )}
 
@@ -247,18 +247,17 @@ export default function BlackjackPage() {
             </button>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 10, width: "100%", justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 8, width: "100%", justifyContent: "center" }}>
             {(["HIT", "STAND", "DOUBLE"] as BlackjackAction[]).map((a) => {
               const isStand = a === "STAND";
-              const disabled = ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2);
+              const dis = ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2);
               return (
-                <button key={a} onClick={() => act(a)} disabled={disabled}
+                <button key={a} onClick={() => act(a)} disabled={dis}
                   style={{
-                    minWidth: 120, height: 44, borderRadius: 12, border: "none", cursor: disabled ? "default" : "pointer",
-                    background: isStand ? "linear-gradient(180deg,#ac2e30,#f75154)" : "linear-gradient(180deg,#161616,#0d0d0d)",
+                    flex: 1, height: 48, borderRadius: 14, border: "none", cursor: dis ? "default" : "pointer",
+                    background: isStand ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
                     boxShadow: isStand ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
-                    color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: disabled ? 0.3 : 1,
-                    padding: "0 28px",
+                    color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: dis ? 0.3 : 1,
                   }}>
                   {a.charAt(0) + a.slice(1).toLowerCase()}
                 </button>
@@ -266,13 +265,13 @@ export default function BlackjackPage() {
             })}
             {game?.canSplit && (
               <button onClick={() => act("SPLIT")} disabled={ld}
-                style={{ minWidth: 120, height: 44, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1, padding: "0 28px" }}>
+                style={{ flex: 1, height: 48, borderRadius: 14, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
                 Split
               </button>
             )}
             {game?.canInsurance && (
               <button onClick={() => act("INSURANCE")} disabled={ld}
-                style={{ minWidth: 120, height: 44, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1, padding: "0 28px" }}>
+                style={{ flex: 1, height: 48, borderRadius: 14, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
                 Insurance
               </button>
             )}

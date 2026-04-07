@@ -27,8 +27,8 @@ body {
 }
 
 @keyframes flipCard {
-  0% { transform: perspective(600px) rotateY(180deg); }
-  100% { transform: perspective(600px) rotateY(0deg); }
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
 }
 .ticker-scroll {
   animation: ticker-scroll 25s linear infinite;
