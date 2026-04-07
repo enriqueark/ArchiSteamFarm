@@ -19,6 +19,7 @@ type DeltaNotice = {
   sign: "+" | "-";
   amount: string;
 };
+type BalanceTrend = "up" | "down" | null;
 
 const toCoins = (atomic: string): number => {
   const value = Number(atomic);
@@ -83,11 +84,14 @@ export default function BalanceControl() {
   const [targetBalance, setTargetBalance] = useState(0);
   const [displayBalance, setDisplayBalance] = useState(0);
   const [deltaNotices, setDeltaNotices] = useState<DeltaNotice[]>([]);
+  const [balanceTrend, setBalanceTrend] = useState<BalanceTrend>(null);
+  const [trendPulse, setTrendPulse] = useState(0);
 
   const previousBalanceRef = useRef<number | null>(null);
   const displayBalanceRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
   const deltaNoticeIdRef = useRef(0);
+  const trendResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getSelectedDepositAddress = useCallback((): CashierDepositAddress | null => {
     const address = depositAddresses.find((entry) => entry.asset === selectedCurrency);
@@ -108,6 +112,22 @@ export default function BalanceControl() {
     setTimeout(() => {
       setDeltaNotices((prev) => prev.filter((existing) => existing.id !== id));
     }, 1800);
+  }, []);
+
+  const triggerBalanceTrend = useCallback((delta: number) => {
+    if (Math.abs(delta) < 0.0000001) {
+      return;
+    }
+    setBalanceTrend(delta > 0 ? "up" : "down");
+    setTrendPulse((prev) => prev + 1);
+    if (trendResetTimerRef.current !== null) {
+      clearTimeout(trendResetTimerRef.current);
+      trendResetTimerRef.current = null;
+    }
+    trendResetTimerRef.current = setTimeout(() => {
+      setBalanceTrend(null);
+      trendResetTimerRef.current = null;
+    }, 1100);
   }, []);
 
   useEffect(() => {
@@ -134,7 +154,9 @@ export default function BalanceControl() {
         const previous = previousBalanceRef.current;
         setTargetBalance(nextBalance);
         if (previous !== null) {
-          showDeltaNotice(nextBalance - previous);
+          const delta = nextBalance - previous;
+          showDeltaNotice(delta);
+          triggerBalanceTrend(delta);
         }
         previousBalanceRef.current = nextBalance;
       } catch {
@@ -151,7 +173,16 @@ export default function BalanceControl() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [authed, showDeltaNotice]);
+  }, [authed, showDeltaNotice, triggerBalanceTrend]);
+
+  useEffect(() => {
+    return () => {
+      if (trendResetTimerRef.current !== null) {
+        clearTimeout(trendResetTimerRef.current);
+        trendResetTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!authed) {
@@ -278,13 +309,22 @@ export default function BalanceControl() {
     }
   };
 
+  const trendPulseClass = balanceTrend
+    ? `balance-trend-${balanceTrend}-${trendPulse % 2 === 0 ? "a" : "b"}`
+    : "";
+  const amountTrendClass = balanceTrend ? `balance-amount-${balanceTrend}` : "";
+
   return (
     <>
       <div className="relative">
-        <div className="flex items-center overflow-hidden rounded-md border border-red-900/70 bg-gray-950/90 shadow-[0_0_14px_rgba(220,38,38,0.18)]">
+        <div
+          className={`flex items-center overflow-hidden rounded-md border border-red-900/70 bg-gray-950/90 shadow-[0_0_14px_rgba(220,38,38,0.18)] ${trendPulseClass}`}
+        >
           <div className="flex min-w-[130px] items-center justify-center gap-2 border-r border-red-900/70 px-3 py-1.5">
             <RedTokenIcon />
-            <span className="tabular-nums text-sm font-semibold text-gray-100">{formatCoins(displayBalance)}</span>
+            <span className={`inline-block tabular-nums text-sm font-semibold text-gray-100 ${amountTrendClass}`}>
+              {formatCoins(displayBalance)}
+            </span>
           </div>
           <button
             type="button"

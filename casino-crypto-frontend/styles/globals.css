@@ -29,6 +29,84 @@ body {
   animation: balanceDeltaFade 1.8s ease-out forwards;
 }
 
+@keyframes balanceTrendUpPulse {
+  0% {
+    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
+  }
+  38% {
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
+  }
+}
+
+@keyframes balanceTrendDownPulse {
+  0% {
+    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
+  }
+  38% {
+    box-shadow: 0 0 22px rgba(239, 68, 68, 0.52);
+  }
+  100% {
+    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
+  }
+}
+
+@keyframes balanceAmountUpFlash {
+  0% {
+    color: #f3f4f6;
+    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    transform: translateY(0);
+  }
+  35% {
+    color: #6ee7b7;
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+    transform: translateY(-0.5px);
+  }
+  100% {
+    color: #f3f4f6;
+    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes balanceAmountDownFlash {
+  0% {
+    color: #f3f4f6;
+    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    transform: translateY(0);
+  }
+  35% {
+    color: #fca5a5;
+    text-shadow: 0 0 12px rgba(239, 68, 68, 0.65);
+    transform: translateY(0.5px);
+  }
+  100% {
+    color: #f3f4f6;
+    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    transform: translateY(0);
+  }
+}
+
+.balance-trend-up-a,
+.balance-trend-up-b {
+  animation: balanceTrendUpPulse 950ms ease-out;
+}
+
+.balance-trend-down-a,
+.balance-trend-down-b {
+  animation: balanceTrendDownPulse 950ms ease-out;
+}
+
+.balance-amount-up {
+  animation: balanceAmountUpFlash 920ms cubic-bezier(0.25, 0.95, 0.32, 1);
+}
+
+.balance-amount-down {
+  animation: balanceAmountDownFlash 920ms cubic-bezier(0.25, 0.95, 0.32, 1);
+}
+
 @keyframes profileMenuDropIn {
   0% {
     opacity: 0;
