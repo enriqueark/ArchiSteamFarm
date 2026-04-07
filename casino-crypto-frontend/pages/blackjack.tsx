@@ -92,7 +92,8 @@ export default function BlackjackPage() {
       const ba = String(Math.round(parseFloat(bet) * 1e8));
       const pv = parseFloat(sidePairs); const tv = parseFloat(side21);
       const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) });
-      setGame(g); playDealSound(); setTimeout(playDealSound, 300); setTimeout(playDealSound, 600); setTimeout(playDealSound, 900);
+      setGame(g);
+      for (let i = 0; i < 4; i++) setTimeout(playDealSound, i * 300);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
 
@@ -197,7 +198,7 @@ export default function BlackjackPage() {
             </button>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 6, width: "100%", padding: "4px 0" }}>
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>
             {([
               { a: "HIT" as BlackjackAction, l: "Hit", dis: ld },
               { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, red: true },
@@ -206,14 +207,13 @@ export default function BlackjackPage() {
             ]).map(({ a, l, dis, red }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, height: 50, borderRadius: 16, border: "none",
+                  flex: 1, height: 48, borderRadius: 12, border: "none",
                   cursor: dis ? "default" : "pointer",
-                  background: red ? "linear-gradient(180deg,#f75154,#ac2e30)" : "linear-gradient(180deg,#1e1e1e,#141414)",
-                  boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 2px 6px rgba(0,0,0,.3)" : "inset 0 1px 0 #2a2a2a, inset 0 -1px 0 #111, 0 2px 6px rgba(0,0,0,.3)",
-                  color: dis && !red ? "#444" : "#fff",
-                  fontSize: 16, fontWeight: 600, fontFamily: G,
-                  opacity: dis && !red ? 0.4 : 1,
-                  letterSpacing: "0.3px",
+                  background: red ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
+                  boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
+                  color: "#fff",
+                  fontSize: 18, fontWeight: 500, fontFamily: G,
+                  opacity: dis ? 0.35 : 1,
                 }}>
                 {l}
               </button>

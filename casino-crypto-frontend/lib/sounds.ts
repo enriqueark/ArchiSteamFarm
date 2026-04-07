@@ -6,57 +6,69 @@ function getCtx(): AudioContext {
   return ctx;
 }
 
-function playTone(freq: number, duration: number, type: OscillatorType = "sine", vol = 0.15) {
-  try {
-    const c = getCtx();
-    const osc = c.createOscillator();
-    const gain = c.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = vol;
-    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(c.destination);
-    osc.start(c.currentTime);
-    osc.stop(c.currentTime + duration);
-  } catch {}
-}
-
 export function playDealSound() {
   try {
     const c = getCtx();
-    const len = 0.12;
-    const sr = c.sampleRate;
-    const buf = c.createBuffer(1, sr * len, sr);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      const t = i / sr;
-      const env = Math.exp(-t * 40);
-      data[i] = (Math.random() * 2 - 1) * env * 0.3;
-      if (t > 0.02 && t < 0.06) {
-        data[i] += Math.sin(t * 2000) * env * 0.15;
-      }
+    const t = c.currentTime;
+    const dur = 0.07;
+    const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      const p = i / d.length;
+      d[i] = (Math.random() * 2 - 1) * (1 - p) * 0.4;
     }
     const src = c.createBufferSource();
     src.buffer = buf;
-    const hp = c.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 2000;
-    src.connect(hp);
-    hp.connect(c.destination);
-    src.start();
+    const filt = c.createBiquadFilter();
+    filt.type = "bandpass";
+    filt.frequency.value = 3000;
+    filt.Q.value = 0.5;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(filt);
+    filt.connect(gain);
+    gain.connect(c.destination);
+    src.start(t);
   } catch {}
 }
 
 export function playWinSound() {
-  playTone(523, 0.15, "sine", 0.12);
-  setTimeout(() => playTone(659, 0.15, "sine", 0.12), 120);
-  setTimeout(() => playTone(784, 0.2, "sine", 0.14), 240);
-  setTimeout(() => playTone(1047, 0.3, "sine", 0.1), 380);
+  try {
+    const c = getCtx();
+    const t = c.currentTime;
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      g.gain.setValueAtTime(0, t + i * 0.1);
+      g.gain.linearRampToValueAtTime(0.1, t + i * 0.1 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.2);
+      osc.connect(g);
+      g.connect(c.destination);
+      osc.start(t + i * 0.1);
+      osc.stop(t + i * 0.1 + 0.25);
+    });
+  } catch {}
 }
 
 export function playLoseSound() {
-  playTone(400, 0.2, "sawtooth", 0.08);
-  setTimeout(() => playTone(300, 0.25, "sawtooth", 0.07), 180);
-  setTimeout(() => playTone(200, 0.4, "sawtooth", 0.06), 360);
+  try {
+    const c = getCtx();
+    const t = c.currentTime;
+    [350, 280, 220].forEach((f, i) => {
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = f;
+      g.gain.setValueAtTime(0, t + i * 0.15);
+      g.gain.linearRampToValueAtTime(0.08, t + i * 0.15 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.15 + 0.3);
+      osc.connect(g);
+      g.connect(c.destination);
+      osc.start(t + i * 0.15);
+      osc.stop(t + i * 0.15 + 0.35);
+    });
+  } catch {}
 }
