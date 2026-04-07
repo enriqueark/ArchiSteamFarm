@@ -197,16 +197,24 @@ export default function BlackjackPage() {
             </button>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 8, width: "100%" }}>
+          <div style={{ display: "flex", gap: 6, width: "100%", padding: "4px 0" }}>
             {([
               { a: "HIT" as BlackjackAction, l: "Hit", dis: ld },
               { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, red: true },
               { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2 },
               { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit },
-              { a: "INSURANCE" as BlackjackAction, l: "Insurance", dis: ld || !game?.canInsurance },
             ]).map(({ a, l, dis, red }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
-                style={{ flex: 1, height: 46, borderRadius: 14, border: "none", cursor: dis ? "default" : "pointer", background: red ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a", boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: dis && !red ? "#555" : "#fff", fontSize: 15, fontWeight: 500, fontFamily: G, opacity: dis && !red ? 0.35 : 1 }}>
+                style={{
+                  flex: 1, height: 50, borderRadius: 16, border: "none",
+                  cursor: dis ? "default" : "pointer",
+                  background: red ? "linear-gradient(180deg,#f75154,#ac2e30)" : "linear-gradient(180deg,#1e1e1e,#141414)",
+                  boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 2px 6px rgba(0,0,0,.3)" : "inset 0 1px 0 #2a2a2a, inset 0 -1px 0 #111, 0 2px 6px rgba(0,0,0,.3)",
+                  color: dis && !red ? "#444" : "#fff",
+                  fontSize: 16, fontWeight: 600, fontFamily: G,
+                  opacity: dis && !red ? 0.4 : 1,
+                  letterSpacing: "0.3px",
+                }}>
                 {l}
               </button>
             ))}
