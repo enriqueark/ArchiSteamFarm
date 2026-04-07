@@ -177,26 +177,33 @@ export default function BlackjackPage() {
       </div>
 
       {/* Control bar */}
-      <div style={{ width: "100%", maxWidth: 729, minHeight: 60, borderRadius: 20, padding: "8px 12px", marginTop: -16, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", display: "flex", alignItems: "center", gap: 8, position: "relative", zIndex: 10 }}>
+      <div style={{ width: "100%", maxWidth: 729, borderRadius: 20, padding: "12px 16px", marginTop: -20, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", position: "relative", zIndex: 10 }}>
         {!active ? (
-          <>
-            <div style={{ flex: 1, display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            {/* 3 bet inputs in a row */}
+            <div style={{ display: "flex", gap: 8, width: "100%" }}>
               {[
-                { label: "Main bet (COINS)", val: bet, set: setBet },
-                { label: "Pairs side bet (optional)", val: sidePairs, set: setSidePairs },
-                { label: "21+3 side bet (optional)", val: side21, set: setSide21 },
+                { label: "21+3", val: side21, set: setSide21 },
+                { label: "Bet", val: bet, set: setBet },
+                { label: "Pairs", val: sidePairs, set: setSidePairs },
               ].map((inp) => (
-                <div key={inp.label} style={{ flex: 1 }}>
-                  <p style={{ color: "#828282", fontSize: 9, margin: "0 0 2px", fontFamily: G }}>{inp.label}</p>
-                  <input value={inp.val} onChange={(e) => inp.set(e.target.value)}
-                    style={{ width: "100%", height: 32, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 13, fontFamily: G, fontWeight: 500, padding: "0 10px", boxSizing: "border-box" }} />
+                <div key={inp.label} style={{ flex: 1, textAlign: "center" }}>
+                  <p style={{ color: "#828282", fontSize: 11, margin: "0 0 4px", fontFamily: G }}>{inp.label}</p>
+                  <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, padding: "0 4px 0 0", height: 42 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 6px", flexShrink: 0, boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+                      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
+                    </div>
+                    <input value={inp.val} onChange={(e) => inp.set(e.target.value)}
+                      style={{ flex: 1, height: "100%", border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, padding: 0, minWidth: 0 }} />
+                  </div>
                 </div>
               ))}
             </div>
-            <button onClick={play} disabled={ld} style={{ height: 44, padding: "0 24px", borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", gap: 6, opacity: ld ? 0.5 : 1, whiteSpace: "nowrap" }}>
-              <img src={PLAY_ICON} alt="" style={{ width: 18, height: 18 }} /> Play
+            {/* Play button */}
+            <button onClick={play} disabled={ld} style={{ width: 181, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 18, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: ld ? 0.5 : 1 }}>
+              <img src={PLAY_ICON} alt="" style={{ width: 20, height: 20 }} /> Play
             </button>
-          </>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 10, width: "100%" }}>
             {([

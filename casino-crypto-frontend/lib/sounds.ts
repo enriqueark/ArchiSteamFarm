@@ -10,24 +10,25 @@ export function playDealSound() {
   try {
     const c = getCtx();
     const t = c.currentTime;
-    const dur = 0.07;
+    const dur = 0.15;
     const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) {
       const p = i / d.length;
-      d[i] = (Math.random() * 2 - 1) * (1 - p) * 0.4;
+      const env = p < 0.1 ? p / 0.1 : Math.exp(-(p - 0.1) * 8);
+      d[i] = (Math.random() * 2 - 1) * env * 0.2;
     }
     const src = c.createBufferSource();
     src.buffer = buf;
-    const filt = c.createBiquadFilter();
-    filt.type = "bandpass";
-    filt.frequency.value = 3000;
-    filt.Q.value = 0.5;
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(6000, t);
+    lp.frequency.exponentialRampToValueAtTime(800, t + dur);
     const gain = c.createGain();
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(filt);
-    filt.connect(gain);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.linearRampToValueAtTime(0.0, t + dur);
+    src.connect(lp);
+    lp.connect(gain);
     gain.connect(c.destination);
     src.start(t);
   } catch {}
