@@ -160,7 +160,7 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-40%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
               {!game?.dealerRevealed ? (
@@ -177,7 +177,7 @@ export default function BlackjackPage() {
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-40%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
@@ -248,33 +248,23 @@ export default function BlackjackPage() {
           </>
         ) : (
           <div style={{ display: "flex", gap: 8, width: "100%", justifyContent: "center" }}>
-            {(["HIT", "STAND", "DOUBLE"] as BlackjackAction[]).map((a) => {
-              const isStand = a === "STAND";
-              const dis = ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2);
-              return (
-                <button key={a} onClick={() => act(a)} disabled={dis}
-                  style={{
-                    flex: 1, height: 48, borderRadius: 14, border: "none", cursor: dis ? "default" : "pointer",
-                    background: isStand ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
-                    boxShadow: isStand ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
-                    color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: dis ? 0.3 : 1,
-                  }}>
-                  {a.charAt(0) + a.slice(1).toLowerCase()}
-                </button>
-              );
-            })}
-            {game?.canSplit && (
-              <button onClick={() => act("SPLIT")} disabled={ld}
-                style={{ flex: 1, height: 48, borderRadius: 14, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
-                Split
+            {([
+              { action: "HIT" as BlackjackAction, label: "Hit", dis: ld },
+              { action: "STAND" as BlackjackAction, label: "Stand", dis: ld, red: true },
+              { action: "DOUBLE" as BlackjackAction, label: "Double", dis: ld || (hand?.cards.length || 0) > 2 },
+              { action: "SPLIT" as BlackjackAction, label: "Split", dis: ld || !game?.canSplit },
+              { action: "INSURANCE" as BlackjackAction, label: "Insurance", dis: ld || !game?.canInsurance },
+            ]).map(({ action, label, dis, red }) => (
+              <button key={action} onClick={() => !dis && act(action)} disabled={dis}
+                style={{
+                  flex: 1, height: 48, borderRadius: 14, border: "none", cursor: dis ? "default" : "pointer",
+                  background: red ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
+                  boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
+                  color: dis && !red ? "#555" : "#fff", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: dis && !red ? 0.4 : 1,
+                }}>
+                {label}
               </button>
-            )}
-            {game?.canInsurance && (
-              <button onClick={() => act("INSURANCE")} disabled={ld}
-                style={{ flex: 1, height: 48, borderRadius: 14, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 16, fontWeight: 500, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
-                Insurance
-              </button>
-            )}
+            ))}
           </div>
         )}
       </div>
