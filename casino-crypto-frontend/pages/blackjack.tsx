@@ -209,21 +209,22 @@ export default function BlackjackPage() {
         ) : (
           <div style={{ display: "flex", gap: 8, width: "100%" }}>
             {([
-              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "➕", iconBg: "#22c55e" },
-              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "🛑", iconBg: "#ef4444" },
-              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, icon: "↔", iconBg: "#3b82f6" },
-              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, icon: "⬆", iconBg: "#f59e0b" },
-            ]).map(({ a, l, dis, icon, iconBg }) => (
+              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, iconBg: "#22c55e", iconSym: "+" },
+              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, iconBg: "#ef4444", iconSym: "◼" },
+              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, iconBg: "#3b82f6", iconSym: "⇔" },
+              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, iconBg: "#f59e0b", iconSym: "⇈" },
+            ]).map(({ a, l, dis, iconBg, iconSym }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, height: 52, borderRadius: 14, border: "1px solid #2a2a2a",
+                  flex: 1, minHeight: 50, padding: "16px 20px", borderRadius: 12, border: "none",
                   cursor: dis ? "default" : "pointer",
-                  background: "linear-gradient(180deg,#1e1e1e,#141414)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G,
+                  background: "#1a1a1a",
+                  boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  color: "#fff", fontSize: 18, fontWeight: 500, fontFamily: G,
                   opacity: dis ? 0.3 : 1,
                 }}>
-                <span style={{ width: 24, height: 24, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: "1" }}>{icon}</span>
+                <span style={{ width: 26, height: 26, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>{iconSym}</span>
                 {l}
               </button>
             ))}
