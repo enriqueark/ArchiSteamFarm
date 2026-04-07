@@ -64,7 +64,8 @@ export default function BlackjackPage() {
   const push = st === "PUSH";
   const ended = won || lost || push;
 
-  const tableImg = !game ? TABLE_IDLE : active ? TABLE_ACTIVE : won ? TABLE_WIN : lost ? TABLE_LOSE : TABLE_IDLE;
+  const tableImg = !game || ended ? TABLE_IDLE : active ? TABLE_ACTIVE : TABLE_IDLE;
+  const tableOverlay = won ? TABLE_WIN : lost ? TABLE_LOSE : null;
 
   const load = useCallback(async () => {
     try { const g = await getActiveBlackjackGame("USDT"); if (g) setGame(g); } catch {}
@@ -72,6 +73,7 @@ export default function BlackjackPage() {
   useEffect(() => { load(); }, [load]);
 
   const play = async () => {
+    if (ended) setGame(null);
     setErr(null); setLd(true);
     try {
       const betAtomic = String(Math.round(parseFloat(bet) * 1e8));
@@ -96,152 +98,142 @@ export default function BlackjackPage() {
     finally { setLd(false); }
   };
 
-  const newGame = () => setGame(null);
-
   const hand = game?.playerHands?.[game.activeHandIndex || 0];
   const dCards = game?.dealerVisibleCards || [];
-  const dVal = game?.dealerRevealed ? "?" : "?";
+
+  const calcDealerVal = () => {
+    if (!game?.dealerRevealed) return "?";
+    return (game.dealerCards || []).reduce((s: number, c: string) => {
+      const r = c.slice(0, -1);
+      return s + (r === "A" ? 11 : ["K", "Q", "J"].includes(r) ? 10 : parseInt(r));
+    }, 0);
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
-
-      {/* Blackjack title */}
-      <div style={{ width: "100%", maxWidth: 800, marginBottom: 8 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#fff", margin: 0, fontFamily: G }}>Blackjack</h1>
-        <p style={{ fontSize: 12, color: "#828282", margin: "4px 0 0", fontFamily: G }}>Dealer stands on 17+. Max bet per hand: 5000 COINS.</p>
-      </div>
-
-      {/* Table area */}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* Table container */}
       <div style={{ position: "relative", width: "100%", maxWidth: 800, aspectRatio: "988/682" }}>
-        <img src={tableImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16 }} />
+        {/* Base table */}
+        <img src={tableImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0 }} />
 
-        {/* Card deck (top right) */}
-        <div style={{ position: "absolute", top: "5%", right: "8%", width: 50, height: 70, borderRadius: 6, background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)", border: "1px solid #444", boxShadow: "2px 2px 0 #111, 4px 4px 0 #0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ width: 32, height: 44, borderRadius: 4, border: "1px solid #555", background: "repeating-linear-gradient(45deg,#222,#222 3px,#2a2a2a 3px,#2a2a2a 6px)" }} />
+        {/* Win/lose overlay */}
+        {tableOverlay && (
+          <img src={tableOverlay} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0, pointerEvents: "none" }} />
+        )}
+
+        {/* Card deck (top right inside table) */}
+        <div style={{ position: "absolute", top: "6%", right: "15%", width: 44, height: 62, borderRadius: 5, background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)", border: "1px solid #444", boxShadow: "2px 2px 0 #111, 4px 4px 0 #0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 28, height: 40, borderRadius: 3, border: "1px solid #555", background: "repeating-linear-gradient(45deg,#222,#222 3px,#2a2a2a 3px,#2a2a2a 6px)" }} />
         </div>
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "14%", left: "50%", transform: "translateX(-50%)" }}>
+          <div style={{ position: "absolute", top: "16%", left: "50%", transform: "translateX(-50%)" }}>
             <div style={{ position: "relative", height: 105, width: dCards.length * 30 + 70 }}>
               {dCards.map((c, i) => <Card key={`d${i}`} code={c} idx={i} faceDown={!game.dealerRevealed && i === 1} />)}
             </div>
-            <div style={{ textAlign: "center", marginTop: 2 }}>
-              <span style={{ background: "rgba(0,0,0,.7)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>
-                {game.dealerRevealed ? dCards.reduce((s, c) => { const r = c.slice(0, -1); return s + (r === "A" ? 11 : ["K","Q","J"].includes(r) ? 10 : parseInt(r)); }, 0) : dVal}
-              </span>
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>{calcDealerVal()}</span>
             </div>
           </div>
         )}
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "20%", left: "50%", transform: "translateX(-50%)" }}>
+          <div style={{ position: "absolute", bottom: "28%", left: "50%", transform: "translateX(-50%)" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
-            <div style={{ textAlign: "center", marginTop: 2 }}>
-              <span style={{ background: "rgba(0,0,0,.7)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>
-                {hand.value}
-              </span>
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>{hand.value}</span>
             </div>
           </div>
         )}
 
-        {/* Result overlay */}
+        {/* Result overlay text */}
         {ended && (
           <div style={{ position: "absolute", top: "44%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
-            <div style={{
-              fontSize: 26, fontWeight: 800, fontFamily: G, padding: "10px 28px", borderRadius: 14, color: "#fff",
-              background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)",
-              textShadow: "0 2px 6px rgba(0,0,0,.4)",
-            }}>
+            <div style={{ fontSize: 24, fontWeight: 800, fontFamily: G, padding: "8px 24px", borderRadius: 12, color: "#fff", background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)", textShadow: "0 2px 6px rgba(0,0,0,.4)" }}>
               {won ? "YOU WIN!" : lost ? "BUST" : "PUSH"}
             </div>
-            {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 16, fontWeight: 700, marginTop: 6, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
+            {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 15, fontWeight: 700, marginTop: 6, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
           </div>
         )}
 
-        {/* Bet chips on table (when betting or active) */}
-        {game && (
-          <div style={{ position: "absolute", bottom: "8%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 40, alignItems: "flex-end" }}>
-            {parseFloat(game.sideBet21Plus3Atomic || "0") > 0 && (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 4px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: G }}>$</span>
-                </div>
-                <span style={{ color: "#fff", fontSize: 12, fontFamily: G }}>{fmtCoins(game.sideBet21Plus3Atomic)}</span>
-                <p style={{ color: "#828282", fontSize: 10, margin: "2px 0 0", fontFamily: G }}>21+3</p>
-              </div>
-            )}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 4px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-                <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: G }}>$</span>
-              </div>
-              <span style={{ color: "#fff", fontSize: 12, fontFamily: G }}>{fmtCoins(game.mainBetAtomic)}</span>
-              <p style={{ color: "#828282", fontSize: 10, margin: "2px 0 0", fontFamily: G }}>Bet</p>
+        {/* Bet chips ON the table (bottom area) */}
+        <div style={{ position: "absolute", bottom: "8%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 32, alignItems: "flex-end" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 3px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
             </div>
-            {parseFloat(game.sideBetPairsAtomic || "0") > 0 && (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 4px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: G }}>$</span>
-                </div>
-                <span style={{ color: "#fff", fontSize: 12, fontFamily: G }}>{fmtCoins(game.sideBetPairsAtomic)}</span>
-                <p style={{ color: "#828282", fontSize: 10, margin: "2px 0 0", fontFamily: G }}>Pairs</p>
-              </div>
-            )}
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 600, fontFamily: G }}>{game ? fmtCoins(game.sideBet21Plus3Atomic) : side21}</span>
+            <p style={{ color: "#828282", fontSize: 10, margin: "1px 0 0", fontFamily: G }}>21+3</p>
           </div>
-        )}
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 3px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
+            </div>
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 600, fontFamily: G }}>{game ? fmtCoins(game.mainBetAtomic) : bet}</span>
+            <p style={{ color: "#828282", fontSize: 10, margin: "1px 0 0", fontFamily: G }}>Bet</p>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 3px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
+            </div>
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 600, fontFamily: G }}>{game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs}</span>
+            <p style={{ color: "#828282", fontSize: 10, margin: "1px 0 0", fontFamily: G }}>Pairs</p>
+          </div>
+        </div>
       </div>
 
-      {/* Control bar */}
+      {/* Control bar — overlapping table bottom */}
       <div style={{
-        width: "100%", maxWidth: 800, borderRadius: 20, padding: "14px 20px", marginTop: -20,
+        width: "100%", maxWidth: 730, borderRadius: 20, padding: "12px 20px", marginTop: -24,
         background: "linear-gradient(180deg, #161616, #0d0d0d)",
         boxShadow: "0 -5px 30px #090909",
         display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 10,
       }}>
         {!active ? (
           <>
-            <div style={{ flex: 1, display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, display: "flex", gap: 8 }}>
               <div style={{ flex: 1 }}>
                 <p style={{ color: "#828282", fontSize: 10, margin: "0 0 3px", fontFamily: G }}>Main bet (COINS)</p>
                 <input value={bet} onChange={(e) => setBet(e.target.value)}
-                  style={{ width: "100%", height: 36, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 12px", boxSizing: "border-box" }} />
+                  style={{ width: "100%", height: 34, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 10px", boxSizing: "border-box" }} />
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: "#828282", fontSize: 10, margin: "0 0 3px", fontFamily: G }}>Pairs side bet (optional)</p>
                 <input value={sidePairs} onChange={(e) => setSidePairs(e.target.value)}
-                  style={{ width: "100%", height: 36, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 12px", boxSizing: "border-box" }} />
+                  style={{ width: "100%", height: 34, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 10px", boxSizing: "border-box" }} />
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: "#828282", fontSize: 10, margin: "0 0 3px", fontFamily: G }}>21+3 side bet (optional)</p>
                 <input value={side21} onChange={(e) => setSide21(e.target.value)}
-                  style={{ width: "100%", height: 36, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 12px", boxSizing: "border-box" }} />
+                  style={{ width: "100%", height: 34, borderRadius: 10, border: "none", outline: "none", background: "#090909", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, padding: "0 10px", boxSizing: "border-box" }} />
               </div>
             </div>
-            <button onClick={ended ? newGame : play} disabled={ld}
-              style={{ height: 44, paddingLeft: 24, paddingRight: 24, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", gap: 8, opacity: ld ? 0.5 : 1, whiteSpace: "nowrap" }}>
-              {ended ? "New Game" : ld ? "..." : "▶ Play"}
+            <button onClick={play} disabled={ld}
+              style={{ height: 42, paddingLeft: 22, paddingRight: 22, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", gap: 6, opacity: ld ? 0.5 : 1, whiteSpace: "nowrap" }}>
+              ▶ Play
             </button>
           </>
         ) : (
           <div style={{ display: "flex", gap: 8, width: "100%" }}>
             {(["HIT", "STAND", "DOUBLE"] as BlackjackAction[]).map((a) => (
               <button key={a} onClick={() => act(a)} disabled={ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2)}
-                style={{ flex: 1, height: 44, borderRadius: 12, border: "none", cursor: "pointer", background: a === "STAND" ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a", boxShadow: a === "STAND" ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2) ? 0.3 : 1 }}>
+                style={{ flex: 1, height: 42, borderRadius: 12, border: "none", cursor: "pointer", background: a === "STAND" ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a", boxShadow: a === "STAND" ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld || (a === "DOUBLE" && (hand?.cards.length || 0) > 2) ? 0.3 : 1 }}>
                 {a.charAt(0) + a.slice(1).toLowerCase()}
               </button>
             ))}
             {game?.canSplit && (
               <button onClick={() => act("SPLIT")} disabled={ld}
-                style={{ flex: 1, height: 44, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
+                style={{ flex: 1, height: 42, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
                 Split
               </button>
             )}
             {game?.canInsurance && (
               <button onClick={() => act("INSURANCE")} disabled={ld}
-                style={{ flex: 1, height: 44, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
+                style={{ flex: 1, height: 42, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 15, fontWeight: 600, fontFamily: G, opacity: ld ? 0.3 : 1 }}>
                 Insurance
               </button>
             )}
@@ -249,8 +241,8 @@ export default function BlackjackPage() {
         )}
       </div>
 
-      {err && <p style={{ color: "#f34950", fontSize: 12, fontFamily: G, margin: "8px 0 0" }}>{err}</p>}
-      {!active && !ended && <p style={{ color: "#828282", fontSize: 11, fontFamily: G, margin: "6px 0 0" }}>Side bets are optional.</p>}
+      {err && <p style={{ color: "#f34950", fontSize: 12, fontFamily: G, margin: "6px 0 0" }}>{err}</p>}
+      {!active && !ended && <p style={{ color: "#828282", fontSize: 11, fontFamily: G, margin: "4px 0 0" }}>Side bets are optional.</p>}
     </div>
   );
 }
