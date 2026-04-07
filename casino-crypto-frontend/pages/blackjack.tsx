@@ -31,7 +31,7 @@ function Card({ code, faceDown, idx }: { code: string; faceDown?: boolean; idx: 
   const left = idx * 30;
   const base: React.CSSProperties = {
     width: 70, height: 100, borderRadius: 8, position: "absolute", left, top: 0,
-    animation: `dealCard 0.4s ease-out ${idx * 0.2}s both`,
+    animation: `dealCard 0.5s ease-out ${idx * 1}s both`,
   };
 
   if (faceDown) return (
@@ -123,13 +123,13 @@ export default function BlackjackPage() {
         )}
 
         {/* Card deck (top right inside table) */}
-        <div style={{ position: "absolute", top: "6%", right: "15%", width: 44, height: 62, borderRadius: 5, background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)", border: "1px solid #444", boxShadow: "2px 2px 0 #111, 4px 4px 0 #0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", top: "3%", right: "22%", width: 44, height: 62, borderRadius: 5, background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)", border: "1px solid #444", boxShadow: "2px 2px 0 #111, 4px 4px 0 #0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: 28, height: 40, borderRadius: 3, border: "1px solid #555", background: "repeating-linear-gradient(45deg,#222,#222 3px,#2a2a2a 3px,#2a2a2a 6px)" }} />
         </div>
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "16%", left: "50%", transform: "translateX(-50%)" }}>
+          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)" }}>
             <div style={{ position: "relative", height: 105, width: (showDealerHidden ? 2 : dCards.length) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
               {showDealerHidden ? (
@@ -146,7 +146,7 @@ export default function BlackjackPage() {
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "28%", left: "50%", transform: "translateX(-50%)" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
@@ -159,19 +159,19 @@ export default function BlackjackPage() {
         {/* Result overlay text */}
         {ended && (
           <div style={{ position: "absolute", top: "44%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
-            <div style={{ fontSize: 24, fontWeight: 800, fontFamily: G, padding: "8px 24px", borderRadius: 12, color: "#fff", background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)", textShadow: "0 2px 6px rgba(0,0,0,.4)" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: G, padding: "6px 18px", borderRadius: 10, color: "#fff", background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)" }}>
               {won ? "YOU WIN!" : lost ? "BUST" : "PUSH"}
             </div>
-            {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 15, fontWeight: 700, marginTop: 6, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
+            {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 13, fontWeight: 700, marginTop: 4, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
           </div>
         )}
 
         {/* Bet chips ON the table (bottom area) */}
         <div style={{ position: "absolute", bottom: "6%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 24, alignItems: "flex-end" }}>
           {[
-            { label: "21+3", val: game ? fmtCoins(game.sideBet21Plus3Atomic) : side21 },
-            { label: "Bet", val: game ? fmtCoins(game.mainBetAtomic) : bet },
             { label: "Pairs", val: game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs },
+            { label: "Bet", val: game ? fmtCoins(game.mainBetAtomic) : bet },
+            { label: "21+3", val: game ? fmtCoins(game.sideBet21Plus3Atomic) : side21 },
           ].map((chip) => (
             <div key={chip.label} style={{ textAlign: "center" }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 4px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
