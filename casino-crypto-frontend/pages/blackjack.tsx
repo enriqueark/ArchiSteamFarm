@@ -207,23 +207,23 @@ export default function BlackjackPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 10, width: "100%" }}>
+          <div style={{ display: "flex", gap: 8, width: "100%" }}>
             {([
-              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld },
-              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, red: true },
-              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2 },
-              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit },
-            ]).map(({ a, l, dis, red }) => (
+              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "➕", iconBg: "#22c55e" },
+              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "🛑", iconBg: "#ef4444" },
+              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, icon: "↔", iconBg: "#3b82f6" },
+              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, icon: "⬆", iconBg: "#f59e0b" },
+            ]).map(({ a, l, dis, icon, iconBg }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, height: 48, borderRadius: 12, border: "none",
+                  flex: 1, height: 52, borderRadius: 14, border: "1px solid #2a2a2a",
                   cursor: dis ? "default" : "pointer",
-                  background: red ? "linear-gradient(180deg,#ac2e30,#f75154)" : "#1a1a1a",
-                  boxShadow: red ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476" : "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
-                  color: "#fff",
-                  fontSize: 18, fontWeight: 500, fontFamily: G,
-                  opacity: dis ? 0.35 : 1,
+                  background: "linear-gradient(180deg,#1e1e1e,#141414)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  color: "#fff", fontSize: 16, fontWeight: 500, fontFamily: G,
+                  opacity: dis ? 0.3 : 1,
                 }}>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: "1" }}>{icon}</span>
                 {l}
               </button>
             ))}
