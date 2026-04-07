@@ -129,26 +129,36 @@ export default function BlackjackPage() {
   const hand = game?.playerHands?.[game.activeHandIndex || 0];
   const dCards = game?.dealerVisibleCards || [];
 
-  const calcVal = (cards: string[]) => cards.reduce((s: number, c: string) => {
-    const r = c.slice(0, -1);
-    const v = r === "A" ? 11 : ["K", "Q", "J"].includes(r) ? 10 : parseInt(r);
-    return s + v;
-  }, 0);
-
-  const displayVal = (cards: string[], value: number) => {
-    const hasAce = cards.some((c) => c.startsWith("A"));
-    if (hasAce && value <= 21) {
-      const low = value - 10;
-      if (low > 0 && low !== value) return `${low}/${value}`;
+  const calcVal = (cards: string[]) => {
+    let total = 0;
+    let aces = 0;
+    for (const c of cards) {
+      const r = c.slice(0, -1);
+      if (r === "A") { total += 11; aces++; }
+      else if (["K", "Q", "J"].includes(r)) total += 10;
+      else total += parseInt(r);
     }
-    return String(value);
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    return total;
   };
 
-  const dealerVisibleVal = dCards.length > 0
-    ? game?.dealerRevealed
-      ? calcVal((game.dealerCards || []).slice(0, revealedDealerCount || 1))
-      : calcVal([dCards[0]])
-    : 0;
+  const displayVal = (cards: string[]) => {
+    let totalHigh = 0;
+    let aces = 0;
+    for (const c of cards) {
+      const r = c.slice(0, -1);
+      if (r === "A") { totalHigh += 11; aces++; }
+      else if (["K", "Q", "J"].includes(r)) totalHigh += 10;
+      else totalHigh += parseInt(r);
+    }
+    const totalLow = totalHigh - (aces > 0 ? 10 : 0);
+    if (aces > 0 && totalHigh <= 21 && totalLow !== totalHigh) {
+      return `${totalLow}/${totalHigh}`;
+    }
+    while (totalHigh > 21 && aces > 0) { totalHigh -= 10; aces--; }
+    return String(totalHigh);
+  };
+
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -181,7 +191,7 @@ export default function BlackjackPage() {
               )}
             </div>
             <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>
-              {game?.dealerRevealed ? displayVal(game.dealerCards || [], dealerVisibleVal as number) : dealerVisibleVal}
+              {game?.dealerRevealed ? displayVal((game.dealerCards || []).slice(0, revealedDealerCount)) : displayVal([dCards[0]])}
             </span>
           </div>
         )}
@@ -193,7 +203,7 @@ export default function BlackjackPage() {
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
             <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>
-              {displayVal(hand.cards, hand.value)}
+              {displayVal(hand.cards)}
             </span>
           </div>
         )}

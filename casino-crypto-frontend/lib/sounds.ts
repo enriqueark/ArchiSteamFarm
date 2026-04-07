@@ -24,23 +24,26 @@ function playTone(freq: number, duration: number, type: OscillatorType = "sine",
 export function playDealSound() {
   try {
     const c = getCtx();
-    const bufferSize = 4096;
-    const noise = c.createScriptProcessor(bufferSize, 1, 1);
-    const gain = c.createGain();
-    gain.gain.value = 0.08;
-    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.06);
-    let samples = 0;
-    noise.onaudioprocess = (e) => {
-      const output = e.outputBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = Math.random() * 2 - 1;
-        samples++;
+    const len = 0.12;
+    const sr = c.sampleRate;
+    const buf = c.createBuffer(1, sr * len, sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * 40);
+      data[i] = (Math.random() * 2 - 1) * env * 0.3;
+      if (t > 0.02 && t < 0.06) {
+        data[i] += Math.sin(t * 2000) * env * 0.15;
       }
-      if (samples > 4096 * 3) { noise.disconnect(); gain.disconnect(); }
-    };
-    noise.connect(gain);
-    gain.connect(c.destination);
-    setTimeout(() => { try { noise.disconnect(); gain.disconnect(); } catch {} }, 80);
+    }
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const hp = c.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 2000;
+    src.connect(hp);
+    hp.connect(c.destination);
+    src.start();
   } catch {}
 }
 
