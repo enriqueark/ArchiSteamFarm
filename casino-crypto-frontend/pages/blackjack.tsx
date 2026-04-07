@@ -131,9 +131,18 @@ export default function BlackjackPage() {
 
   const calcVal = (cards: string[]) => cards.reduce((s: number, c: string) => {
     const r = c.slice(0, -1);
-    let v = r === "A" ? 11 : ["K", "Q", "J"].includes(r) ? 10 : parseInt(r);
+    const v = r === "A" ? 11 : ["K", "Q", "J"].includes(r) ? 10 : parseInt(r);
     return s + v;
   }, 0);
+
+  const displayVal = (cards: string[], value: number) => {
+    const hasAce = cards.some((c) => c.startsWith("A"));
+    if (hasAce && value <= 21) {
+      const low = value - 10;
+      if (low > 0 && low !== value) return `${low}/${value}`;
+    }
+    return String(value);
+  };
 
   const dealerVisibleVal = dCards.length > 0
     ? game?.dealerRevealed
@@ -161,7 +170,7 @@ export default function BlackjackPage() {
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
           <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 30 + 70 }}>
+            <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 30 + 70, marginLeft: 15 }}>
               <Card code={dCards[0]} idx={0} />
               {!game?.dealerRevealed ? (
                 <Card code="XX" idx={1} faceDown />
@@ -171,17 +180,21 @@ export default function BlackjackPage() {
                 ))
               )}
             </div>
-            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4, alignSelf: "center" }}>{dealerVisibleVal}</span>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>
+              {game?.dealerRevealed ? displayVal(game.dealerCards || [], dealerVisibleVal as number) : dealerVisibleVal}
+            </span>
           </div>
         )}
 
         {/* Player cards */}
         {hand && (
           <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
+            <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70, marginLeft: 15 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
-            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4, alignSelf: "center" }}>{hand.value}</span>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>
+              {displayVal(hand.cards, hand.value)}
+            </span>
           </div>
         )}
 
