@@ -56,6 +56,7 @@ export default function BlackjackPage() {
   const [side21, setSide21] = useState("0");
   const [ld, setLd] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   const st = game?.status;
   const active = st === "ACTIVE";
@@ -64,8 +65,19 @@ export default function BlackjackPage() {
   const push = st === "PUSH";
   const ended = won || lost || push;
 
-  const tableImg = !game || ended ? TABLE_IDLE : active ? TABLE_ACTIVE : TABLE_IDLE;
-  const tableOverlay = won ? TABLE_WIN : lost ? TABLE_LOSE : null;
+  useEffect(() => {
+    if (ended && game?.dealerRevealed) {
+      const dealerCardCount = (game.dealerCards || []).length;
+      const delay = Math.max(1, dealerCardCount - 1) * 1000 + 500;
+      const t = setTimeout(() => setShowResult(true), delay);
+      return () => clearTimeout(t);
+    } else {
+      setShowResult(false);
+    }
+  }, [ended, game?.dealerRevealed, game?.dealerCards]);
+
+  const tableImg = !game ? TABLE_IDLE : active ? TABLE_ACTIVE : (showResult ? TABLE_IDLE : TABLE_ACTIVE);
+  const tableOverlay = showResult ? (won ? TABLE_WIN : lost ? TABLE_LOSE : null) : null;
 
   const load = useCallback(async () => {
     try { const g = await getActiveBlackjackGame("USDT"); if (g) setGame(g); } catch {}
@@ -73,7 +85,7 @@ export default function BlackjackPage() {
   useEffect(() => { load(); }, [load]);
 
   const play = async () => {
-    if (ended) setGame(null);
+    if (ended) { setGame(null); setShowResult(false); }
     setErr(null); setLd(true);
     try {
       const betAtomic = String(Math.round(parseFloat(bet) * 1e8));
@@ -108,7 +120,6 @@ export default function BlackjackPage() {
   }, 0);
 
   const dealerVisibleVal = dCards.length > 0 ? calcVal(game?.dealerRevealed ? (game.dealerCards || []) : [dCards[0]]) : 0;
-  const showDealerHidden = game && !game.dealerRevealed && dCards.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -129,38 +140,34 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)" }}>
-            <div style={{ position: "relative", height: 105, width: (showDealerHidden ? 2 : dCards.length) * 30 + 70 }}>
+          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? dCards.length : 2) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
-              {showDealerHidden ? (
+              {!game?.dealerRevealed ? (
                 <Card code="XX" idx={1} faceDown />
               ) : (
                 dCards.slice(1).map((c, i) => <Card key={`d${i + 1}`} code={c} idx={i + 1} />)
               )}
             </div>
-            <div style={{ textAlign: "center", marginTop: 4 }}>
-              <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>{dealerVisibleVal}</span>
-            </div>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{dealerVisibleVal}</span>
           </div>
         )}
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>
-            <div style={{ textAlign: "center", marginTop: 4 }}>
-              <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G }}>{hand.value}</span>
-            </div>
+            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{hand.value}</span>
           </div>
         )}
 
-        {/* Result overlay text */}
-        {ended && (
+        {/* Result overlay text — only after reveal delay */}
+        {showResult && (
           <div style={{ position: "absolute", top: "44%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: G, padding: "6px 18px", borderRadius: 10, color: "#fff", background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)" }}>
-              {won ? "YOU WIN!" : lost ? "BUST" : "PUSH"}
+              {won ? "YOU WIN!" : lost ? "LOSE" : "PUSH"}
             </div>
             {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 13, fontWeight: 700, marginTop: 4, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
           </div>
