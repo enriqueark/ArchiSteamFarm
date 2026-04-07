@@ -60,6 +60,7 @@ export default function BlackjackPage() {
   const [err, setErr] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [revealedDealerCount, setRevealedDealerCount] = useState(0);
+  const [revealing, setRevealing] = useState(false);
 
   const st = game?.status;
   const active = st === "ACTIVE";
@@ -72,11 +73,12 @@ export default function BlackjackPage() {
     if (ended && game?.dealerRevealed) {
       const all = game.dealerCards || [];
       setRevealedDealerCount(1);
+      setRevealing(true);
       const t: ReturnType<typeof setTimeout>[] = [];
       for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound(); }, i * 400));
-      t.push(setTimeout(() => { setShowResult(true); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
-      return () => t.forEach(clearTimeout);
-    } else { setShowResult(false); setRevealedDealerCount(0); }
+      t.push(setTimeout(() => { setShowResult(true); setRevealing(false); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
+      return () => { t.forEach(clearTimeout); setRevealing(false); };
+    } else { setShowResult(false); setRevealedDealerCount(0); setRevealing(false); }
   }, [ended, game?.dealerRevealed, game?.dealerCards, game?.status]);
 
   const tableImg = !game ? TABLE_IDLE : active ? TABLE_ACTIVE : (showResult ? TABLE_IDLE : TABLE_ACTIVE);
@@ -200,7 +202,7 @@ export default function BlackjackPage() {
               ))}
             </div>
             {/* Play button */}
-            <button onClick={play} disabled={ld} style={{ width: 181, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 18, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: ld ? 0.5 : 1 }}>
+            <button onClick={play} disabled={ld || revealing} style={{ width: 181, height: 48, borderRadius: 12, border: "none", cursor: ld || revealing ? "default" : "pointer", background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 18, fontWeight: 600, fontFamily: G, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: ld || revealing ? 0.5 : 1 }}>
               <img src={PLAY_ICON} alt="" style={{ width: 20, height: 20 }} /> Play
             </button>
           </div>
