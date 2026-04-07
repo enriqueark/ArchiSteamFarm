@@ -1,352 +1,271 @@
-import { useEffect, useMemo, useState } from "react";
-import Button from "@/components/Button";
-import Card from "@/components/Card";
-import Input from "@/components/Input";
-import { actBlackjack, getActiveBlackjackGame, startBlackjackGame, type BlackjackGame } from "@/lib/api";
+import { useState, useEffect, useCallback } from "react";
+import {
+  startBlackjackGame, actBlackjack, getActiveBlackjackGame,
+  type BlackjackGame, type BlackjackAction,
+} from "@/lib/api";
 
-const INTERNAL_GAME_CURRENCY = "USDT";
-const COIN_DECIMALS = 8;
-const MAX_BET_COINS = 5000;
-const DEALER_REVEAL_STEP_MS = 500;
-const BLACKJACK_REVEAL_LOCK_KEY = "blackjack:reveal-lock:v1";
+const A = "/assets/";
+const TABLE_IDLE = `${A}863ee14829df4334294390c64488345c.png`;
+const TABLE_ACTIVE = `${A}f8eee957459d78be189a8a4e8fc91da8.png`;
+const TABLE_WIN = `${A}e5bb966fcbce61d0903ae1672af8ef80.png`;
+const TABLE_LOSE = `${A}5ce16f3d9d067da2efb6a5fb48314eb1.png`;
+const CARD_BACK = `${A}69e6f934709c04b3cc4289edf9df5676.svg`;
+const PLAY_ICON = `${A}2d7f2642f861986711d393c7536da7fc.svg`;
 
-const toAtomicString = (coinsRaw: string): string => {
-  const value = Number(coinsRaw);
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error("Bet must be a positive COINS value");
-  }
-  if (value > MAX_BET_COINS) {
-    throw new Error(`Maximum bet is ${MAX_BET_COINS} COINS`);
-  }
-  return String(Math.round(value * 10 ** COIN_DECIMALS));
-};
+const G = '"DM Sans","Gotham",sans-serif';
 
-const fromAtomic = (atomic: string | null | undefined): string => {
-  if (!atomic) {
-    return "0.00";
-  }
-  const value = Number(atomic);
-  if (!Number.isFinite(value)) {
-    return "0.00";
-  }
-  return (value / 10 ** COIN_DECIMALS).toFixed(2);
-};
+const SUIT_SYMBOLS: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
+const SUIT_COLORS: Record<string, string> = { S: "#1a1919", H: "#bd0926", D: "#bd0926", C: "#1a1919" };
 
-const toOptionalAtomicString = (coinsRaw: string): string | undefined => {
-  const cleaned = coinsRaw.trim();
-  if (!cleaned) {
-    return undefined;
-  }
-  const value = Number(cleaned);
-  if (!Number.isFinite(value) || value < 0) {
-    throw new Error("Side bet must be 0 or more");
-  }
-  if (value === 0) {
-    return undefined;
-  }
-  if (value > MAX_BET_COINS) {
-    throw new Error(`Maximum side bet is ${MAX_BET_COINS} COINS`);
-  }
-  return String(Math.round(value * 10 ** COIN_DECIMALS));
-};
+function parseCard(code: string): { rank: string; suit: string; display: string } {
+  const suit = code.slice(-1);
+  const rank = code.slice(0, -1);
+  const displayRank = rank === "10" ? "10" : rank.toUpperCase();
+  return { rank: displayRank, suit, display: `${displayRank}${SUIT_SYMBOLS[suit] || ""}` };
+}
 
-const cardSuit = (card: string): "S" | "H" | "D" | "C" => {
-  const suit = card.slice(-1);
-  return suit === "H" || suit === "D" || suit === "C" ? suit : "S";
-};
+function fmtCoins(v: string | null | undefined): string {
+  if (!v) return "0.00";
+  const n = Number(v) / 1e8;
+  return isNaN(n) ? "0.00" : n.toFixed(2);
+}
 
-const cardRank = (card: string): string => card.slice(0, -1);
+function CardComponent({ code, faceDown, idx, isDealer }: { code: string; faceDown?: boolean; idx: number; isDealer?: boolean }) {
+  const { rank, suit } = parseCard(code);
+  const color = SUIT_COLORS[suit] || "#1a1919";
+  const suitChar = SUIT_SYMBOLS[suit] || "";
+  const offsetX = idx * 28;
+  const top = isDealer ? 20 : 0;
 
-const suitGlyph = (suit: "S" | "H" | "D" | "C"): string => {
-  if (suit === "H") return "♥";
-  if (suit === "D") return "♦";
-  if (suit === "C") return "♣";
-  return "♠";
-};
-
-const handValueFromCards = (cards: string[]): number => {
-  let total = 0;
-  let aces = 0;
-  for (const card of cards) {
-    const rank = cardRank(card);
-    if (rank === "A") {
-      total += 11;
-      aces += 1;
-      continue;
-    }
-    if (rank === "K" || rank === "Q" || rank === "J") {
-      total += 10;
-      continue;
-    }
-    const numeric = Number(rank);
-    total += Number.isFinite(numeric) ? numeric : 0;
-  }
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces -= 1;
-  }
-  return total;
-};
-
-const Chip = ({ label, value, color }: { label: string; value: string; color: string }) => (
-  <div className={`blackjack-chip blackjack-chip-bounce rounded-full px-3 py-2 text-xs font-semibold shadow-lg ${color}`}>
-    <div className="text-[10px] uppercase tracking-wide opacity-80">{label}</div>
-    <div>{value}</div>
-  </div>
-);
-
-const PlayingCard = ({ card, hidden, delayMs = 0 }: { card?: string; hidden?: boolean; delayMs?: number }) => {
-  if (hidden) {
+  if (faceDown) {
     return (
-      <div
-        className="blackjack-card blackjack-card-deal h-28 w-20 rounded-lg border border-red-700/70 bg-gradient-to-br from-red-900 to-red-600 p-2 shadow-lg"
-        style={{ animationDelay: `${delayMs}ms` }}
-      >
-        <div className="h-full w-full rounded border border-white/20 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.2),transparent_45%)]" />
+      <div style={{
+        width: 80, height: 115, borderRadius: 10, position: "absolute",
+        left: offsetX, top,
+        background: "linear-gradient(180deg, #1a1a1a, #282828)",
+        boxShadow: "0 4px 12px rgba(0,0,0,.4), 0 2px 0 #111",
+        border: "1px solid #333",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        animation: `dealCard 0.4s ease-out ${idx * 0.15}s both`,
+      }}>
+        <div style={{ width: 50, height: 70, borderRadius: 6, border: "1px solid #444", background: "#111" }} />
       </div>
     );
   }
-  if (!card) {
-    return (
-      <div className="h-28 w-20 rounded-lg border border-gray-700 bg-gray-900/40 p-2 text-xs text-gray-500 flex items-center justify-center">
-        --
-      </div>
-    );
-  }
-  const suit = cardSuit(card);
-  const isRed = suit === "H" || suit === "D";
+
   return (
-    <div
-      className="blackjack-card blackjack-card-deal h-28 w-20 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
-      style={{ animationDelay: `${delayMs}ms` }}
-    >
-      <div className={`text-sm font-bold ${isRed ? "text-red-500" : "text-gray-900"}`}>{cardRank(card)}</div>
-      <div className={`mt-4 text-center text-2xl ${isRed ? "text-red-500" : "text-gray-900"}`}>{suitGlyph(suit)}</div>
-      <div className={`text-right text-sm font-bold ${isRed ? "text-red-500" : "text-gray-900"}`}>{cardRank(card)}</div>
+    <div style={{
+      width: 80, height: 115, borderRadius: 10, position: "absolute",
+      left: offsetX, top,
+      background: "radial-gradient(circle at 30% 30%, #fff, #e8e8e8)",
+      boxShadow: "0 4px 12px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.5)",
+      display: "flex", flexDirection: "column", padding: "6px 8px",
+      animation: `dealCard 0.4s ease-out ${idx * 0.15}s both`,
+    }}>
+      <span style={{ fontSize: 16, fontWeight: 700, color, lineHeight: "1", fontFamily: G }}>{rank}</span>
+      <span style={{ fontSize: 12, color, lineHeight: "1" }}>{suitChar}</span>
+      <span style={{ fontSize: 32, color, position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", opacity: 0.15 }}>{suitChar}</span>
     </div>
   );
-};
+}
 
 export default function BlackjackPage() {
-  const [betCoins, setBetCoins] = useState("10.00");
-  const [pairsBetCoins, setPairsBetCoins] = useState("0");
-  const [plus3BetCoins, setPlus3BetCoins] = useState("0");
-  const [loading, setLoading] = useState(false);
   const [game, setGame] = useState<BlackjackGame | null>(null);
-  const [dealSeed, setDealSeed] = useState(0);
-  const [dealerRevealStep, setDealerRevealStep] = useState(1);
-  const [dealerRevealStartedAt, setDealerRevealStartedAt] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [bet, setBet] = useState("10.00");
+  const [sidePairs, setSidePairs] = useState("0");
+  const [side21, setSide21] = useState("0");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const setRevealLock = (locked: boolean) => {
-    if (typeof window === "undefined") return;
+  const status = game?.status;
+  const isActive = status === "ACTIVE";
+  const isWon = status === "WON";
+  const isLost = status === "LOST";
+  const isPush = status === "PUSH";
+
+  const tableImg = !game ? TABLE_IDLE : isActive ? TABLE_ACTIVE : isWon ? TABLE_WIN : isLost ? TABLE_LOSE : TABLE_IDLE;
+
+  const loadActive = useCallback(async () => {
     try {
-      if (locked) window.localStorage.setItem(BLACKJACK_REVEAL_LOCK_KEY, String(Date.now()));
-      else window.localStorage.removeItem(BLACKJACK_REVEAL_LOCK_KEY);
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (!game || !game.dealerRevealed) {
-      setDealerRevealStep(1);
-      setDealerRevealStartedAt(null);
-      return;
-    }
-    const totalCards = game.dealerCards.length;
-    if (totalCards <= 1) {
-      setDealerRevealStep(totalCards);
-      setDealerRevealStartedAt(Date.now());
-      return;
-    }
-    setDealerRevealStep(1);
-    setDealerRevealStartedAt(Date.now());
-    let cancelled = false;
-    let currentStep = 1;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleNext = () => {
-      timer = setTimeout(() => {
-        if (cancelled) return;
-        currentStep += 1;
-        setDealerRevealStep(currentStep);
-        if (currentStep < totalCards) scheduleNext();
-      }, DEALER_REVEAL_STEP_MS);
-    };
-    scheduleNext();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [game, game?.gameId, game?.dealerRevealed, game?.dealerCards.length, dealSeed]);
-
-  useEffect(() => {
-    setError(null);
-    getActiveBlackjackGame().then((active) => setGame(active)).catch(() => {});
+      const g = await getActiveBlackjackGame("COINS");
+      if (g) setGame(g);
+    } catch { /* no active game */ }
   }, []);
 
-  const dealerCardsDisplay = useMemo(() => {
-    if (!game) return [];
-    if (!game.dealerRevealed) return game.dealerVisibleCards ?? [];
-    const safeRevealStep = dealerRevealStartedAt === null ? 1 : dealerRevealStep;
-    return game.dealerCards.slice(0, Math.max(1, safeRevealStep));
-  }, [dealerRevealStartedAt, dealerRevealStep, game]);
+  useEffect(() => { loadActive(); }, [loadActive]);
 
-  const activeHand = game ? game.playerHands[game.activeHandIndex] : null;
-  const canAct = !!game && game.status === "ACTIVE";
-  const dealerRevealComplete = !!game && game.dealerRevealed && dealerRevealStartedAt !== null && dealerRevealStep >= game.dealerCards.length;
-  const canShowResult = !!game && game.status !== "ACTIVE" && dealerRevealComplete;
-  const canStartNewDeal = !game || canShowResult;
-  const dealerDisplayValue = dealerCardsDisplay.length > 0 ? handValueFromCards(dealerCardsDisplay) : 0;
-
-  useEffect(() => {
-    const shouldLock = !!game && game.status !== "ACTIVE" && game.dealerRevealed && !dealerRevealComplete;
-    setRevealLock(shouldLock);
-    return () => setRevealLock(false);
-  }, [dealerRevealComplete, game]);
-
-  const startGame = async () => {
-    setError(null);
-    setNotice(null);
-    setLoading(true);
+  const handlePlay = async () => {
+    setErr(null); setLoading(true);
     try {
-      const betAtomic = toAtomicString(betCoins);
-      const pairsAtomic = toOptionalAtomicString(pairsBetCoins);
-      const plus3Atomic = toOptionalAtomicString(plus3BetCoins);
-      const created = await startBlackjackGame({
-        currency: INTERNAL_GAME_CURRENCY,
-        betAtomic,
-        sideBetPairsAtomic: pairsAtomic,
-        sideBet21Plus3Atomic: plus3Atomic
-      });
-      setDealSeed(Date.now());
-      setGame(created);
-      setNotice("Blackjack game started.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to start blackjack");
-    } finally {
-      setLoading(false);
-    }
+      const betAtomic = String(Math.round(parseFloat(bet) * 1e8));
+      const pairsAtomic = parseFloat(sidePairs) > 0 ? String(Math.round(parseFloat(sidePairs) * 1e8)) : undefined;
+      const plus3Atomic = parseFloat(side21) > 0 ? String(Math.round(parseFloat(side21) * 1e8)) : undefined;
+      const g = await startBlackjackGame({ currency: "COINS", betAtomic, sideBetPairsAtomic: pairsAtomic, sideBet21Plus3Atomic: plus3Atomic });
+      setGame(g);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(false); }
   };
 
-  const doAction = async (action: "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE") => {
+  const handleAction = async (action: BlackjackAction) => {
     if (!game) return;
-    setError(null);
-    setLoading(true);
+    setErr(null); setLoading(true);
     try {
-      const next = await actBlackjack(game.gameId, action);
-      if (next.status !== "ACTIVE" && next.dealerRevealed) {
-        setDealerRevealStep(1);
-        setDealerRevealStartedAt(null);
-      }
-      setGame(next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Blackjack action failed");
-    } finally {
-      setLoading(false);
-    }
+      const g = await actBlackjack(game.gameId, action);
+      setGame(g);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(false); }
   };
+
+  const handleNewGame = () => { setGame(null); };
+
+  const playerHand = game?.playerHands?.[game.activeHandIndex || 0];
+  const dealerCards = game?.dealerVisibleCards || [];
+  const dealerValue = game?.dealerRevealed ? (game.dealerCards || []).reduce((sum, c) => {
+    const r = c.slice(0, -1);
+    if (r === "A") return sum + 11;
+    if (["K", "Q", "J"].includes(r)) return sum + 10;
+    return sum + parseInt(r);
+  }, 0) : "?";
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Blackjack</h1>
-      <p className="text-xs text-gray-400">Dealer stands on 17+. Max bet per hand: {MAX_BET_COINS} COINS.</p>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      {notice ? <p className="text-sm text-emerald-300">{notice}</p> : null}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, paddingBottom: 20 }}>
+      {/* Table */}
+      <div style={{ position: "relative", width: "100%", maxWidth: 800, aspectRatio: "988/682" }}>
+        <img src={tableImg} alt="Blackjack table" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 20 }} />
 
-      {canStartNewDeal ? (
-        <Card title="Start new hand">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Input label="Main bet (COINS)" value={betCoins} onChange={(e) => setBetCoins(e.target.value)} />
-            <Input label="Pairs side bet (optional)" value={pairsBetCoins} onChange={(e) => setPairsBetCoins(e.target.value)} placeholder="0" />
-            <Input label="21+3 side bet (optional)" value={plus3BetCoins} onChange={(e) => setPlus3BetCoins(e.target.value)} placeholder="0" />
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button onClick={() => void startGame()} disabled={loading || !canStartNewDeal}>
-              {loading ? "Starting..." : "Deal"}
-            </Button>
-            <span className="text-xs text-gray-400">Side bets are optional.</span>
-          </div>
-        </Card>
-      ) : null}
-
-      {game ? (
-        <div className="grid grid-cols-1 gap-4">
-          <Card title="Blackjack table" className="blackjack-table overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
-                <Chip label="Main" value={fromAtomic(game.mainBetAtomic)} color="border border-amber-300/30 bg-amber-500/20 text-amber-100" />
-                <Chip label="Pairs" value={fromAtomic(game.sideBetPairsAtomic)} color="border border-sky-300/30 bg-sky-500/20 text-sky-100" />
-                <Chip label="21+3" value={fromAtomic(game.sideBet21Plus3Atomic)} color="border border-fuchsia-300/30 bg-fuchsia-500/20 text-fuchsia-100" />
-                <Chip label="Insurance" value={fromAtomic(game.insuranceBetAtomic)} color="border border-emerald-300/30 bg-emerald-500/20 text-emerald-100" />
-              </div>
-              <div className="text-xs text-gray-300">
-                Status: <span className="font-semibold text-white">{game.status}</span>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
-              <div className="mb-2 text-xs uppercase tracking-wider text-gray-300">Dealer · Value {dealerDisplayValue}</div>
-              <div className="flex gap-3 flex-wrap">
-                {dealerCardsDisplay.map((card, idx) => {
-                  const shouldAnimateReveal = !!game.dealerRevealed && dealerRevealStartedAt !== null;
-                  const animationDelay = shouldAnimateReveal ? 0 : idx * 900;
-                  return (
-                    <PlayingCard key={`${dealSeed}-dealer-${card}-${idx}`} card={card} delayMs={animationDelay} />
-                  );
-                })}
-                {!game.dealerRevealed ? <PlayingCard hidden delayMs={dealerCardsDisplay.length * 900} /> : null}
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {game.playerHands.map((hand, handIndex) => (
-                <div
-                  key={`hand-${handIndex}`}
-                  className={`rounded-xl border p-3 ${
-                    handIndex === game.activeHandIndex ? "border-red-400/70 bg-red-900/20" : "border-white/10 bg-black/20"
-                  }`}
-                >
-                  <div className="mb-2 text-xs text-gray-300">
-                    Hand {handIndex + 1} · Stake {fromAtomic(hand.stakeAtomic)} · Value {hand.value}
-                    {hand.blackjack ? " · BLACKJACK" : ""}
-                    {hand.busted ? " · BUST" : ""}
-                  </div>
-                  <div className="flex gap-3 flex-wrap">
-                    {hand.cards.map((card, idx) => (
-                      <PlayingCard key={`${dealSeed}-player-${handIndex}-${card}-${idx}`} card={card} delayMs={idx * 500} />
-                    ))}
-                  </div>
-                </div>
+        {/* Dealer cards */}
+        {game && dealerCards.length > 0 && (
+          <div style={{ position: "absolute", top: "12%", left: "50%", transform: "translateX(-50%)" }}>
+            <div style={{ position: "relative", height: 120, width: dealerCards.length * 28 + 80 }}>
+              {dealerCards.map((c, i) => (
+                <CardComponent key={i} code={c} idx={i} isDealer faceDown={!game.dealerRevealed && i === 1} />
               ))}
             </div>
-          </Card>
-        </div>
-      ) : null}
-
-      {canAct && activeHand ? (
-        <Card title="Actions">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => void doAction("HIT")}
-              disabled={loading || activeHand.doubled || activeHand.value >= 21 || activeHand.busted || activeHand.stood}
-            >
-              HIT
-            </Button>
-            <Button onClick={() => void doAction("STAND")} disabled={loading}>STAND</Button>
-            <Button onClick={() => void doAction("DOUBLE")} disabled={loading || activeHand.cards.length !== 2 || activeHand.doubled}>DOUBLE</Button>
-            <Button onClick={() => void doAction("SPLIT")} disabled={loading || !game.canSplit}>SPLIT</Button>
-            <Button onClick={() => void doAction("INSURANCE")} disabled={loading || !game.canInsurance || !!game.insuranceBetAtomic}>INSURANCE</Button>
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <span style={{ background: "#000", color: "#fff", padding: "2px 10px", borderRadius: 8, fontSize: 14, fontWeight: 700, fontFamily: G }}>
+                {typeof dealerValue === "number" ? dealerValue : "?"}
+              </span>
+            </div>
           </div>
-        </Card>
-      ) : null}
+        )}
 
-      {canShowResult ? (
-        <Card title="Hand result">
-          <p className="text-sm">Status: <span className="font-semibold">{game.status}</span></p>
-          <p className="text-sm">Payout: {fromAtomic(game.payoutAtomic)} COINS</p>
-        </Card>
-      ) : null}
+        {/* Player cards */}
+        {playerHand && (
+          <div style={{ position: "absolute", bottom: "18%", left: "50%", transform: "translateX(-50%)" }}>
+            <div style={{ position: "relative", height: 120, width: playerHand.cards.length * 28 + 80 }}>
+              {playerHand.cards.map((c, i) => (
+                <CardComponent key={i} code={c} idx={i} />
+              ))}
+            </div>
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <span style={{ background: "#000", color: "#fff", padding: "2px 10px", borderRadius: 8, fontSize: 14, fontWeight: 700, fontFamily: G }}>
+                {playerHand.value}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Game result overlay */}
+        {game && !isActive && (
+          <div style={{ position: "absolute", top: "45%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
+            <span style={{
+              fontSize: 28, fontWeight: 800, fontFamily: G, padding: "8px 24px", borderRadius: 12,
+              color: "#fff",
+              background: isWon ? "rgba(34,197,94,.85)" : isLost ? "rgba(239,68,68,.85)" : "rgba(255,255,255,.15)",
+              textShadow: "0 2px 8px rgba(0,0,0,.5)",
+            }}>
+              {isWon ? "YOU WIN!" : isLost ? "BUST" : isPush ? "PUSH" : status}
+            </span>
+            {game.payoutAtomic && (
+              <p style={{ color: "#55ff60", fontSize: 18, fontWeight: 700, marginTop: 8, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Betting controls / action bar */}
+      <div style={{
+        width: "100%", maxWidth: 800, borderRadius: 20, padding: "16px 24px",
+        background: "linear-gradient(180deg, #161616, #0d0d0d)",
+        boxShadow: "0 -5px 30px #090909",
+        display: "flex", alignItems: "center", gap: 16,
+      }}>
+        {!game || !isActive ? (
+          <>
+            {/* Bet inputs */}
+            <div style={{ display: "flex", gap: 12, flex: 1 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: "#828282", fontSize: 11, margin: "0 0 4px", fontFamily: G }}>Main bet (COINS)</p>
+                <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 10, padding: "0 12px", height: 40 }}>
+                  <input value={bet} onChange={(e) => setBet(e.target.value)}
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500 }} />
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: "#828282", fontSize: 11, margin: "0 0 4px", fontFamily: G }}>Pairs side bet (optional)</p>
+                <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 10, padding: "0 12px", height: 40 }}>
+                  <input value={sidePairs} onChange={(e) => setSidePairs(e.target.value)}
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500 }} />
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: "#828282", fontSize: 11, margin: "0 0 4px", fontFamily: G }}>21+3 side bet (optional)</p>
+                <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 10, padding: "0 12px", height: 40 }}>
+                  <input value={side21} onChange={(e) => setSide21(e.target.value)}
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500 }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Play / New Game button */}
+            <button onClick={game ? handleNewGame : handlePlay} disabled={loading}
+              style={{
+                height: 48, paddingLeft: 28, paddingRight: 28, borderRadius: 12, border: "none", cursor: "pointer",
+                background: "linear-gradient(180deg, #ac2e30, #f75154)",
+                boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476",
+                color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
+                display: "flex", alignItems: "center", gap: 8,
+                opacity: loading ? 0.5 : 1,
+              }}>
+              {!game && <img src={PLAY_ICON} alt="" style={{ width: 20, height: 20 }} />}
+              {loading ? "..." : game ? "New Game" : "Play"}
+            </button>
+            {game && !isActive && (
+              <p style={{ color: "#828282", fontSize: 12, fontFamily: G, margin: 0 }}>Side bets are optional.</p>
+            )}
+          </>
+        ) : (
+          /* In-game action buttons */
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>
+            <button onClick={() => handleAction("HIT")} disabled={loading}
+              style={{ flex: 1, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: loading ? 0.5 : 1 }}>
+              Hit
+            </button>
+            <button onClick={() => handleAction("STAND")} disabled={loading}
+              style={{ flex: 1, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(180deg, #ac2e30, #f75154)", boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476", color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: loading ? 0.5 : 1 }}>
+              Stand
+            </button>
+            {game.canSplit && (
+              <button onClick={() => handleAction("SPLIT")} disabled={loading}
+                style={{ flex: 1, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: loading ? 0.5 : 1 }}>
+                Split
+              </button>
+            )}
+            <button onClick={() => handleAction("DOUBLE")} disabled={loading || (playerHand?.cards.length || 0) > 2}
+              style={{ flex: 1, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: loading || (playerHand?.cards.length || 0) > 2 ? 0.3 : 1 }}>
+              Double
+            </button>
+            {game.canInsurance && (
+              <button onClick={() => handleAction("INSURANCE")} disabled={loading}
+                style={{ flex: 1, height: 48, borderRadius: 12, border: "none", cursor: "pointer", background: "#1a1a1a", boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424", color: "#828282", fontSize: 16, fontWeight: 600, fontFamily: G, opacity: loading ? 0.5 : 1 }}>
+                Insurance
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {err && <p style={{ color: "#f34950", fontSize: 12, fontFamily: G, margin: 0 }}>{err}</p>}
     </div>
   );
 }
