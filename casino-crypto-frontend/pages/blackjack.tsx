@@ -57,6 +57,7 @@ export default function BlackjackPage() {
   const [ld, setLd] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [revealedDealerCount, setRevealedDealerCount] = useState(0);
 
   const st = game?.status;
   const active = st === "ACTIVE";
@@ -67,12 +68,17 @@ export default function BlackjackPage() {
 
   useEffect(() => {
     if (ended && game?.dealerRevealed) {
-      const dealerCardCount = (game.dealerCards || []).length;
-      const delay = Math.max(1, dealerCardCount - 1) * 500 + 800;
-      const t = setTimeout(() => setShowResult(true), delay);
-      return () => clearTimeout(t);
+      const allCards = game.dealerCards || [];
+      setRevealedDealerCount(1);
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      for (let i = 1; i < allCards.length; i++) {
+        timers.push(setTimeout(() => setRevealedDealerCount(i + 1), i * 500));
+      }
+      timers.push(setTimeout(() => setShowResult(true), allCards.length * 500 + 300));
+      return () => timers.forEach(clearTimeout);
     } else {
       setShowResult(false);
+      setRevealedDealerCount(0);
     }
   }, [ended, game?.dealerRevealed, game?.dealerCards]);
 
@@ -85,7 +91,7 @@ export default function BlackjackPage() {
   useEffect(() => { load(); }, [load]);
 
   const play = async () => {
-    if (ended) { setGame(null); setShowResult(false); }
+    if (ended) { setGame(null); setShowResult(false); setRevealedDealerCount(0); }
     setErr(null); setLd(true);
     try {
       const betAtomic = String(Math.round(parseFloat(bet) * 1e8));
@@ -119,7 +125,11 @@ export default function BlackjackPage() {
     return s + v;
   }, 0);
 
-  const dealerVisibleVal = dCards.length > 0 ? calcVal(game?.dealerRevealed ? (game.dealerCards || []) : [dCards[0]]) : 0;
+  const dealerVisibleVal = dCards.length > 0
+    ? game?.dealerRevealed
+      ? calcVal((game.dealerCards || []).slice(0, revealedDealerCount || 1))
+      : calcVal([dCards[0]])
+    : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -140,13 +150,15 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "52%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? dCards.length : 2) * 30 + 70 }}>
+          <div style={{ position: "absolute", top: "10%", left: "55%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", height: 105, width: (game?.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 30 + 70 }}>
               <Card code={dCards[0]} idx={0} />
               {!game?.dealerRevealed ? (
                 <Card code="XX" idx={1} faceDown />
               ) : (
-                dCards.slice(1).map((c, i) => <Card key={`d${i + 1}`} code={c} idx={i + 1} flipping={i === 0} />)
+                (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => (
+                  <Card key={`d${i + 1}`} code={c} idx={i + 1} flipping={i === 0} />
+                ))
               )}
             </div>
             <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "3px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 4 }}>{dealerVisibleVal}</span>
@@ -155,7 +167,7 @@ export default function BlackjackPage() {
 
         {/* Player cards */}
         {hand && (
-          <div style={{ position: "absolute", bottom: "22%", left: "52%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", bottom: "22%", left: "55%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 105, width: hand.cards.length * 30 + 70 }}>
               {hand.cards.map((c, i) => <Card key={`p${i}`} code={c} idx={i} />)}
             </div>

@@ -27,8 +27,7 @@ body {
 }
 
 @keyframes flipCard {
-  0% { transform: perspective(600px) rotateY(0deg); }
-  50% { transform: perspective(600px) rotateY(90deg); }
+  0% { transform: perspective(600px) rotateY(180deg); }
   100% { transform: perspective(600px) rotateY(0deg); }
 }
 .ticker-scroll {
