@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   startBlackjackGame, actBlackjack, getActiveBlackjackGame,
   type BlackjackGame, type BlackjackAction,
 } from "@/lib/api";
+import { playDealSound, playWinSound, playLoseSound } from "@/lib/sounds";
 
 const A = "/assets/";
 const TABLE_IDLE = `${A}4d4f0838d8d221ce04032bc55f2eb265.png`;
@@ -58,6 +59,7 @@ export default function BlackjackPage() {
   const [err, setErr] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [revealedDealerCount, setRevealedDealerCount] = useState(0);
+  const prevCardCount = useRef(0);
 
   const st = game?.status;
   const active = st === "ACTIVE";
@@ -72,9 +74,13 @@ export default function BlackjackPage() {
       setRevealedDealerCount(1);
       const timers: ReturnType<typeof setTimeout>[] = [];
       for (let i = 1; i < allCards.length; i++) {
-        timers.push(setTimeout(() => setRevealedDealerCount(i + 1), i * 500));
+        timers.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound(); }, i * 500));
       }
-      timers.push(setTimeout(() => setShowResult(true), allCards.length * 500 + 300));
+      timers.push(setTimeout(() => {
+        setShowResult(true);
+        if (game.status === "WON") playWinSound();
+        else if (game.status === "LOST") playLoseSound();
+      }, allCards.length * 500 + 300));
       return () => timers.forEach(clearTimeout);
     } else {
       setShowResult(false);
@@ -104,6 +110,10 @@ export default function BlackjackPage() {
         ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}),
       });
       setGame(g);
+      playDealSound();
+      setTimeout(playDealSound, 500);
+      setTimeout(playDealSound, 1000);
+      setTimeout(playDealSound, 1500);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLd(false); }
   };
@@ -111,7 +121,7 @@ export default function BlackjackPage() {
   const act = async (action: BlackjackAction) => {
     if (!game) return;
     setErr(null); setLd(true);
-    try { setGame(await actBlackjack(game.gameId, action)); }
+    try { const g = await actBlackjack(game.gameId, action); setGame(g); playDealSound(); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLd(false); }
   };
