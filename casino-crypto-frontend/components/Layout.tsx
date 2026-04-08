@@ -68,6 +68,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [tickerEvents, setTickerEvents] = useState<RouletteRoundEvent[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
+  const prevBalanceRef = useRef<string | null>(null);
 
   useEffect(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -106,6 +108,22 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   }, [router.pathname]);
 
   const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
+
+  useEffect(() => {
+    if (!primaryWallet) return;
+    const currentBal = formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic);
+    const prev = prevBalanceRef.current;
+    if (prev !== null && prev !== currentBal) {
+      const prevNum = parseFloat(prev.replace(/,/g, ""));
+      const curNum = parseFloat(currentBal.replace(/,/g, ""));
+      if (curNum > prevNum) { setBalanceFlash("up"); }
+      else if (curNum < prevNum) { setBalanceFlash("down"); }
+      const t = setTimeout(() => setBalanceFlash(null), 1500);
+      prevBalanceRef.current = currentBal;
+      return () => clearTimeout(t);
+    }
+    prevBalanceRef.current = currentBal;
+  }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
 
   const refreshWallets = () => {
@@ -290,9 +308,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-3.5 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#1a1a1a] px-4">
+                <div className="inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#1a1a1a] px-4" style={{ transition: "box-shadow 0.3s", boxShadow: balanceFlash === "up" ? "0 0 12px rgba(34,197,94,0.4)" : balanceFlash === "down" ? "0 0 12px rgba(239,68,68,0.4)" : "none" }}>
                   <span className="inline-flex h-[10px] w-[10px] rounded-full bg-[#f6c453] shadow-[0_0_6px_rgba(246,196,83,0.5)]" />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", fontFamily: '"DM Sans","Gotham",sans-serif' }}>
+                  <span style={{
+                    fontSize: 14, fontWeight: 600, fontFamily: '"DM Sans","Gotham",sans-serif',
+                    color: balanceFlash === "up" ? "#22c55e" : balanceFlash === "down" ? "#ef4444" : "#ffffff",
+                    transition: "color 0.3s",
+                  }}>
                     {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
