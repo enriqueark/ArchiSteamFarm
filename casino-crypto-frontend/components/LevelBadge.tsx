@@ -25,16 +25,16 @@ export default function LevelBadge({ level }: { level: number }) {
         height: 18,
         padding: "0 6px",
         borderRadius: 5,
-        border: `1px solid ${tier.color}`,
-        background: tier.bg,
+        border: isRainbow ? undefined : `1px solid ${tier.color}`,
+        background: isRainbow ? undefined : tier.bg,
         fontSize: 10,
         fontWeight: 700,
         fontFamily: '"DM Sans","Gotham",sans-serif',
-        color: tier.color,
+        color: isRainbow ? undefined : tier.color,
         lineHeight: "1",
-        boxShadow: `0 0 8px ${tier.color}40, inset 0 0 4px ${tier.color}20`,
-        animation: isRainbow ? "rainbowGlow 2s linear infinite" : `levelPulse 2s ease-in-out infinite`,
-        textShadow: `0 0 6px ${tier.color}80`,
+        boxShadow: isRainbow ? undefined : `0 0 8px ${tier.color}40, inset 0 0 4px ${tier.color}20`,
+        animation: isRainbow ? "rainbowGlow 6s ease-in-out infinite" : "levelPulse 2s ease-in-out infinite",
+        textShadow: isRainbow ? undefined : `0 0 6px ${tier.color}80`,
       }}
     >
       {level}

@@ -43,13 +43,13 @@ body {
 }
 
 @keyframes rainbowGlow {
-  0% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; }
-  16% { border-color: #ffb753; color: #ffb753; box-shadow: 0 0 10px #ffb75380; text-shadow: 0 0 8px #ffb753; }
-  33% { border-color: #53ff87; color: #53ff87; box-shadow: 0 0 10px #53ff8780; text-shadow: 0 0 8px #53ff87; }
-  50% { border-color: #53a3ff; color: #53a3ff; box-shadow: 0 0 10px #53a3ff80; text-shadow: 0 0 8px #53a3ff; }
-  66% { border-color: #c053ff; color: #c053ff; box-shadow: 0 0 10px #c053ff80; text-shadow: 0 0 8px #c053ff; }
-  83% { border-color: #ff53a3; color: #ff53a3; box-shadow: 0 0 10px #ff53a380; text-shadow: 0 0 8px #ff53a3; }
-  100% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; }
+  0%, 8% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; background: linear-gradient(180deg, #ff535320, #ff535360); }
+  16%, 24% { border-color: #ffb753; color: #ffb753; box-shadow: 0 0 10px #ffb75380; text-shadow: 0 0 8px #ffb753; background: linear-gradient(180deg, #ffb75320, #ffb75360); }
+  33%, 41% { border-color: #53ff87; color: #53ff87; box-shadow: 0 0 10px #53ff8780; text-shadow: 0 0 8px #53ff87; background: linear-gradient(180deg, #53ff8720, #53ff8760); }
+  50%, 58% { border-color: #53a3ff; color: #53a3ff; box-shadow: 0 0 10px #53a3ff80; text-shadow: 0 0 8px #53a3ff; background: linear-gradient(180deg, #53a3ff20, #53a3ff60); }
+  66%, 74% { border-color: #c053ff; color: #c053ff; box-shadow: 0 0 10px #c053ff80; text-shadow: 0 0 8px #c053ff; background: linear-gradient(180deg, #c053ff20, #c053ff60); }
+  83%, 91% { border-color: #ff53a3; color: #ff53a3; box-shadow: 0 0 10px #ff53a380; text-shadow: 0 0 8px #ff53a3; background: linear-gradient(180deg, #ff53a320, #ff53a360); }
+  100% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; background: linear-gradient(180deg, #ff535320, #ff535360); }
 }
 .ticker-scroll {
   animation: ticker-scroll 25s linear infinite;
