@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { startBlackjackGame, actBlackjack, getActiveBlackjackGame, type BlackjackGame, type BlackjackAction } from "@/lib/api";
 import { playDealSound, playWinSound, playLoseSound } from "@/lib/sounds";
+import { refreshBalance } from "@/lib/refreshBalance";
 
 const A = "/assets/";
 const TABLE_IDLE = `${A}4d4f0838d8d221ce04032bc55f2eb265.png`;
@@ -76,7 +77,7 @@ export default function BlackjackPage() {
       setRevealing(true);
       const t: ReturnType<typeof setTimeout>[] = [];
       for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound(); }, i * 400));
-      t.push(setTimeout(() => { setShowResult(true); setRevealing(false); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
+      t.push(setTimeout(() => { setShowResult(true); setRevealing(false); refreshBalance(); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
       return () => { t.forEach(clearTimeout); setRevealing(false); };
     } else { setShowResult(false); setRevealedDealerCount(0); setRevealing(false); }
   }, [ended, game?.dealerRevealed, game?.dealerCards, game?.status]);
@@ -93,7 +94,7 @@ export default function BlackjackPage() {
     try {
       const ba = String(Math.round(parseFloat(bet) * 1e8));
       const pv = parseFloat(sidePairs); const tv = parseFloat(side21);
-      const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) });
+      const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) }); refreshBalance();
       setGame(g);
       for (let i = 0; i < 4; i++) setTimeout(playDealSound, i * 300);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }

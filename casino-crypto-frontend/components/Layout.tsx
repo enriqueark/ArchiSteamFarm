@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import Footer from "./Footer";
 import {
@@ -71,13 +71,17 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const prevBalanceRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
-    const interval = setInterval(() => {
-      getWallets().then(setWallets).catch(() => {});
-    }, 15_000);
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    refreshWallets();
+    const interval = setInterval(refreshWallets, 15_000);
+    const onRefresh = () => refreshWallets();
+    window.addEventListener("refreshBalance", onRefresh);
+    return () => { clearInterval(interval); window.removeEventListener("refreshBalance", onRefresh); };
+  }, [refreshWallets]);
 
   useEffect(() => {
     const sock = new CasinoSocket("USDT");
@@ -125,10 +129,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     prevBalanceRef.current = currentBal;
   }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
-
-  const refreshWallets = () => {
-    getWallets().then(setWallets).catch(() => {});
-  };
 
   const loadVaultState = async () => {
     setVaultLoading(true);

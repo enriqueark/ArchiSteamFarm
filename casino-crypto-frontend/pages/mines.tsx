@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
+import { refreshBalance } from "@/lib/refreshBalance";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -226,7 +227,7 @@ export default function MinesPage() {
   const start = async () => {
     setErr(null); setLd(true); reset();
     try {
-      const g = await startMinesGame("USDT", ba, mc); setGame(g);
+      const g = await startMinesGame("USDT", ba, mc); setGame(g); refreshBalance();
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
       fetchSkin(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
@@ -283,7 +284,7 @@ export default function MinesPage() {
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); setSkinUrl(null); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try { setGame(await cashoutMines(game.gameId)); setSkinUrl(null); refreshBalance(); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const pickR = () => {
     if (!act) return;
@@ -291,7 +292,7 @@ export default function MinesPage() {
     if (h.length) reveal(h[Math.floor(Math.random() * h.length)]);
   };
 
-  const pay = "$" + f(game?.potentialPayoutAtomic);
+  const pay = f(game?.potentialPayoutAtomic) + " COINS";
 
   return (
     <div style={{ display: "flex", gap: 16, height: "100%" }}>
