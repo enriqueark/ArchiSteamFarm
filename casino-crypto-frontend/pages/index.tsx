@@ -1,202 +1,148 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import Card from "@/components/Card";
-import Button from "@/components/Button";
-import {
-  getHealthLive,
-  getHealthReady,
-  getMe,
-  logout,
-  getApiUrl,
-  getWsUrl,
-  type HealthLive,
-  type HealthReady,
-  type User,
-} from "@/lib/api";
-import { CasinoSocket, type SocketEvent } from "@/lib/socket";
-import { useToast } from "@/lib/toast";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getMyRouletteBets, type RouletteBet } from "@/lib/api";
 
-export default function Dashboard() {
-  const { showError } = useToast();
-  const [live, setLive] = useState<HealthLive | null>(null);
-  const [ready, setReady] = useState<HealthReady | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [wsStatus, setWsStatus] = useState("disconnected");
-  const [events, setEvents] = useState<string[]>([]);
-  const socketRef = useRef<CasinoSocket | null>(null);
+const games = [
+  { name: "CASES", href: "/cases", img: "/assets/c92374a7485d20ac9bbef2d35ed1a789.png", icon: "/assets/098fe17d7ecd701c12a38a0cadfb52c7.svg" },
+  { name: "CASE BATTLE", href: "/case-battles", img: "/assets/9f3dc7144a620b11022014239169d46e.png", icon: "/assets/a3e58527c3e7370a1e8d3424ef21f14e.svg" },
+  { name: "ROULETTE", href: "/roulette", img: "/assets/b8e5b82a90d613d81dd652412e8e23ee.png", icon: "/assets/30f1deaab44de7043abb1842bd019412.svg" },
+  { name: "MINES", href: "/mines", img: "/assets/9d98d1f5815402cf67601802a236e1b3.png", icon: "/assets/a52450c41c59fc6f0f63e0a9e8b9be5b.svg" },
+  { name: "BLACKJACK", href: "/blackjack", img: "/assets/cea3c3db4ef626ba499a275c20d4030a.png", icon: "/assets/d8347e0a14786c0b7e4e5b5719203353.svg" },
+];
 
-  const addEvent = (msg: string) => {
-    setEvents((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
-  };
 
-  const checkHealth = useCallback(async () => {
-    try {
-      const l = await getHealthLive();
-      setLive(l);
-      addEvent(`Health live: ${l.status}`);
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : "Health check failed");
-    }
-    try {
-      const r = await getHealthReady();
-      setReady(r);
-      addEvent(`Health ready: ${r.status} (pg=${r.checks.postgres}, redis=${r.checks.redis})`);
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : "Ready check failed");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showError]);
+function formatAtomic(val: string, decimals = 8): string {
+  return (Number(val) / Math.pow(10, decimals)).toFixed(2);
+}
+
+export default function HomePage() {
+  const [bets, setBets] = useState<RouletteBet[]>([]);
+  const [tab, setTab] = useState<"all" | "wins" | "mine">("mine");
 
   useEffect(() => {
-    checkHealth();
-    getMe().then(setUser).catch(() => {});
+    getMyRouletteBets(50).then(setBets).catch(() => {});
+  }, []);
 
-    const sock = new CasinoSocket("USDT");
-    socketRef.current = sock;
-
-    sock.subscribe((ev: SocketEvent) => {
-      switch (ev.type) {
-        case "open":
-          setWsStatus("connected");
-          addEvent("WebSocket connected");
-          break;
-        case "close":
-          setWsStatus("disconnected");
-          addEvent("WebSocket disconnected");
-          break;
-        case "error":
-          setWsStatus("error");
-          addEvent("WebSocket error");
-          break;
-        case "roulette.round":
-          addEvent(`Round #${ev.data.roundNumber} — ${ev.data.status}`);
-          break;
-        case "roulette.betTotals":
-          addEvent(`Bet totals update for round ${ev.data.roundId}`);
-          break;
-        case "pong":
-          addEvent("pong received");
-          break;
-      }
-    });
-
-    sock.connect();
-    return () => sock.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkHealth]);
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // ignore
-    }
-    window.location.reload();
-  };
+  const filteredBets = tab === "wins" ? bets.filter((b) => b.status === "WON") : bets;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-3">
-          {user && <span className="text-sm text-gray-400">{user.email}</span>}
-          <Button variant="secondary" onClick={handleLogout}>
-            Logout
-          </Button>
+    <div className="space-y-6">
+      {/* Banners */}
+      <div className="grid grid-cols-2 gap-4">
+        {[1, 2].map((n) => (
+          <div
+            key={n}
+            className="h-[180px] rounded-card flex items-center justify-center"
+            style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
+          >
+            <span className="text-2xl font-bold text-[#333]">BANNER {n}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Games */}
+      <div>
+        <div className="flex items-center gap-2.5 mb-4">
+          <img src="/assets/63c8c686837122667ee0f137787e2d7c.svg" alt="" className="w-6 h-6" />
+          <h2 className="text-xl font-bold text-white">Games</h2>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card title="Connection Status">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">API URL</span>
-              <span className="font-mono text-xs">{getApiUrl()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">WS URL</span>
-              <span className="font-mono text-xs">{getWsUrl()}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">WebSocket</span>
-              <span
-                className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  wsStatus === "connected"
-                    ? "bg-green-900 text-green-300"
-                    : wsStatus === "error"
-                      ? "bg-red-900 text-red-300"
-                      : "bg-gray-800 text-gray-400"
-                }`}
-              >
-                {wsStatus}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="API Health">
-          <div className="space-y-2 text-sm">
-            {live && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Live</span>
-                <span className="text-green-400">{live.status}</span>
+        <div className="grid grid-cols-5 gap-3">
+          {games.map((g) => (
+            <Link
+              key={g.name}
+              href={g.href}
+              className="group relative rounded-card overflow-hidden"
+              style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
+            >
+              <div
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full opacity-30 pointer-events-none"
+                style={{ background: "radial-gradient(circle, #f75154 0%, transparent 70%)", filter: "blur(60px)" }}
+              />
+              <div className="relative h-[280px] flex items-center justify-center p-4">
+                <img
+                  src={g.img}
+                  alt={g.name}
+                  className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
-            )}
-            {ready && (
-              <>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Ready</span>
-                  <span className={ready.status === "ready" ? "text-green-400" : "text-yellow-400"}>
-                    {ready.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Postgres</span>
-                  <span>{ready.checks.postgres ? "OK" : "DOWN"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Redis</span>
-                  <span>{ready.checks.redis ? "OK" : "DOWN"}</span>
-                </div>
-              </>
-            )}
-            <Button variant="secondary" className="w-full mt-2" onClick={checkHealth}>
-              Refresh
-            </Button>
-          </div>
-        </Card>
-
-        <Card title="User Info">
-          {user ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">ID</span>
-                <span className="font-mono text-xs">{user.id}</span>
+              <div className="relative flex items-center gap-2 px-4 py-3 bg-[#0d0d0d]/80">
+                <img src={g.icon} alt="" className="w-5 h-5" />
+                <span className="text-sm font-medium text-white">{g.name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Role</span>
-                <span>{user.role}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Status</span>
-                <span>{user.status}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">Loading...</p>
-          )}
-        </Card>
-      </div>
-
-      <Card title="Latest Events">
-        <div className="max-h-80 overflow-y-auto space-y-1 font-mono text-xs">
-          {events.length === 0 && <p className="text-gray-500">No events yet...</p>}
-          {events.map((e, i) => (
-            <div key={i} className="text-gray-400 border-b border-gray-800 py-1">
-              {e}
-            </div>
+            </Link>
           ))}
         </div>
-      </Card>
+      </div>
+
+      {/* Highlights — real bet data */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <img src="/assets/4e95822b3466acf681a95bd6c857747a.svg" alt="" className="w-6 h-6" />
+            <h2 className="text-xl font-bold text-white">Highlights</h2>
+          </div>
+          <Link href="/roulette" className="text-sm text-muted cursor-pointer hover:text-white transition-colors">
+            View All
+          </Link>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          {([["all", "All Games"], ["wins", "Big wins"], ["mine", "My Games"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`h-[34px] rounded-[10px] px-4 text-[12px] font-medium leading-[12px] transition-all ${
+                tab === key
+                  ? "text-white border border-[#2f3640] bg-gradient-to-b from-[#1a1a1a] to-[#111111] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_0_rgba(0,0,0,0.35)]"
+                  : "text-[#7f7f7f] border border-transparent bg-transparent hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="rounded-card overflow-hidden" style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}>
+          <div className="grid grid-cols-5 px-5 py-3 text-xs font-medium text-muted border-b border-[#1a1a1a]">
+            <span>Game</span>
+            <span>Type</span>
+            <span>Amount</span>
+            <span>Status</span>
+            <span>Payout</span>
+          </div>
+          {filteredBets.length === 0 ? (
+            <div className="px-5 py-8 text-center text-muted text-sm">
+              {bets.length === 0 ? "No bets yet. Play Roulette or Mines to see your history!" : "No matching bets."}
+            </div>
+          ) : (
+            filteredBets.slice(0, 15).map((b, i) => (
+              <div key={b.id || i} className="grid grid-cols-5 items-center px-5 py-3 border-b border-[#111] last:border-b-0 hover:bg-[#1a1a1a]/30 transition-colors">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[3px] h-5 rounded-r bg-accent-red" />
+                  <span className="text-sm text-white">Roulette</span>
+                </div>
+                <span className="text-sm text-white">{b.betType}</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded-full bg-[#ffae50]/20" />
+                  <span className="text-sm text-white">{formatAtomic(b.stakeAtomic)}</span>
+                </div>
+                <span className={`text-sm font-medium ${
+                  b.status === "WON" ? "text-accent-green" : b.status === "LOST" ? "text-red-400" : "text-muted"
+                }`}>
+                  {b.status}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded-full bg-[#ffae50]/20" />
+                  <span className={`text-sm ${b.status === "WON" ? "text-accent-green" : "text-white"}`}>
+                    {b.payoutAtomic ? formatAtomic(b.payoutAtomic) : "0.00"}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

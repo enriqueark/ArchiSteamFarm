@@ -2,246 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
 body {
-  @apply bg-gray-950 text-gray-100;
+  background-color: #090909;
+  color: #fff;
+  font-family: "DM Sans", "Gotham", "Inter", system-ui, sans-serif;
+  margin: 0;
 }
 
-@keyframes balanceDeltaFade {
+::-webkit-scrollbar { width: 0px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: transparent; }
+* { scrollbar-width: none; }
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes dealCard {
+  0% { opacity: 0; transform: translateY(-60px) translateX(200px) rotate(15deg) scale(0.7); }
+  100% { opacity: 1; transform: translateY(0) translateX(0) rotate(0deg) scale(1); }
+}
+
+@keyframes flipCard {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+.ticker-scroll {
+  animation: ticker-scroll 25s linear infinite;
+}
+
+@keyframes walletBalanceUpPulse {
   0% {
-    opacity: 0;
-    transform: translateY(-2px) scale(0.98);
-  }
-  15% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  80% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-}
-
-.balance-delta-notice {
-  animation: balanceDeltaFade 1.8s ease-out forwards;
-}
-
-@keyframes balanceTrendUpPulse {
-  0% {
-    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
-  }
-  38% {
-    box-shadow: 0 0 22px rgba(16, 185, 129, 0.45);
-  }
-  100% {
-    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
-  }
-}
-
-@keyframes balanceTrendDownPulse {
-  0% {
-    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
-  }
-  38% {
-    box-shadow: 0 0 22px rgba(239, 68, 68, 0.52);
-  }
-  100% {
-    box-shadow: 0 0 14px rgba(220, 38, 38, 0.18);
-  }
-}
-
-@keyframes balanceAmountUpFlash {
-  0% {
-    color: #f3f4f6;
-    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
-    transform: translateY(0);
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    background-color: #1a1a1a;
   }
   35% {
-    color: #6ee7b7;
-    text-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
-    transform: translateY(-0.5px);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.45);
+    background-color: #13241d;
   }
   100% {
-    color: #f3f4f6;
-    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
-    transform: translateY(0);
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    background-color: #1a1a1a;
   }
 }
 
-@keyframes balanceAmountDownFlash {
-  0% {
-    color: #f3f4f6;
-    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
-    transform: translateY(0);
-  }
-  35% {
-    color: #fca5a5;
-    text-shadow: 0 0 12px rgba(239, 68, 68, 0.65);
-    transform: translateY(0.5px);
-  }
-  100% {
-    color: #f3f4f6;
-    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
-    transform: translateY(0);
-  }
-}
-
-.balance-trend-up-a,
-.balance-trend-up-b {
-  animation: balanceTrendUpPulse 950ms ease-out;
-}
-
-.balance-trend-down-a,
-.balance-trend-down-b {
-  animation: balanceTrendDownPulse 950ms ease-out;
-}
-
-.balance-amount-up {
-  animation: balanceAmountUpFlash 920ms cubic-bezier(0.25, 0.95, 0.32, 1);
-}
-
-.balance-amount-down {
-  animation: balanceAmountDownFlash 920ms cubic-bezier(0.25, 0.95, 0.32, 1);
-}
-
-@keyframes profileMenuDropIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.profile-menu-enter {
-  transform-origin: top right;
-  animation: profileMenuDropIn 180ms ease-out;
-}
-
-@keyframes blackjackCardDealIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-18px) translateX(8px) rotate(-6deg) scale(0.94);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg) scale(1);
-  }
-}
-
-.blackjack-card-deal {
-  animation: blackjackCardDealIn 520ms cubic-bezier(0.23, 1, 0.32, 1);
-  animation-fill-mode: both;
-}
-
-@keyframes blackjackChipPulse {
-  0% {
-    transform: scale(0.97);
-    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
-  }
-  55% {
-    transform: scale(1.04);
-    box-shadow: 0 0 18px rgba(239, 68, 68, 0.35);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
-  }
-}
-
-.blackjack-chip-pulse {
-  animation: blackjackChipPulse 420ms ease-out;
-}
-
-@keyframes blackjackActionFlash {
+@keyframes walletBalanceDownPulse {
   0% {
     box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    background-color: #1a1a1a;
   }
-  45% {
-    box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
+  35% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.48);
+    background-color: #2a1618;
   }
   100% {
     box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    background-color: #1a1a1a;
   }
 }
 
-.blackjack-action-flash {
-  animation: blackjackActionFlash 420ms ease-out;
-}
-
-@keyframes blackjackGlowSweep {
+@keyframes walletBalanceAmountUpFlash {
   0% {
-    background-position: 0% 50%;
+    color: #ffffff;
+    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  }
+  35% {
+    color: #77f2bc;
+    text-shadow: 0 0 14px rgba(16, 185, 129, 0.65);
   }
   100% {
-    background-position: 200% 50%;
+    color: #ffffff;
+    text-shadow: 0 0 0 rgba(16, 185, 129, 0);
   }
 }
 
-.blackjack-ultra-table {
-  position: relative;
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  background:
-    radial-gradient(circle at 20% 0%, rgba(239, 68, 68, 0.12), transparent 36%),
-    radial-gradient(circle at 80% 100%, rgba(59, 130, 246, 0.1), transparent 42%),
-    linear-gradient(120deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.95));
-  overflow: hidden;
-}
-
-.blackjack-ultra-table::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    rgba(239, 68, 68, 0),
-    rgba(239, 68, 68, 0.28),
-    rgba(99, 102, 241, 0.22),
-    rgba(239, 68, 68, 0)
-  );
-  background-size: 200% 100%;
-  animation: blackjackGlowSweep 3.4s linear infinite;
-  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  padding: 1px;
-}
-
-@keyframes blackjackCardFlipIn {
+@keyframes walletBalanceAmountDownFlash {
   0% {
-    transform: perspective(800px) rotateY(-88deg) translateY(-6px);
-    opacity: 0;
+    color: #ffffff;
+    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
+  }
+  35% {
+    color: #ff9ea4;
+    text-shadow: 0 0 14px rgba(239, 68, 68, 0.68);
   }
   100% {
-    transform: perspective(800px) rotateY(0deg) translateY(0);
-    opacity: 1;
+    color: #ffffff;
+    text-shadow: 0 0 0 rgba(239, 68, 68, 0);
   }
 }
 
-.blackjack-card-flip {
-  transform-origin: left center;
-  animation: blackjackCardFlipIn 700ms cubic-bezier(0.2, 0.9, 0.2, 1);
+.wallet-balance-up-a,
+.wallet-balance-up-b {
+  animation: walletBalanceUpPulse 980ms ease-out;
 }
 
-@keyframes blackjackChipFloat {
-  0% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-  100% {
-    transform: translateY(0);
-  }
+.wallet-balance-down-a,
+.wallet-balance-down-b {
+  animation: walletBalanceDownPulse 980ms ease-out;
 }
 
-.blackjack-chip-float {
-  animation: blackjackChipFloat 1.8s ease-in-out infinite;
+.wallet-balance-amount-up {
+  animation: walletBalanceAmountUpFlash 980ms ease-out;
+}
+
+.wallet-balance-amount-down {
+  animation: walletBalanceAmountDownFlash 980ms ease-out;
 }

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getCashierDepositAddresses,
+  createWithdrawal,
+  getDepositAddresses,
   getWallets,
-  requestCashierWithdrawal,
-  type CashierDepositAddress,
+  type CashierAddress,
   type CashierWithdrawalResponse
 } from "@/lib/api";
 import { useAuthUI } from "@/lib/auth-ui";
@@ -80,7 +80,7 @@ export default function BalanceControl() {
   const [amount, setAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
   const [requesting, setRequesting] = useState(false);
-  const [depositAddresses, setDepositAddresses] = useState<CashierDepositAddress[]>([]);
+  const [depositAddresses, setDepositAddresses] = useState<CashierAddress[]>([]);
   const [targetBalance, setTargetBalance] = useState(0);
   const [displayBalance, setDisplayBalance] = useState(0);
   const [deltaNotices, setDeltaNotices] = useState<DeltaNotice[]>([]);
@@ -93,7 +93,7 @@ export default function BalanceControl() {
   const deltaNoticeIdRef = useRef(0);
   const trendResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getSelectedDepositAddress = useCallback((): CashierDepositAddress | null => {
+  const getSelectedDepositAddress = useCallback((): CashierAddress | null => {
     const address = depositAddresses.find((entry) => entry.asset === selectedCurrency);
     return address ?? null;
   }, [depositAddresses, selectedCurrency]);
@@ -191,9 +191,9 @@ export default function BalanceControl() {
     let cancelled = false;
     const loadAddresses = async () => {
       try {
-        const rows = await getCashierDepositAddresses();
+        const rows = await getDepositAddresses();
         if (!cancelled) {
-          setDepositAddresses(rows);
+          setDepositAddresses(rows.addresses);
         }
       } catch {
         if (!cancelled) {
@@ -292,10 +292,9 @@ export default function BalanceControl() {
         return;
       }
 
-      const network = getNetworkForAsset(selectedCurrency);
-      const result: CashierWithdrawalResponse = await requestCashierWithdrawal({
-        asset: selectedCurrency,
-        network,
+      const result: CashierWithdrawalResponse = await createWithdrawal({
+        asset: "USDT",
+        network: "erc20",
         amountCoins: amount,
         destinationAddress: withdrawAddress.trim()
       });

@@ -1,43 +1,7 @@
-import { emitAppToast } from "./toast";
-
 function getBaseUrl(): string {
-  const runtimeValue =
-    typeof window !== "undefined" && window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL
-      ? window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL.trim()
-      : "";
-  const envValue = (process.env.NEXT_PUBLIC_API_URL || "").trim();
-  const configured = runtimeValue || envValue;
-
-  if (configured) {
-    // Safety guard: production clients must never target localhost/127.0.0.1.
-    // If env/runtime was misconfigured, fallback to same-origin API host.
-    if (
-      typeof window !== "undefined" &&
-      /(^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/i.test(configured)
-    ) {
-      return window.location.origin;
-    }
-
-    if (configured.startsWith("/") && typeof window !== "undefined") {
-      return `${window.location.origin}${configured.replace(/\/$/, "")}`;
-    }
-
-    // Avoid mixed-content issues (https page trying to call http API).
-    if (
-      typeof window !== "undefined" &&
-      window.location.protocol === "https:" &&
-      configured.startsWith("http://")
-    ) {
-      return window.location.origin;
-    }
-
-    return configured.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL) {
+    return window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL;
   }
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
-  }
-
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 }
 
@@ -52,17 +16,6 @@ function getApi(): string {
 }
 
 let accessToken: string | null = null;
-let suppressNextApiErrorToast = false;
-
-let lastApiToastAtMs = 0;
-const emitToastWithCooldown = (detail: { message: string; variant: "error" | "success" }): void => {
-  const now = Date.now();
-  if (now - lastApiToastAtMs < 5_000) {
-    return;
-  }
-  lastApiToastAtMs = now;
-  emitAppToast(detail);
-};
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -87,10 +40,6 @@ export function clearSession() {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
   }
-}
-
-export function suppressNextErrorToastOnce() {
-  suppressNextApiErrorToast = true;
 }
 
 export async function validateSession(): Promise<boolean> {
@@ -133,28 +82,14 @@ async function request<T>(
     headers["Idempotency-Key"] = idempotencyKey();
   }
 
-  const res = await fetch(`${getApi()}${path}`, { ...options, headers }).catch((error) => {
-    emitAppToast({
-      variant: "error",
-      message: `Network error: ${error instanceof Error ? error.message : "Request failed"}`
-    });
-    throw error;
-  });
+  const res = await fetch(`${getApi()}${path}`, { ...options, headers });
 
   if (!res.ok) {
     if (res.status === 401 && needsAuth) {
       clearSession();
     }
     const body = await res.json().catch(() => ({}));
-    const message = body.message || body.error || `HTTP ${res.status}`;
-    if (typeof window !== "undefined" && !suppressNextApiErrorToast) {
-      emitAppToast({
-        variant: "error",
-        message
-      });
-    }
-    suppressNextApiErrorToast = false;
-    throw new Error(message);
+    throw new Error(body.message || body.error || `HTTP ${res.status}`);
   }
 
   if (res.status === 204) return {} as T;
@@ -231,107 +166,16 @@ export interface Wallet {
   id: string;
   currency: string;
   balanceAtomic: string;
+  balanceCoins?: string;
   lockedAtomic: string;
+  lockedCoins?: string;
+  availableAtomic?: string;
+  availableCoins?: string;
   updatedAt: string;
 }
 
 export async function getWallets(): Promise<Wallet[]> {
   return request<Wallet[]>("/wallets");
-}
-
-// ── Chat ─────────────────────────────────────────────────────────────────
-
-export interface ChatMessage {
-  id: string;
-  userId: string;
-  userLabel: string;
-  userLevel: number;
-  avatarUrl: string | null;
-  message: string;
-  createdAt: string;
-}
-
-type ChatMessageApiPayload = {
-  id: string;
-  userId: string;
-  username?: string;
-  userLabel?: string;
-  level?: number;
-  userLevel?: number;
-  avatarUrl: string | null;
-  message: string;
-  createdAt: string;
-};
-
-const normalizeChatMessage = (message: ChatMessageApiPayload): ChatMessage => ({
-  id: message.id,
-  userId: message.userId,
-  userLabel: message.userLabel ?? message.username ?? `user_${message.userId.slice(0, 8)}`,
-  userLevel: message.userLevel ?? message.level ?? 1,
-  avatarUrl: message.avatarUrl ?? null,
-  message: message.message,
-  createdAt: message.createdAt
-});
-
-export async function getChatMessages(limit = 60): Promise<ChatMessage[]> {
-  const data = await request<ChatMessageApiPayload[]>(`/chat/messages?limit=${limit}`, {}, false);
-  return data.map(normalizeChatMessage);
-}
-
-export async function postChatMessage(message: string): Promise<ChatMessage> {
-  const data = await request<ChatMessageApiPayload>(
-    "/chat/messages",
-    {
-      method: "POST",
-      body: JSON.stringify({ message })
-    },
-    true,
-    true
-  );
-  return normalizeChatMessage(data);
-}
-
-// ── Cashier (OxaPay) ───────────────────────────────────────────────────────
-
-export interface CashierDepositAddress {
-  asset: "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
-  network: "bitcoin" | "erc20" | "solana";
-  networkLabel: string;
-  address: string;
-  providerTrackId: string;
-  qrCodeUrl: string | null;
-}
-
-export interface CashierWithdrawalResponse {
-  id: string;
-  status: string;
-  amountAtomic: string;
-  asset: string;
-  network: string;
-  destinationAddress: string;
-  providerTrackId: string | null;
-}
-
-export async function getCashierDepositAddresses(): Promise<CashierDepositAddress[]> {
-  const data = await request<{ addresses: CashierDepositAddress[] }>("/cashier/deposit-addresses", {}, true);
-  return data.addresses;
-}
-
-export async function requestCashierWithdrawal(input: {
-  asset: "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
-  network: "bitcoin" | "erc20" | "solana";
-  amountCoins: string;
-  destinationAddress: string;
-}): Promise<CashierWithdrawalResponse> {
-  return request<CashierWithdrawalResponse>(
-    "/cashier/withdrawals",
-    {
-      method: "POST",
-      body: JSON.stringify(input)
-    },
-    true,
-    true
-  );
 }
 
 // ── Roulette ────────────────────────────────────────────────────────────
@@ -363,46 +207,8 @@ export interface RouletteBetResponse {
   wallet: Wallet;
 }
 
-export interface RouletteResultHistoryItem {
-  roundId: string;
-  roundNumber: number;
-  currency: string;
-  winningNumber: number;
-  winningColor: string;
-  totalStakedAtomic: string;
-  totalPayoutAtomic: string;
-  settledAt: string;
-}
-
-export interface RouletteBetBreakdown {
-  roundId: string;
-  roundNumber: number;
-  currency: string;
-  totalsAtomic: {
-    RED: string;
-    BLACK: string;
-    GREEN: string;
-    BAIT: string;
-  };
-  entriesByType: {
-    RED: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    BLACK: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    GREEN: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-    BAIT: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
-  };
-  totalStakedAtomic: string;
-}
-
 export async function getCurrentRound(currency = "USDT"): Promise<RouletteRound> {
   return request<RouletteRound>(`/roulette/rounds/current?currency=${currency}`, {}, false);
-}
-
-export async function getRouletteRecentResults(currency = "USDT", limit = 20): Promise<RouletteResultHistoryItem[]> {
-  return request<RouletteResultHistoryItem[]>(`/roulette/results?currency=${currency}&limit=${limit}`, {}, false);
-}
-
-export async function getCurrentRouletteBetBreakdown(currency = "USDT"): Promise<RouletteBetBreakdown> {
-  return request<RouletteBetBreakdown>(`/roulette/rounds/current/breakdown?currency=${currency}`, {}, false);
 }
 
 export async function placeRouletteBet(
@@ -421,8 +227,310 @@ export async function placeRouletteBet(
   );
 }
 
-export async function getMyRouletteBets(limit = 50) {
-  return request<unknown[]>(`/roulette/bets/me?limit=${limit}`);
+export interface RouletteBet {
+  id: string;
+  roundId: string;
+  currency: string;
+  betType: string;
+  betValue: string | null;
+  stakeAtomic: string;
+  payoutAtomic: string | null;
+  status: string;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+export async function getMyRouletteBets(limit = 50): Promise<RouletteBet[]> {
+  return request<RouletteBet[]>(`/roulette/bets/me?limit=${limit}`);
+}
+
+export async function getLedgerEntries(currency: string, limit = 50) {
+  return request<unknown[]>(`/wallets/${currency}/entries?limit=${limit}`);
+}
+
+// ── Cases ────────────────────────────────────────────────────────────────
+
+export interface CaseListItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  logoUrl: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+}
+
+export interface CaseItem {
+  id: string;
+  name: string;
+  valueAtomic: string;
+  dropRate: string;
+  imageUrl: string | null;
+  cs2SkinId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SkinPreviewQuote {
+  preview: {
+    id: string;
+    name: string;
+    valueAtomic: string;
+    imageUrl: string | null;
+  } | null;
+}
+
+export interface CaseDetails {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  logoUrl: string | null;
+  priceAtomic: string;
+  currency: string;
+  isActive: boolean;
+  volatilityIndex: number;
+  volatilityTier: "L" | "M" | "H" | "I";
+  createdAt: string;
+  updatedAt: string;
+  items: CaseItem[];
+}
+
+export interface CaseOpeningResult {
+  openingId: string;
+  caseId: string;
+  caseSlug: string;
+  caseTitle: string;
+  item: CaseItem;
+  topTierEligible: boolean;
+  topTierItems: CaseItem[];
+  roll: number;
+  payoutAtomic: string;
+  profitAtomic: string;
+  priceAtomic: string;
+  currency: string;
+  provablyFair: {
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+  };
+  wallet: {
+    walletId: string;
+    balanceAtomic: string;
+    lockedAtomic: string;
+    availableAtomic: string;
+  };
+  createdAt: string;
+}
+
+export async function getCases(): Promise<CaseListItem[]> {
+  return request<CaseListItem[]>("/cases", {}, false);
+}
+
+export async function getCaseDetails(caseId: string): Promise<CaseDetails> {
+  return request<CaseDetails>(`/cases/${caseId}`, {}, false);
+}
+
+export async function openCase(caseId: string): Promise<CaseOpeningResult> {
+  return request<CaseOpeningResult>(
+    `/cases/${caseId}/open`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    },
+    true,
+    true
+  );
+}
+
+export async function getMyCaseOpenings(limit = 30): Promise<CaseOpeningResult[]> {
+  return request<CaseOpeningResult[]>(`/cases/openings/me?limit=${limit}`);
+}
+
+export async function getSkinPreviewByAmountAtomic(amountAtomic: string): Promise<SkinPreviewQuote> {
+  return request<SkinPreviewQuote>(`/cases/catalog/skin-preview?amountAtomic=${encodeURIComponent(amountAtomic)}`, {}, false);
+}
+
+// ── Battles ──────────────────────────────────────────────────────────────
+
+export type BattleTemplate =
+  | "ONE_VS_ONE"
+  | "TWO_VS_TWO"
+  | "ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE"
+  | "TWO_VS_TWO_VS_TWO"
+  | "THREE_VS_THREE";
+
+export interface BattleCaseEntry {
+  id: string;
+  orderIndex: number;
+  caseId: string;
+  caseTitle: string;
+  caseSlug: string;
+  casePriceAtomic: string;
+}
+
+export interface BattleSlotEntry {
+  id: string;
+  seatIndex: number;
+  teamIndex: number;
+  state: "OPEN" | "JOINED" | "BOT_FILLED";
+  userId: string | null;
+  displayName: string;
+  isBot: boolean;
+  borrowPercent: number;
+  paidAmountAtomic: string;
+  payoutAtomic: string;
+  winWeightAtomic: string;
+  profitAtomic: string;
+}
+
+export interface BattleDropEntry {
+  id: string;
+  roundIndex: number;
+  orderIndex: number;
+  battleCaseId: string;
+  battleSlotId: string;
+  caseItemId: string;
+  caseItemName: string;
+  caseItemImageUrl?: string | null;
+  valueAtomic: string;
+}
+
+export interface BattleState {
+  id: string;
+  status: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  template: BattleTemplate;
+  modeCrazy: boolean;
+  modeGroup: boolean;
+  modeJackpot: boolean;
+  modeTerminal: boolean;
+  modeFast: boolean;
+  modePrivate: boolean;
+  modeBorrow: boolean;
+  totalCostAtomic: string;
+  totalPayoutAtomic: string;
+  winnerTeam: number | null;
+  winnerUserId: string | null;
+  jackpotRoll: number | null;
+  jackpotWinnerSlotId: string | null;
+  jackpotChances: Array<{
+    slotId: string;
+    seatIndex: number;
+    displayName: string;
+    chancePercent: number;
+    weightAtomic: string;
+  }> | null;
+  createdByUserId: string;
+  createdAt: string;
+  startedAt: string | null;
+  settledAt: string | null;
+  cases: BattleCaseEntry[];
+  slots: BattleSlotEntry[];
+  drops: BattleDropEntry[];
+}
+
+export async function listBattles(query?: {
+  includePrivate?: boolean;
+  status?: "OPEN" | "RUNNING" | "SETTLED" | "CANCELLED";
+  limit?: number;
+}): Promise<BattleState[]> {
+  const params = new URLSearchParams();
+  if (typeof query?.includePrivate === "boolean") params.set("includePrivate", String(query.includePrivate));
+  if (query?.status) params.set("status", query.status);
+  if (typeof query?.limit === "number") params.set("limit", String(query.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<BattleState[]>(`/battles${suffix}`);
+}
+
+export async function getBattle(battleId: string): Promise<BattleState> {
+  return request<BattleState>(`/battles/${battleId}`);
+}
+
+export async function createBattle(input: {
+  template: BattleTemplate;
+  caseIds: string[];
+  modeCrazy?: boolean;
+  modeGroup?: boolean;
+  modeJackpot?: boolean;
+  modeTerminal?: boolean;
+  modeFast?: boolean;
+  modePrivate?: boolean;
+  modeBorrow?: boolean;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    "/battles",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
+}
+
+export async function joinBattle(input: {
+  battleId: string;
+  borrowPercent?: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        borrowPercent: input.borrowPercent ?? 100,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function callBattleBot(input: {
+  battleId: string;
+  seatIndex: number;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/call-bot`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        seatIndex: input.seatIndex,
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function fillBattleBots(input: {
+  battleId: string;
+  currency?: string;
+}): Promise<BattleState> {
+  return request<BattleState>(
+    `/battles/${input.battleId}/fill-bots`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        currency: input.currency ?? "USDT"
+      })
+    },
+    true,
+    true
+  );
 }
 
 // ── Blackjack ─────────────────────────────────────────────────────────────
@@ -496,8 +604,44 @@ export async function getActiveBlackjackGame(currency = "USDT"): Promise<Blackja
   return request<BlackjackGame | null>(`/blackjack/games/active?currency=${currency}`, {}, true);
 }
 
-export async function getBlackjackGame(gameId: string): Promise<BlackjackGame> {
-  return request<BlackjackGame>(`/blackjack/games/${gameId}`, {}, true);
+export interface CashierAddress {
+  asset: string;
+  network: string;
+  networkLabel: string;
+  address: string;
+  providerTrackId: string;
+  qrCodeUrl: string | null;
+}
+
+export interface CashierWithdrawalResponse {
+  id: string;
+  status: string;
+  amountAtomic: string;
+  asset: string;
+  network: string;
+  destinationAddress: string;
+  providerTrackId: string | null;
+}
+
+export async function getDepositAddresses(): Promise<{ addresses: CashierAddress[] }> {
+  return request<{ addresses: CashierAddress[] }>("/cashier/deposit-addresses");
+}
+
+export async function createWithdrawal(input: {
+  asset: "USDT";
+  network: "erc20";
+  amountCoins: string;
+  destinationAddress: string;
+}): Promise<CashierWithdrawalResponse> {
+  return request<CashierWithdrawalResponse>(
+    "/cashier/withdrawals",
+    {
+      method: "POST",
+      body: JSON.stringify(input)
+    },
+    true,
+    true
+  );
 }
 
 export async function actBlackjack(gameId: string, action: BlackjackAction): Promise<BlackjackGame> {
@@ -561,12 +705,12 @@ export async function startMinesGame(
   );
 }
 
-export async function getMinesGame(gameId: string): Promise<MinesGame> {
-  return request<MinesGame>(`/mines/games/${gameId}`);
-}
-
 export async function getActiveMinesGame(): Promise<MinesGame | null> {
   return request<MinesGame | null>("/mines/games/active");
+}
+
+export async function getMinesGame(gameId: string): Promise<MinesGame> {
+  return request<MinesGame>(`/mines/games/${gameId}`);
 }
 
 export async function revealMine(gameId: string, cellIndex: number): Promise<MinesRevealResponse> {
@@ -586,18 +730,324 @@ export async function cashoutMines(gameId: string): Promise<MinesGame> {
   );
 }
 
+// ── Chat / Rain ──────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  userLevel: number;
+  avatarUrl: string | null;
+  message: string;
+  createdAt: string;
+}
+
+export async function getChatMessages(limit = 60): Promise<ChatMessage[]> {
+  return request<ChatMessage[]>(`/chat/messages?limit=${limit}`, {}, false);
+}
+
+export async function sendChatMessage(message: string): Promise<ChatMessage> {
+  return request<ChatMessage>(
+    "/chat/messages",
+    { method: "POST", body: JSON.stringify({ message }) },
+    true
+  );
+}
+
+export interface RainState {
+  roundId: string;
+  startsAt: string;
+  endsAt: string;
+  baseAmountAtomic: string;
+  tippedAmountAtomic: string;
+  totalAmountAtomic: string;
+  joinedCount: number;
+  hasJoined: boolean;
+}
+
+export async function getRainState(): Promise<RainState> {
+  return request<RainState>("/chat/rain/current");
+}
+
+export async function joinRain(): Promise<RainState> {
+  return request<RainState>("/chat/rain/join", { method: "POST" }, true, true);
+}
+
+export async function tipRain(amountCoins: number): Promise<{ rain: RainState }> {
+  return request<{ rain: RainState }>(
+    "/chat/rain/tip",
+    { method: "POST", body: JSON.stringify({ amountCoins }) },
+    true,
+    true
+  );
+}
+
 // ── User ────────────────────────────────────────────────────────────────
 
 export interface User {
   id: string;
+  publicId?: number | null;
   email: string;
   role: string;
   status: string;
   createdAt: string;
+  level?: number;
+  levelXpAtomic?: string;
+  levelXp?: string;
+  progression?: {
+    level: number;
+    xpAtomic: string;
+    xp?: string;
+    currency?: string;
+  };
 }
 
 export async function getMe(): Promise<User> {
   return request<User>("/users/me");
+}
+
+// ── Profile / Vault / History ───────────────────────────────────────────
+
+export interface ProfileSummary {
+  user: {
+    id: string;
+    publicId: number | null;
+    email: string;
+    role: string;
+    status: string;
+    profileVisible: boolean;
+    level: number;
+    levelXpAtomic: string;
+    levelXp: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  wallet: {
+    walletId: string | null;
+    balanceAtomic: string;
+    balanceCoins: string;
+    lockedAtomic: string;
+    lockedCoins: string;
+    availableAtomic: string;
+    availableCoins: string;
+    currency: string;
+    updatedAt: string | null;
+  };
+  totals: {
+    depositsAtomic: string;
+    depositsCoins: string;
+    withdrawalsAtomic: string;
+    withdrawalsCoins: string;
+    withdrawalFeesAtomic: string;
+    withdrawalFeesCoins: string;
+    wageredAtomic: string;
+    wageredCoins: string;
+    payoutAtomic: string;
+    payoutCoins: string;
+    netGamingAtomic: string;
+    netGamingCoins: string;
+    bonusFromReferralAtomic: string;
+    bonusFromReferralCoins: string;
+    claimableAffiliateCommissionAtomic: string;
+    claimableAffiliateCommissionCoins: string;
+    claimedAffiliateCommissionAtomic: string;
+    claimedAffiliateCommissionCoins: string;
+    currency: string;
+  };
+  perGame: {
+    mines: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+    blackjack: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+    roulette: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+  };
+}
+
+export async function getProfileSummary(): Promise<ProfileSummary> {
+  return request<ProfileSummary>("/users/profile/summary");
+}
+
+export interface VaultLock {
+  id: string;
+  amountAtomic: string;
+  unlockAt: string;
+  createdAt: string;
+}
+
+export interface VaultState {
+  vaultId: string;
+  balanceAtomic: string;
+  availableAtomic: string;
+  lockedAtomic: string;
+  releasableAtomic: string;
+  locks: VaultLock[];
+}
+
+export type VaultLockDuration = "1H" | "1D" | "3D" | "7D";
+
+export async function getVaultState(): Promise<VaultState> {
+  return request<VaultState>("/vault");
+}
+
+export async function depositVault(amountCoins: number, lockDuration?: VaultLockDuration): Promise<void> {
+  await request(
+    "/vault/deposit",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amountCoins,
+        ...(lockDuration ? { lockDuration } : {})
+      })
+    },
+    true,
+    true
+  );
+}
+
+export async function withdrawVault(amountCoins: number): Promise<void> {
+  await request(
+    "/vault/withdraw",
+    {
+      method: "POST",
+      body: JSON.stringify({ amountCoins })
+    },
+    true,
+    true
+  );
+}
+
+export interface UserTransactionItem {
+  id: string;
+  kind: "DEPOSIT" | "WITHDRAWAL" | "ADMIN" | "TIP_SENT" | "TIP_RECEIVED" | "RAIN_TIP" | "RAIN_PAYOUT" | "GAME" | "VAULT" | "OTHER";
+  direction: "CREDIT" | "DEBIT";
+  reason: string;
+  amountAtomic: string;
+  amountCoins: string;
+  balanceBeforeAtomic: string;
+  balanceBeforeCoins: string;
+  balanceAfterAtomic: string;
+  balanceAfterCoins: string;
+  referenceId: string | null;
+  gameType: string | null;
+  counterpartyFrom: {
+    id: string;
+    publicId: number | null;
+    label: string;
+  } | null;
+  counterpartyTo: {
+    id: string;
+    publicId: number | null;
+    label: string;
+  } | null;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+}
+
+export async function getMyTransactions(limit = 50, offset = 0): Promise<PaginatedResponse<UserTransactionItem>> {
+  return request<PaginatedResponse<UserTransactionItem>>(`/users/me/transactions?limit=${limit}&offset=${offset}`);
+}
+
+export interface UserGameHistoryItem {
+  id: string;
+  gameMode: "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES";
+  status: string;
+  playedAt: string;
+  wagerAtomic: string;
+  wagerCoins: string;
+  payoutAtomic: string;
+  payoutCoins: string;
+  profitAtomic: string;
+  profitCoins: string;
+  reference: string | null;
+}
+
+export async function getMyGameHistory(
+  params: { limit?: number; offset?: number; mode?: "ALL" | "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES" } = {}
+): Promise<PaginatedResponse<UserGameHistoryItem>> {
+  const limit = params.limit ?? 50;
+  const offset = params.offset ?? 0;
+  const mode = params.mode ?? "ALL";
+  return request<PaginatedResponse<UserGameHistoryItem>>(
+    `/users/me/game-history?limit=${limit}&offset=${offset}&mode=${mode}`
+  );
+}
+
+export interface AffiliateDashboard {
+  myCode: {
+    code: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  appliedCode: {
+    code: string;
+    createdAt: string;
+    bonusReceivedAtomic: string;
+    bonusReceivedCoins: string;
+    referrer: {
+      publicId: number | null;
+      userLabel: string;
+    };
+  } | null;
+  stats: {
+    referralCount: number;
+    totalWageredAtomic: string;
+    totalWageredCoins: string;
+    totalCommissionAtomic: string;
+    totalCommissionCoins: string;
+    claimableCommissionAtomic: string;
+    claimableCommissionCoins: string;
+    claimedCommissionAtomic: string;
+    claimedCommissionCoins: string;
+    currency: string;
+  };
+  referrals: Array<{
+    referralId: string;
+    createdAt: string;
+    user: {
+      id: string;
+      publicId: number | null;
+      userLabel: string;
+      createdAt: string;
+    };
+    totalWageredAtomic: string;
+    totalWageredCoins: string;
+    totalCommissionAtomic: string;
+    totalCommissionCoins: string;
+    claimableCommissionAtomic: string;
+    claimableCommissionCoins: string;
+    claimedCommissionAtomic: string;
+    claimedCommissionCoins: string;
+    bonusReceivedAtomic: string;
+    bonusReceivedCoins: string;
+    active: boolean;
+  }>;
+}
+
+export async function getAffiliateDashboard(): Promise<AffiliateDashboard> {
+  return request<AffiliateDashboard>("/affiliates/dashboard");
 }
 
 export function getApiUrl() {

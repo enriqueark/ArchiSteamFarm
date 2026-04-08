@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
-import { getAccessToken, getChatMessages, postChatMessage, type ChatMessage } from "@/lib/api";
+import { getAccessToken, getChatMessages, sendChatMessage as postChatMessage, type ChatMessage } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 import { useAuthUI } from "@/lib/auth-ui";
 import { useToast } from "@/lib/toast";
@@ -25,7 +25,7 @@ type IncomingSocketChat = {
 const toChatMessage = (raw: IncomingSocketChat): ChatMessage => ({
   id: raw.id,
   userId: raw.userId,
-  userLabel: raw.userLabel ?? raw.username ?? `user_${raw.userId.slice(0, 8)}`,
+  username: raw.userLabel ?? raw.username ?? `user_${raw.userId.slice(0, 8)}`,
   userLevel: raw.userLevel ?? raw.level ?? 1,
   avatarUrl: raw.avatarUrl ?? null,
   message: raw.message,
@@ -128,10 +128,10 @@ export default function GlobalChatDrawer() {
                     {entry.avatarUrl ? (
                       <img src={entry.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
                     ) : (
-                      entry.userLabel.slice(0, 1).toUpperCase()
+                      entry.username.slice(0, 1).toUpperCase()
                     )}
                   </span>
-                  <span className="max-w-[140px] truncate font-semibold text-gray-200">{entry.userLabel}</span>
+                  <span className="max-w-[140px] truncate font-semibold text-gray-200">{entry.username}</span>
                   <span className="rounded bg-indigo-900/60 px-1.5 py-0.5 text-[10px] text-indigo-200">
                     LVL {entry.userLevel}
                   </span>
