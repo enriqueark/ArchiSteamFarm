@@ -49,8 +49,9 @@ const updateUserStatusSchema = z.object({
 
 const adjustByAdminSchema = z
   .object({
-    userId: z.string().cuid().optional(),
+    userId: z.string().trim().min(1).optional(),
     email: z.string().email().optional(),
+    publicId: z.coerce.number().int().positive().optional(),
     amountAtomic: z
       .string()
       .regex(/^-?\d+$/, "amountAtomic must be an integer string")
@@ -72,8 +73,11 @@ const adjustByAdminSchema = z
     referenceId: z.string().max(64).optional(),
     metadata: z.record(z.string(), z.unknown()).optional()
   })
-  .refine((value) => Boolean(value.userId) !== Boolean(value.email), {
-    message: "Provide exactly one of userId or email",
+  .refine((value) => {
+    const provided = [Boolean(value.userId), Boolean(value.email), Boolean(value.publicId)].filter(Boolean).length;
+    return provided === 1;
+  }, {
+    message: "Provide exactly one of userId, email or publicId",
     path: ["userId"]
   });
 
@@ -1825,7 +1829,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const body = adjustByAdminSchema.parse(request.body);
       let targetUserId = body.userId;
 
-      if (!targetUserId) {
+      if (!targetUserId && body.email) {
         const user = await prisma.user.findUnique({
           where: {
             email: body.email
@@ -1838,6 +1842,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           throw new AppError("User not found by email", 404, "USER_NOT_FOUND");
         }
         targetUserId = user.id;
+      }
+
+      if (!targetUserId && body.publicId) {
+        const user = await prisma.user.findFirst({
+          where: {
+            publicId: body.publicId
+          },
+          select: {
+            id: true
+          }
+        });
+        if (!user) {
+          throw new AppError("User not found by publicId", 404, "USER_NOT_FOUND");
+        }
+        targetUserId = user.id;
+      }
+
+      if (!targetUserId) {
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
       }
 
       const result = await adjustWalletBalance({
