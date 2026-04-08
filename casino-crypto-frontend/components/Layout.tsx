@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import Footer from "./Footer";
+import LevelBadge from "./LevelBadge";
 import {
   depositVault,
   getVaultState,
@@ -360,9 +361,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             <div ref={profileMenuRef} className="relative flex items-center gap-3.5">
               <div className="flex flex-col items-end gap-0.5">
                 <span style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", fontFamily: '"DM Sans","Gotham",sans-serif', lineHeight: "1" }}>{displayUsername}</span>
-                <span className="inline-flex h-[18px] min-w-[24px] items-center justify-center rounded-[5px] bg-gradient-to-b from-[#3c5e7c] to-[#2a415b] px-1.5 text-[10px] font-bold leading-none text-[#d8ecff]">
-                  {Math.max(1, userLevel || 80)}
-                </span>
+                <LevelBadge level={Math.max(1, userLevel || 100)} />
               </div>
               <button
                 type="button"

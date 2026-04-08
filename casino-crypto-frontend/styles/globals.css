@@ -36,6 +36,21 @@ body {
   30% { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
+
+@keyframes levelPulse {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 6px currentColor; }
+  50% { filter: brightness(1.3); box-shadow: 0 0 14px currentColor; }
+}
+
+@keyframes rainbowGlow {
+  0% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; }
+  16% { border-color: #ffb753; color: #ffb753; box-shadow: 0 0 10px #ffb75380; text-shadow: 0 0 8px #ffb753; }
+  33% { border-color: #53ff87; color: #53ff87; box-shadow: 0 0 10px #53ff8780; text-shadow: 0 0 8px #53ff87; }
+  50% { border-color: #53a3ff; color: #53a3ff; box-shadow: 0 0 10px #53a3ff80; text-shadow: 0 0 8px #53a3ff; }
+  66% { border-color: #c053ff; color: #c053ff; box-shadow: 0 0 10px #c053ff80; text-shadow: 0 0 8px #c053ff; }
+  83% { border-color: #ff53a3; color: #ff53a3; box-shadow: 0 0 10px #ff53a380; text-shadow: 0 0 8px #ff53a3; }
+  100% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; }
+}
 .ticker-scroll {
   animation: ticker-scroll 25s linear infinite;
 }
