@@ -127,7 +127,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       const t = setTimeout(() => setBalanceFlash(null), 1500);
 
       if (animRef.current) cancelAnimationFrame(animRef.current);
-      const duration = 800;
+      const duration = 1400;
       const start = performance.now();
       const animate = (now: number) => {
         const elapsed = now - start;
