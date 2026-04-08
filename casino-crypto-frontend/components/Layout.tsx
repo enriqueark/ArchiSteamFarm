@@ -70,6 +70,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const prevBalanceRef = useRef<string | null>(null);
+  const [displayBalance, setDisplayBalance] = useState<string | null>(null);
+  const animRef = useRef<number | null>(null);
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -120,13 +122,29 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     if (prev !== null && prev !== currentBal) {
       const prevNum = parseFloat(prev.replace(/,/g, ""));
       const curNum = parseFloat(currentBal.replace(/,/g, ""));
-      if (curNum > prevNum) { setBalanceFlash("up"); }
-      else if (curNum < prevNum) { setBalanceFlash("down"); }
+      if (curNum > prevNum) setBalanceFlash("up");
+      else if (curNum < prevNum) setBalanceFlash("down");
       const t = setTimeout(() => setBalanceFlash(null), 1500);
+
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      const duration = 800;
+      const start = performance.now();
+      const animate = (now: number) => {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const val = prevNum + (curNum - prevNum) * eased;
+        setDisplayBalance(val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        if (progress < 1) animRef.current = requestAnimationFrame(animate);
+        else animRef.current = null;
+      };
+      animRef.current = requestAnimationFrame(animate);
+
       prevBalanceRef.current = currentBal;
-      return () => clearTimeout(t);
+      return () => { clearTimeout(t); if (animRef.current) cancelAnimationFrame(animRef.current); };
     }
     prevBalanceRef.current = currentBal;
+    setDisplayBalance(currentBal);
   }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
 
@@ -314,8 +332,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                     fontSize: 14, fontWeight: 600, fontFamily: '"DM Sans","Gotham",sans-serif',
                     color: balanceFlash === "up" ? "#22c55e" : balanceFlash === "down" ? "#ef4444" : "#ffffff",
                     transition: "color 0.3s",
+                    fontVariantNumeric: "tabular-nums",
                   }}>
-                    {formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
+                    {displayBalance || formatCoins(primaryWallet.balanceCoins, primaryWallet.balanceAtomic)}
                   </span>
                 </div>
                 <Link
