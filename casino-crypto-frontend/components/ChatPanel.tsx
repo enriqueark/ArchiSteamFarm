@@ -9,7 +9,7 @@ import {
   type RainState
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
-import LevelBadge from "./LevelBadge";
+import LevelBadge, { getTierColor } from "./LevelBadge";
 
 interface Props {
   onClose: () => void;
@@ -466,7 +466,7 @@ export default function ChatPanel({ onClose }: Props) {
             )}
             <div className="min-w-0 flex-1 max-w-[213px]">
               <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-sm font-medium" style={{ color: userColor(m.username || "Player") }}>
+                <span className="text-sm font-medium" style={{ color: getTierColor(m.userLevel || 1) }}>
                   {m.username || "Player"}
                 </span>
                 <LevelBadge level={m.userLevel || 1} />

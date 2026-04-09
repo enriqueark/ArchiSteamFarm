@@ -7,6 +7,10 @@ const TIERS = [
   { max: Infinity, color: "#c053ff", bg: "linear-gradient(180deg, #c053ff38, #ffb753)" },
 ];
 
+export function getTierColor(level: number): string {
+  return (TIERS.find((t) => level <= t.max) || TIERS[TIERS.length - 1]).color;
+}
+
 function getTier(level: number) {
   return TIERS.find((t) => level <= t.max) || TIERS[TIERS.length - 1];
 }
