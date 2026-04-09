@@ -5,6 +5,7 @@ import {
   joinRain,
   sendChatMessage,
   tipRain,
+  tipUser,
   type ChatMessage,
   type RainState
 } from "@/lib/api";
@@ -99,6 +100,12 @@ export default function ChatPanel({ onClose }: Props) {
   const [joiningRain, setJoiningRain] = useState(false);
   const [tippingRain, setTippingRain] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextUser, setContextUser] = useState<ChatMessage | null>(null);
+  const [tipModal, setTipModal] = useState<ChatMessage | null>(null);
+  const [tipAmount, setTipAmount] = useState("");
+  const [tipSending, setTipSending] = useState(false);
+  const [tipError, setTipError] = useState<string | null>(null);
+  const [tipHide, setTipHide] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [animatedRainAmountCoins, setAnimatedRainAmountCoins] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +152,7 @@ export default function ChatPanel({ onClose }: Props) {
         upsertMessage({
           id: ev.data.id,
           userId: ev.data.userId,
+          publicId: ev.data.publicId || 0,
           username: ev.data.userLabel,
           userLevel: ev.data.level,
           avatarUrl: ev.data.avatarUrl,
@@ -190,6 +198,7 @@ export default function ChatPanel({ onClose }: Props) {
         upsertMessage({
           id: ev.data.id,
           userId: "system",
+          publicId: 0,
           username: "System",
           userLevel: 0,
           avatarUrl: null,
@@ -284,6 +293,18 @@ export default function ChatPanel({ onClose }: Props) {
   const msUntilNextRain = useMemo(() => getMsUntilNextHalfHourBoundaryCET(new Date(nowMs)), [nowMs]);
   const isJoinWindow = msUntilNextRain <= 60_000;
   const nextRainLabel = useMemo(() => formatNextRainCountdown(msUntilNextRain), [msUntilNextRain]);
+
+  const handleTip = async () => {
+    if (!tipModal || tipSending) return;
+    const amount = parseFloat(tipAmount);
+    if (!amount || amount < 1) { setTipError("Minimum tip is 1 COIN"); return; }
+    setTipSending(true); setTipError(null);
+    try {
+      await tipUser(tipModal.publicId, amount, tipHide ? undefined : undefined);
+      setTipModal(null); setTipAmount(""); setTipError(null);
+    } catch (e: unknown) { setTipError(e instanceof Error ? e.message : "Tip failed"); }
+    finally { setTipSending(false); }
+  };
 
   const handleSend = async () => {
     const text = message.trim();
@@ -454,25 +475,24 @@ export default function ChatPanel({ onClose }: Props) {
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-2 space-y-2">
         {messages.map((m, i) => (
           <div key={m.id || i} className="flex items-start gap-3 py-1">
-            {m.avatarUrl ? (
-              <img src={m.avatarUrl} alt={m.username} className="w-10 h-10 rounded-[12px] shrink-0 object-cover" />
-            ) : (
-              <div
-                className="w-10 h-10 rounded-[12px] shrink-0 flex items-center justify-center text-white text-xs font-bold"
-                style={{ backgroundColor: "#1f1f1f", border: "1px solid #2a2a2a" }}
-              >
-                {(m.username || "U").slice(0, 1).toUpperCase()}
-              </div>
-            )}
+            <div className="shrink-0 mt-5" onClick={() => setContextUser(m)} style={{ cursor: "pointer" }}>
+              {m.avatarUrl ? (
+                <img src={m.avatarUrl} alt={m.username} className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: "#1f1f1f", border: "1px solid #2a2a2a" }}>
+                  {(m.username || "U").slice(0, 1).toUpperCase()}
+                </div>
+              )}
+            </div>
             <div className="min-w-0 flex-1 max-w-[213px]">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-sm font-medium" style={{ color: getTierColor(m.userLevel || 1) }}>
+              <div className="flex items-center gap-1.5 mb-1" onClick={() => setContextUser(m)} style={{ cursor: "pointer" }}>
+                <span className="text-[13px] font-medium" style={{ color: getTierColor(m.userLevel || 1) }}>
                   {m.username || "Player"}
                 </span>
                 <LevelBadge level={m.userLevel || 1} />
               </div>
               <div className="rounded-[8px] bg-[#161616] px-3 py-2">
-                <p className="text-[14px] leading-[18px] text-white">{m.message}</p>
+                <p className="text-[13px] leading-[17px] text-white">{m.message}</p>
               </div>
             </div>
           </div>
@@ -656,6 +676,74 @@ export default function ChatPanel({ onClose }: Props) {
           }
         }
       `}</style>
+
+      {/* Context menu */}
+      {contextUser && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setContextUser(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "40%", right: 20, background: "#1a1a1a", borderRadius: 12, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,.5)", border: "1px solid #2a2a2a", minWidth: 160 }}>
+            <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
+              onClick={() => { navigator.clipboard.writeText(String(contextUser.publicId)); setContextUser(null); }}>
+              <span style={{ fontSize: 14 }}>📋</span>
+              <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>Copy UID</span>
+            </div>
+            <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
+              onClick={() => { setTipModal(contextUser); setContextUser(null); setTipAmount(""); setTipError(null); }}>
+              <span style={{ fontSize: 14 }}>💰</span>
+              <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>Tip</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tip modal */}
+      {tipModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setTipModal(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#111", borderRadius: 16, padding: 24, width: 340, border: "1px solid #2a2a2a", boxShadow: "0 0 30px rgba(247,81,84,.15)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ color: "#f75154", fontSize: 18, fontWeight: 700, margin: 0, fontFamily: '"DM Sans",sans-serif' }}>Tip User</h3>
+              <span onClick={() => setTipModal(null)} style={{ color: "#828282", cursor: "pointer", fontSize: 18 }}>✕</span>
+            </div>
+            <hr style={{ border: "none", borderTop: "1px solid #f7515430", marginBottom: 16 }} />
+
+            <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>User</p>
+            <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+              {tipModal.avatarUrl ? (
+                <img src={tipModal.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#252525", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+                  {(tipModal.username || "U")[0].toUpperCase()}
+                </div>
+              )}
+              <span style={{ color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }}>{tipModal.username} (id: {tipModal.publicId})</span>
+            </div>
+
+            <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 4px", fontFamily: '"DM Sans",sans-serif' }}>Tip Amount</p>
+            <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>Minimum tip amount is 1 COIN</p>
+            <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "0 14px", height: 42, display: "flex", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ color: "#828282", fontSize: 14, marginRight: 6 }}>🪙</span>
+              <input value={tipAmount} onChange={(e) => setTipAmount(e.target.value)} placeholder="0"
+                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }} />
+            </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}>
+              <input type="checkbox" checked={tipHide} onChange={(e) => setTipHide(e.target.checked)} style={{ accentColor: "#f75154" }} />
+              <span style={{ color: "#828282", fontSize: 12, fontFamily: '"DM Sans",sans-serif' }}>Don&apos;t show tip in chat</span>
+            </label>
+
+            {tipError && <p style={{ color: "#f75154", fontSize: 12, margin: "0 0 8px" }}>{tipError}</p>}
+
+            <button onClick={handleTip} disabled={tipSending} style={{
+              width: "100%", height: 44, borderRadius: 12, border: "none", cursor: "pointer",
+              background: "linear-gradient(180deg, #f75154, #ac2e30)",
+              boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 0 20px rgba(247,81,84,.2)",
+              color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: '"DM Sans",sans-serif',
+              opacity: tipSending ? 0.5 : 1,
+            }}>
+              {tipSending ? "Sending..." : "Send tip"}
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -735,6 +735,7 @@ export async function cashoutMines(gameId: string): Promise<MinesGame> {
 export interface ChatMessage {
   id: string;
   userId: string;
+  publicId: number;
   username: string;
   userLevel: number;
   avatarUrl: string | null;
@@ -777,6 +778,26 @@ export async function tipRain(amountCoins: number): Promise<{ rain: RainState }>
   return request<{ rain: RainState }>(
     "/chat/rain/tip",
     { method: "POST", body: JSON.stringify({ amountCoins }) },
+    true,
+    true
+  );
+}
+
+export interface TipUserResult {
+  id: string;
+  fromUserId: string;
+  fromUserLabel: string;
+  toUserId: string;
+  toUserLabel: string;
+  amountAtomic: string;
+  message: string | null;
+  createdAt: string;
+}
+
+export async function tipUser(toUserPublicId: number, amountCoins: number, message?: string): Promise<TipUserResult> {
+  return request<TipUserResult>(
+    "/chat/tips",
+    { method: "POST", body: JSON.stringify({ toUserPublicId, amountCoins, ...(message ? { message } : {}) }) },
     true,
     true
   );

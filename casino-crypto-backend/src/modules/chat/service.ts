@@ -8,6 +8,7 @@ import { getLevelFromXp } from "../progression/service";
 export type ChatMessageState = {
   id: string;
   userId: string;
+  publicId: number;
   username: string;
   userLevel: number;
   avatarUrl: string | null;
@@ -49,11 +50,13 @@ const toState = (row: {
   createdAt: Date;
   user: {
     email: string;
+    publicId: number;
     levelXpAtomic: bigint;
   };
 }): ChatMessageState => ({
   id: row.id,
   userId: row.userId,
+  publicId: row.user.publicId,
   username: formatUsername(row.user.email, row.userId),
   userLevel: getLevelFromXp(row.user.levelXpAtomic),
   avatarUrl: null,
@@ -73,6 +76,7 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         user: {
           select: {
             email: true,
+            publicId: true,
             levelXpAtomic: true
           }
         }
@@ -90,7 +94,8 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         include: {
           user: {
             select: {
-              email: true
+              email: true,
+              publicId: true
             }
           }
         }
@@ -149,6 +154,7 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           user: {
             select: {
               email: true,
+              publicId: true,
               levelXpAtomic: true
             }
           }
@@ -166,7 +172,8 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           include: {
             user: {
               select: {
-                email: true
+                email: true,
+                publicId: true
               }
             }
           }

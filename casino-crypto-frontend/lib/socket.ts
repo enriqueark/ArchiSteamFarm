@@ -29,6 +29,7 @@ export type SocketEvent =
       data: {
         id: string;
         userId: string;
+        publicId?: number;
         userLabel: string;
         level: number;
         avatarUrl: string | null;

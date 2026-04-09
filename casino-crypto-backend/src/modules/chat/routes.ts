@@ -69,6 +69,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       data: {
         id: created.id,
         userId: created.userId,
+        publicId: created.publicId,
         userLabel: created.username,
         level: created.userLevel,
         avatarUrl: created.avatarUrl,
