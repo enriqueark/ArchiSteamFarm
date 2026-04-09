@@ -1,4 +1,4 @@
-import { LedgerDirection, LedgerReason, Prisma } from "@prisma/client";
+import { LedgerDirection, LedgerReason, UserRole, Prisma } from "@prisma/client";
 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
@@ -29,6 +29,13 @@ const userLabel = (email: string): string => {
     return "Player";
   }
   return local.slice(0, 24);
+};
+
+const toCoinsString = (atomic: bigint): string => {
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COIN_ATOMIC;
+  const fraction = (abs % COIN_ATOMIC).toString().padStart(8, "0").slice(0, 2);
+  return `${whole.toString()}.${fraction}`;
 };
 
 const lockWallet = async (tx: Prisma.TransactionClient, userId: string) => {
@@ -167,6 +174,87 @@ const emitRainPayoutsForSettledRound = async (roundId: string): Promise<void> =>
         roundId,
         userId: entry.wallet.userId,
         payoutAtomic: entry.amountAtomic.toString()
+      }
+    });
+  }
+};
+
+const emitRainSummaryMessage = async (roundId: string): Promise<void> => {
+  const round = await prisma.rainRound.findUnique({
+    where: { id: roundId },
+    select: {
+      id: true,
+      startsAt: true,
+      endsAt: true,
+      baseAmountAtomic: true,
+      tippedAmountAtomic: true,
+      joins: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              publicId: true,
+              email: true
+            }
+          }
+        }
+      }
+    }
+  });
+  if (!round) {
+    return;
+  }
+
+  const payouts = await prisma.ledgerEntry.findMany({
+    where: {
+      reason: LedgerReason.RAIN_PAYOUT,
+      referenceId: roundId
+    },
+    select: {
+      wallet: {
+        select: {
+          userId: true
+        }
+      },
+      amountAtomic: true
+    }
+  });
+
+  const totalGiven = payouts.reduce((sum, row) => sum + row.amountAtomic, 0n);
+  const winnerIds = new Set<string>(payouts.map((row) => row.wallet.userId));
+  const participants = round.joins
+    .filter((join) => winnerIds.has(join.userId))
+    .map((join) => ({
+      userId: join.userId,
+      userPublicId: join.user.publicId ?? null,
+      userLabel: userLabel(join.user.email)
+    }));
+
+  getRouletteBroadcaster()?.broadcast({
+    type: "rain.settled",
+    data: {
+      roundId: round.id,
+      startsAt: round.startsAt.toISOString(),
+      endsAt: round.endsAt.toISOString(),
+      totalAmountAtomic: (round.baseAmountAtomic + round.tippedAmountAtomic).toString(),
+      givenAmountAtomic: totalGiven.toString(),
+      givenAmountCoins: toCoinsString(totalGiven),
+      winnerCount: participants.length,
+      winners: participants
+    }
+  });
+  if (participants.length > 0) {
+    getRouletteBroadcaster()?.broadcast({
+      type: "chat.message",
+      data: {
+        id: `rain-summary:${round.id}`,
+        userId: "system",
+        userPublicId: null,
+        userLabel: "System",
+        level: 0,
+        avatarUrl: null,
+        message: `Rain just given out ${toCoinsString(totalGiven)} coins to ${participants.length} users`,
+        createdAt: new Date().toISOString()
       }
     });
   }
@@ -369,6 +457,8 @@ export const tipUser = async (input: {
   toUserPublicId: number;
   amountCoins: number;
   message?: string;
+  silent?: boolean;
+  actorRole?: UserRole;
 }) => {
   const amountAtomic = BigInt(Math.round(input.amountCoins * Number(COIN_ATOMIC)));
   if (amountAtomic <= 0n) {
@@ -382,7 +472,7 @@ export const tipUser = async (input: {
   const tip = await prisma.$transaction(async (tx) => {
     const sender = await tx.user.findUnique({
       where: { id: input.fromUserId },
-      select: { id: true, email: true, canTip: true }
+      select: { id: true, email: true, canTip: true, publicId: true }
     });
     if (!sender) {
       throw new AppError("Sender not found", 404, "USER_NOT_FOUND");
@@ -469,12 +559,16 @@ export const tipUser = async (input: {
     return {
       id: created.id,
       fromUserId: sender.id,
+      fromUserPublicId: sender.publicId ?? null,
       fromUserLabel: userLabel(sender.email),
       toUserId: recipient.id,
+      toUserPublicId: recipient.publicId ?? null,
       toUserLabel: userLabel(recipient.email),
       amountAtomic: created.amountAtomic,
       message: created.message,
-      createdAt: created.createdAt
+      createdAt: created.createdAt,
+      silent: Boolean(input.silent),
+      actorRole: input.actorRole ?? UserRole.PLAYER
     };
   });
 
@@ -500,6 +594,7 @@ export const settleEndedRainRounds = async (): Promise<void> => {
   });
   if (before?.id) {
     await emitRainPayoutsForSettledRound(before.id);
+    await emitRainSummaryMessage(before.id);
   }
 };
 

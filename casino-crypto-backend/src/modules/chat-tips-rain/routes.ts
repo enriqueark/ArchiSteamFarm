@@ -9,7 +9,8 @@ import { getCurrentRainState, joinRain, tipRain, tipUser, type RainRoundState } 
 const userTipSchema = z.object({
   toUserPublicId: z.coerce.number().int().min(1),
   amountCoins: z.coerce.number().min(1).max(1_000_000),
-  message: z.string().trim().max(120).optional()
+  message: z.string().trim().max(120).optional(),
+  silent: z.coerce.boolean().optional()
 });
 
 const rainTipSchema = z.object({
@@ -97,22 +98,30 @@ export const chatTipsRainRoutes: FastifyPluginAsync = async (fastify) => {
         fromUserId: request.user.sub,
         toUserPublicId: body.toUserPublicId,
         amountCoins: body.amountCoins,
-        message: body.message
+        message: body.message,
+        silent: body.silent,
+        actorRole: request.user.role
       });
       const broadcaster = getRouletteBroadcaster();
-      broadcaster?.broadcast({
-        type: "chat.userTip",
-        data: {
-          id: result.id,
-          fromUserId: result.fromUserId,
-          fromUserLabel: result.fromUserLabel,
-          toUserId: result.toUserId,
-          toUserLabel: result.toUserLabel,
-          amountAtomic: result.amountAtomic,
-          message: result.message,
-          createdAt: result.createdAt.toISOString()
-        }
-      });
+      const shouldBroadcastTipMessage =
+        !result.silent || request.user.role === "ADMIN" || request.user.role === "SUPPORT";
+      if (shouldBroadcastTipMessage) {
+        broadcaster?.broadcast({
+          type: "chat.userTip",
+          data: {
+            id: result.id,
+            fromUserId: result.fromUserId,
+            fromUserPublicId: result.fromUserPublicId,
+            fromUserLabel: result.fromUserLabel,
+            toUserId: result.toUserId,
+            toUserPublicId: result.toUserPublicId,
+            toUserLabel: result.toUserLabel,
+            amountAtomic: result.amountAtomic,
+            message: result.message,
+            createdAt: result.createdAt.toISOString()
+          }
+        });
+      }
       return reply.send(result);
     }
   );

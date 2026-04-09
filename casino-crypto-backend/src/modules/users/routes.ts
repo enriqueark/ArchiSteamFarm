@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
-import { getProfileSummary } from "../affiliates/service";
+import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
 const COIN_DECIMALS = 100000000n;
@@ -29,6 +29,15 @@ const gameHistoryQuerySchema = z.object({
   mode: z
     .enum(["ALL", "MINES", "BLACKJACK", "ROULETTE", "CASES", "BATTLES"])
     .default("ALL")
+});
+const profileVisibilitySchema = z.object({
+  profileVisible: z.boolean()
+});
+const publicProfileParamsSchema = z.object({
+  publicId: z.coerce.number().int().min(1)
+});
+const publicProfileByUserIdParamsSchema = z.object({
+  userId: z.string().cuid()
 });
 
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
@@ -109,6 +118,282 @@ const getPublicIdBestEffort = async (userId: string): Promise<number | null> => 
   }
 };
 
+type PublicChatProfileSummary = {
+  user: {
+    id: string;
+    publicId: number | null;
+    username: string;
+    level: number;
+    profileVisible: boolean;
+  };
+  stats: {
+    rewardsRedeemedAtomic: string;
+    rewardsRedeemedCoins: string;
+    wageredTotalAtomic: string;
+    wageredTotalCoins: string;
+    wageredByMode: {
+      caseBattlesAtomic: string;
+      caseBattlesCoins: string;
+      caseOpeningAtomic: string;
+      caseOpeningCoins: string;
+      minesAtomic: string;
+      minesCoins: string;
+      blackjackAtomic: string;
+      blackjackCoins: string;
+      rouletteAtomic: string;
+      rouletteCoins: string;
+    };
+    maxSingleWinAtomic: string;
+    maxSingleWinCoins: string;
+    maxSingleMultiplier: string;
+    currency: string;
+  };
+};
+
+const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChatProfileSummary> => {
+  const user = await prisma.user.findUnique({
+    where: { publicId },
+    select: {
+      id: true,
+      publicId: true,
+      email: true,
+      profileVisible: true,
+      levelXpAtomic: true
+    }
+  });
+  if (!user) {
+    throw new Error("USER_NOT_FOUND");
+  }
+
+  const username = user.email.split("@")[0] || `user#${user.publicId ?? "?"}`;
+  const level = getLevelFromXp(user.levelXpAtomic);
+  if (!user.profileVisible) {
+    return {
+      user: {
+        id: user.id,
+        publicId: user.publicId ?? null,
+        username,
+        level,
+        profileVisible: false
+      },
+      stats: {
+        rewardsRedeemedAtomic: "0",
+        rewardsRedeemedCoins: "0.00",
+        wageredTotalAtomic: "0",
+        wageredTotalCoins: "0.00",
+        wageredByMode: {
+          caseBattlesAtomic: "0",
+          caseBattlesCoins: "0.00",
+          caseOpeningAtomic: "0",
+          caseOpeningCoins: "0.00",
+          minesAtomic: "0",
+          minesCoins: "0.00",
+          blackjackAtomic: "0",
+          blackjackCoins: "0.00",
+          rouletteAtomic: "0",
+          rouletteCoins: "0.00"
+        },
+        maxSingleWinAtomic: "0",
+        maxSingleWinCoins: "0.00",
+        maxSingleMultiplier: "0.00",
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL
+      }
+    };
+  }
+
+  const [minesAgg, blackjackAgg, rouletteAgg, caseOpeningsAgg, battleSlotsAgg, bestWin] = await Promise.all([
+    prisma.minesGame.aggregate({
+      where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+      _sum: { betAtomic: true }
+    }),
+    prisma.blackjackGame.aggregate({
+      where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+      _sum: { initialBetAtomic: true }
+    }),
+    prisma.rouletteBet.aggregate({
+      where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+      _sum: { stakeAtomic: true }
+    }),
+    prisma.caseOpening.aggregate({
+      where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+      _sum: { priceAtomic: true },
+      _max: { profitAtomic: true }
+    }),
+    prisma.battleSlot.aggregate({
+      where: { userId: user.id },
+      _sum: { paidAmountAtomic: true },
+      _max: { profitAtomic: true }
+    }),
+    prisma.$queryRaw<
+      Array<{
+        payoutAtomic: bigint;
+        wagerAtomic: bigint;
+        multiplierNumerator: bigint;
+      }>
+    >(Prisma.sql`
+      SELECT payout_atomic AS "payoutAtomic",
+             wager_atomic AS "wagerAtomic",
+             multiplier_numerator AS "multiplierNumerator"
+      FROM (
+        SELECT
+          COALESCE(mg."payoutAtomic", 0)::bigint AS payout_atomic,
+          mg."betAtomic"::bigint AS wager_atomic,
+          CASE
+            WHEN mg."betAtomic" > 0 THEN (COALESCE(mg."payoutAtomic", 0)::bigint * 100000000n) / mg."betAtomic"
+            ELSE 0::bigint
+          END AS multiplier_numerator
+        FROM "mines_games" mg
+        WHERE mg."userId" = ${user.id}
+          AND mg."currency" = ${PLATFORM_INTERNAL_CURRENCY}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(bj."payoutAtomic", 0)::bigint AS payout_atomic,
+          bj."initialBetAtomic"::bigint AS wager_atomic,
+          CASE
+            WHEN bj."initialBetAtomic" > 0 THEN (COALESCE(bj."payoutAtomic", 0)::bigint * 100000000n) / bj."initialBetAtomic"
+            ELSE 0::bigint
+          END AS multiplier_numerator
+        FROM "blackjack_games" bj
+        WHERE bj."userId" = ${user.id}
+          AND bj."currency" = ${PLATFORM_INTERNAL_CURRENCY}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(rb."payoutAtomic", 0)::bigint AS payout_atomic,
+          rb."stakeAtomic"::bigint AS wager_atomic,
+          CASE
+            WHEN rb."stakeAtomic" > 0 THEN (COALESCE(rb."payoutAtomic", 0)::bigint * 100000000n) / rb."stakeAtomic"
+            ELSE 0::bigint
+          END AS multiplier_numerator
+        FROM "roulette_bets" rb
+        WHERE rb."userId" = ${user.id}
+          AND rb."currency" = ${PLATFORM_INTERNAL_CURRENCY}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(co."payoutAtomic", 0)::bigint AS payout_atomic,
+          co."priceAtomic"::bigint AS wager_atomic,
+          CASE
+            WHEN co."priceAtomic" > 0 THEN (COALESCE(co."payoutAtomic", 0)::bigint * 100000000n) / co."priceAtomic"
+            ELSE 0::bigint
+          END AS multiplier_numerator
+        FROM "case_openings" co
+        WHERE co."userId" = ${user.id}
+          AND co."currency" = ${PLATFORM_INTERNAL_CURRENCY}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(bs."payoutAtomic", 0)::bigint AS payout_atomic,
+          bs."paidAmountAtomic"::bigint AS wager_atomic,
+          CASE
+            WHEN bs."paidAmountAtomic" > 0 THEN (COALESCE(bs."payoutAtomic", 0)::bigint * 100000000n) / bs."paidAmountAtomic"
+            ELSE 0::bigint
+          END AS multiplier_numerator
+        FROM "battle_slots" bs
+        WHERE bs."userId" = ${user.id}
+          AND bs."paidAmountAtomic" > 0
+      ) x
+      ORDER BY "payoutAtomic" DESC, "multiplierNumerator" DESC
+      LIMIT 1
+    `)
+  ]);
+
+  const minesWagered = minesAgg._sum.betAtomic ?? 0n;
+  const blackjackWagered = blackjackAgg._sum.initialBetAtomic ?? 0n;
+  const rouletteWagered = rouletteAgg._sum.stakeAtomic ?? 0n;
+  const caseOpeningWagered = caseOpeningsAgg._sum.priceAtomic ?? 0n;
+  const caseBattlesWagered = battleSlotsAgg._sum.paidAmountAtomic ?? 0n;
+  const wageredTotal = minesWagered + blackjackWagered + rouletteWagered + caseOpeningWagered + caseBattlesWagered;
+
+  const maxSingleWinAtomic = bestWin[0]?.payoutAtomic ?? 0n;
+  const multiplierNumerator = bestWin[0]?.multiplierNumerator ?? 0n;
+  const maxSingleMultiplier = Number(multiplierNumerator) / 1e8;
+
+  return {
+    user: {
+      id: user.id,
+      publicId: user.publicId ?? null,
+      username,
+      level,
+      profileVisible: true
+    },
+    stats: {
+      rewardsRedeemedAtomic: "0",
+      rewardsRedeemedCoins: "0.00",
+      wageredTotalAtomic: wageredTotal.toString(),
+      wageredTotalCoins: toCoinsString(wageredTotal),
+      wageredByMode: {
+        caseBattlesAtomic: caseBattlesWagered.toString(),
+        caseBattlesCoins: toCoinsString(caseBattlesWagered),
+        caseOpeningAtomic: caseOpeningWagered.toString(),
+        caseOpeningCoins: toCoinsString(caseOpeningWagered),
+        minesAtomic: minesWagered.toString(),
+        minesCoins: toCoinsString(minesWagered),
+        blackjackAtomic: blackjackWagered.toString(),
+        blackjackCoins: toCoinsString(blackjackWagered),
+        rouletteAtomic: rouletteWagered.toString(),
+        rouletteCoins: toCoinsString(rouletteWagered)
+      },
+      maxSingleWinAtomic: maxSingleWinAtomic.toString(),
+      maxSingleWinCoins: toCoinsString(maxSingleWinAtomic),
+      maxSingleMultiplier: maxSingleMultiplier.toFixed(4),
+      currency: PLATFORM_VIRTUAL_COIN_SYMBOL
+    }
+  };
+};
+
+const getUserMinimalById = async (userId: string): Promise<{
+  id: string;
+  publicId: number | null;
+  email: string;
+  levelXpAtomic: bigint;
+  profileVisible: boolean;
+}> => {
+  const row = await prisma.user
+    .findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        publicId: true,
+        email: true,
+        levelXpAtomic: true,
+        profileVisible: true
+      }
+    })
+    .catch(async (error) => {
+      if (!isMissingPublicIdColumnError(error) && !isMissingLevelXpColumnError(error)) {
+        throw error;
+      }
+      const fallback = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true
+        }
+      });
+      if (!fallback) {
+        return null;
+      }
+      return {
+        id: fallback.id,
+        publicId: null,
+        email: fallback.email,
+        levelXpAtomic: 0n,
+        profileVisible: true
+      };
+    });
+
+  if (!row) {
+    throw new Error("USER_NOT_FOUND");
+  }
+  return row;
+};
+
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/me", { preHandler: requireAuth }, async (request, reply) => {
     const user = await prisma.user
@@ -179,6 +464,290 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/profile/summary", { preHandler: requireAuth }, async (request, reply) => {
     const summary = await getProfileSummary(request.user.sub);
     return reply.send(summary);
+  });
+
+  fastify.patch("/me/profile-visibility", { preHandler: requireAuth }, async (request, reply) => {
+    const body = profileVisibilitySchema.parse(request.body);
+    const updated = await setProfileVisibility(request.user.sub, body.profileVisible);
+    return reply.send({
+      profileVisible: updated.profileVisible,
+      updatedAt: updated.updatedAt
+    });
+  });
+
+  fastify.get(
+    "/profiles/:publicId/summary",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ publicId: z.coerce.number().int().min(1) }).parse(request.params);
+      try {
+        const summary = await getPublicChatProfileSummary(params.publicId);
+        return reply.send(summary);
+      } catch (error) {
+        if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+          return reply.code(404).send({
+            code: "USER_NOT_FOUND",
+            message: "User not found"
+          });
+        }
+        throw error;
+      }
+    }
+  );
+
+  fastify.get(
+    "/profiles/by-user/:userId/summary",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = publicProfileByUserIdParamsSchema.parse(request.params);
+      let user: {
+        id: string;
+        publicId: number | null;
+        email: string;
+      } | null = null;
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: {
+            id: true,
+            publicId: true,
+            email: true
+          }
+        });
+      } catch (error) {
+        if (!isMissingPublicIdColumnError(error)) {
+          throw error;
+        }
+        const fallback = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: {
+            id: true,
+            email: true
+          }
+        });
+        user = fallback
+          ? {
+              id: fallback.id,
+              publicId: null,
+              email: fallback.email
+            }
+          : null;
+      }
+
+      if (!user) {
+        return reply.code(404).send({
+          code: "USER_NOT_FOUND",
+          message: "User not found"
+        });
+      }
+
+      if (user.publicId !== null) {
+        try {
+          const summary = await getPublicChatProfileSummary(user.publicId);
+          return reply.send(summary);
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== "USER_NOT_FOUND") {
+            throw error;
+          }
+        }
+      }
+
+      const minimal = await getUserMinimalById(user.id).catch((error) => {
+        if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+          return null;
+        }
+        throw error;
+      });
+      if (!minimal) {
+        return reply.code(404).send({
+          code: "USER_NOT_FOUND",
+          message: "User not found"
+        });
+      }
+
+      return reply.send({
+        user: {
+          id: minimal.id,
+          publicId: minimal.publicId,
+          username: minimal.email.split("@")[0] || `user#${minimal.publicId ?? "?"}`,
+          level: getLevelFromXp(minimal.levelXpAtomic),
+          profileVisible: minimal.profileVisible
+        },
+        stats: {
+          rewardsRedeemedAtomic: "0",
+          rewardsRedeemedCoins: "0.00",
+          wageredTotalAtomic: "0",
+          wageredTotalCoins: "0.00",
+          wageredByMode: {
+            caseBattlesAtomic: "0",
+            caseBattlesCoins: "0.00",
+            caseOpeningAtomic: "0",
+            caseOpeningCoins: "0.00",
+            minesAtomic: "0",
+            minesCoins: "0.00",
+            blackjackAtomic: "0",
+            blackjackCoins: "0.00",
+            rouletteAtomic: "0",
+            rouletteCoins: "0.00"
+          },
+          maxSingleWinAtomic: "0",
+          maxSingleWinCoins: "0.00",
+          maxSingleMultiplier: "0.0000",
+          currency: PLATFORM_VIRTUAL_COIN_SYMBOL
+        }
+      });
+    }
+  );
+
+  fastify.get("/public-profile/:publicId", { preHandler: requireAuth }, async (request, reply) => {
+    const params = publicProfileParamsSchema.parse(request.params);
+
+    const user = await prisma.user.findUnique({
+      where: { publicId: params.publicId },
+      select: {
+        id: true,
+        publicId: true,
+        email: true,
+        role: true,
+        status: true,
+        profileVisible: true,
+        levelXpAtomic: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!user) {
+      return reply.code(404).send({ message: "User not found" });
+    }
+
+    if (!user.profileVisible) {
+      return reply.code(403).send({
+        code: "PROFILE_PRIVATE",
+        message: "This profile is private"
+      });
+    }
+
+    const [wallet, minesAgg, blackjackAgg, rouletteAgg, casesAgg, battlesAgg] = await Promise.all([
+      prisma.wallet.findUnique({
+        where: {
+          userId_currency: {
+            userId: user.id,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          }
+        },
+        select: {
+          id: true,
+          balanceAtomic: true,
+          lockedAtomic: true,
+          updatedAt: true
+        }
+      }),
+      prisma.minesGame.aggregate({
+        where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+        _sum: { betAtomic: true, payoutAtomic: true },
+        _max: { payoutAtomic: true, currentMultiplier: true }
+      }),
+      prisma.blackjackGame.aggregate({
+        where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+        _sum: { initialBetAtomic: true, payoutAtomic: true },
+        _max: { payoutAtomic: true }
+      }),
+      prisma.rouletteBet.aggregate({
+        where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+        _sum: { stakeAtomic: true, payoutAtomic: true },
+        _max: { payoutAtomic: true }
+      }),
+      prisma.caseOpening.aggregate({
+        where: { userId: user.id, currency: PLATFORM_INTERNAL_CURRENCY },
+        _sum: { priceAtomic: true, payoutAtomic: true },
+        _max: { payoutAtomic: true }
+      }),
+      prisma.battleSlot.aggregate({
+        where: { userId: user.id, paidAmountAtomic: { gt: 0n } },
+        _sum: { paidAmountAtomic: true, payoutAtomic: true },
+        _max: { payoutAtomic: true }
+      })
+    ]);
+
+    const maxPayoutCandidates = [
+      minesAgg._max.payoutAtomic ?? 0n,
+      blackjackAgg._max.payoutAtomic ?? 0n,
+      rouletteAgg._max.payoutAtomic ?? 0n,
+      casesAgg._max.payoutAtomic ?? 0n,
+      battlesAgg._max.payoutAtomic ?? 0n
+    ];
+    const maxSingleWinAtomic = maxPayoutCandidates.reduce((acc, value) => (value > acc ? value : acc), 0n);
+
+    const maxMultiplierFromMinesDecimal = minesAgg._max.currentMultiplier;
+    const maxMultiplierRaw =
+      maxMultiplierFromMinesDecimal !== null && maxMultiplierFromMinesDecimal !== undefined
+        ? Number(maxMultiplierFromMinesDecimal.toString())
+        : 0;
+    const maxMultiplier = Number.isFinite(maxMultiplierRaw) ? maxMultiplierRaw : 0;
+
+    const level = getLevelFromXp(user.levelXpAtomic);
+    const balanceAtomic = wallet?.balanceAtomic ?? 0n;
+    const lockedAtomic = wallet?.lockedAtomic ?? 0n;
+    const availableAtomic = balanceAtomic - lockedAtomic;
+
+    return reply.send({
+      user: {
+        id: user.id,
+        publicId: user.publicId,
+        username: user.email.split("@")[0] || `user#${user.publicId}`,
+        role: user.role,
+        status: user.status,
+        profileVisible: user.profileVisible,
+        level,
+        levelXpAtomic: user.levelXpAtomic.toString(),
+        levelXp: toCoinsString(user.levelXpAtomic, 0),
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      },
+      wallet: {
+        walletId: wallet?.id ?? null,
+        balanceAtomic: balanceAtomic.toString(),
+        balanceCoins: toCoinsString(balanceAtomic),
+        lockedAtomic: lockedAtomic.toString(),
+        lockedCoins: toCoinsString(lockedAtomic),
+        availableAtomic: availableAtomic.toString(),
+        availableCoins: toCoinsString(availableAtomic),
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+        updatedAt: wallet?.updatedAt ?? null
+      },
+      stats: {
+        rewardsRedeemedAtomic: "0",
+        rewardsRedeemedCoins: "0.00",
+        totalWageredByMode: {
+          minesAtomic: (minesAgg._sum.betAtomic ?? 0n).toString(),
+          minesCoins: toCoinsString(minesAgg._sum.betAtomic ?? 0n),
+          blackjackAtomic: (blackjackAgg._sum.initialBetAtomic ?? 0n).toString(),
+          blackjackCoins: toCoinsString(blackjackAgg._sum.initialBetAtomic ?? 0n),
+          rouletteAtomic: (rouletteAgg._sum.stakeAtomic ?? 0n).toString(),
+          rouletteCoins: toCoinsString(rouletteAgg._sum.stakeAtomic ?? 0n),
+          caseOpeningAtomic: (casesAgg._sum.priceAtomic ?? 0n).toString(),
+          caseOpeningCoins: toCoinsString(casesAgg._sum.priceAtomic ?? 0n),
+          caseBattlesAtomic: (battlesAgg._sum.paidAmountAtomic ?? 0n).toString(),
+          caseBattlesCoins: toCoinsString(battlesAgg._sum.paidAmountAtomic ?? 0n)
+        },
+        totalPayoutByMode: {
+          minesAtomic: (minesAgg._sum.payoutAtomic ?? 0n).toString(),
+          minesCoins: toCoinsString(minesAgg._sum.payoutAtomic ?? 0n),
+          blackjackAtomic: (blackjackAgg._sum.payoutAtomic ?? 0n).toString(),
+          blackjackCoins: toCoinsString(blackjackAgg._sum.payoutAtomic ?? 0n),
+          rouletteAtomic: (rouletteAgg._sum.payoutAtomic ?? 0n).toString(),
+          rouletteCoins: toCoinsString(rouletteAgg._sum.payoutAtomic ?? 0n),
+          caseOpeningAtomic: (casesAgg._sum.payoutAtomic ?? 0n).toString(),
+          caseOpeningCoins: toCoinsString(casesAgg._sum.payoutAtomic ?? 0n),
+          caseBattlesAtomic: (battlesAgg._sum.payoutAtomic ?? 0n).toString(),
+          caseBattlesCoins: toCoinsString(battlesAgg._sum.payoutAtomic ?? 0n)
+        },
+        maxSingleWinAtomic: maxSingleWinAtomic.toString(),
+        maxSingleWinCoins: toCoinsString(maxSingleWinAtomic),
+        maxMultiplier
+      }
+    });
   });
 
   fastify.get("/me/transactions", { preHandler: requireAuth }, async (request, reply) => {

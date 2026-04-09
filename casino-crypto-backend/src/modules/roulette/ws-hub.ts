@@ -70,6 +70,7 @@ type RouletteRealtimeEvent =
       data: {
         id: string;
         userId: string;
+        userPublicId: number | null;
         userLabel: string;
         level: number;
         avatarUrl: string | null;
@@ -128,12 +129,31 @@ type RouletteRealtimeEvent =
       data: {
         id: string;
         fromUserId: string;
+        fromUserPublicId: number | null;
         fromUserLabel: string;
         toUserId: string;
+        toUserPublicId: number | null;
         toUserLabel: string;
         amountAtomic: string;
         message: string | null;
         createdAt: string;
+      };
+    }
+  | {
+      type: "rain.settled";
+      data: {
+        roundId: string;
+        startsAt: string;
+        endsAt: string;
+        totalAmountAtomic: string;
+        givenAmountAtomic: string;
+        givenAmountCoins: string;
+        winnerCount: number;
+        winners: Array<{
+          userId: string;
+          userPublicId: number | null;
+          userLabel: string;
+        }>;
       };
     }
   | {

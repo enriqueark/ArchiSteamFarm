@@ -8,7 +8,8 @@ import { getLevelFromXp } from "../progression/service";
 export type ChatMessageState = {
   id: string;
   userId: string;
-  publicId: number;
+  publicId: number | null;
+  userPublicId: number | null;
   username: string;
   userLevel: number;
   avatarUrl: string | null;
@@ -43,6 +44,12 @@ const hasLevelXpColumn = (error: unknown): boolean =>
     error.message.includes("users.levelXpAtomic") ||
     error.message.includes("column") && error.message.toLowerCase().includes("levelxpatomic"));
 
+const hasPublicIdColumn = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.message.includes("publicId") ||
+    error.message.includes("users.publicId") ||
+    (error.message.includes("column") && error.message.toLowerCase().includes("publicid")));
+
 const toState = (row: {
   id: string;
   userId: string;
@@ -50,13 +57,14 @@ const toState = (row: {
   createdAt: Date;
   user: {
     email: string;
-    publicId: number;
     levelXpAtomic: bigint;
+    publicId: number | null;
   };
 }): ChatMessageState => ({
   id: row.id,
   userId: row.userId,
-  publicId: row.user.publicId,
+  publicId: row.user.publicId ?? null,
+  userPublicId: row.user.publicId ?? null,
   username: formatUsername(row.user.email, row.userId),
   userLevel: getLevelFromXp(row.user.levelXpAtomic),
   avatarUrl: null,
@@ -76,14 +84,14 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         user: {
           select: {
             email: true,
-            publicId: true,
-            levelXpAtomic: true
+            levelXpAtomic: true,
+            publicId: true
           }
         }
       }
     })
     .catch(async (error) => {
-      if (!hasLevelXpColumn(error)) {
+      if (!hasLevelXpColumn(error) && !hasPublicIdColumn(error)) {
         throw error;
       }
       const legacyRows = await prisma.chatMessage.findMany({
@@ -94,8 +102,7 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         include: {
           user: {
             select: {
-              email: true,
-              publicId: true
+              email: true
             }
           }
         }
@@ -104,7 +111,8 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         ...row,
         user: {
           ...row.user,
-          levelXpAtomic: 0n
+          levelXpAtomic: 0n,
+          publicId: null
         }
       }));
     });
@@ -154,14 +162,14 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           user: {
             select: {
               email: true,
-              publicId: true,
-              levelXpAtomic: true
+              levelXpAtomic: true,
+              publicId: true
             }
           }
         }
       })
       .catch(async (error) => {
-        if (!hasLevelXpColumn(error)) {
+        if (!hasLevelXpColumn(error) && !hasPublicIdColumn(error)) {
           throw error;
         }
         const legacyRow = await prisma.chatMessage.create({
@@ -172,8 +180,7 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           include: {
             user: {
               select: {
-                email: true,
-                publicId: true
+                email: true
               }
             }
           }
@@ -182,7 +189,8 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           ...legacyRow,
           user: {
             ...legacyRow.user,
-            levelXpAtomic: 0n
+            levelXpAtomic: 0n,
+            publicId: null
           }
         };
       });
