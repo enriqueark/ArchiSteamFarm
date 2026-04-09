@@ -8,6 +8,7 @@ const TIERS = [
 ];
 
 export function getTierColor(level: number): string {
+  if (level >= 100) return "#ffffff";
   return (TIERS.find((t) => level <= t.max) || TIERS[TIERS.length - 1]).color;
 }
 
