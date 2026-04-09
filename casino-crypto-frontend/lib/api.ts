@@ -868,6 +868,10 @@ export interface User {
   role: string;
   status: string;
   createdAt: string;
+  avatarUrl?: string | null;
+  customAvatarUrl?: string | null;
+  providerAvatarUrl?: string | null;
+  avatarSource?: "CUSTOM" | "PROVIDER" | "INITIAL";
   level?: number;
   levelXpAtomic?: string;
   levelXp?: string;
@@ -881,6 +885,27 @@ export interface User {
 
 export async function getMe(): Promise<User> {
   return request<User>("/users/me");
+}
+
+export type AvatarSource = "CUSTOM" | "PROVIDER" | "INITIAL";
+
+export interface UpdateMyAvatarResponse {
+  avatarUrl: string | null;
+  customAvatarUrl: string | null;
+  providerAvatarUrl: string | null;
+  avatarSource: AvatarSource;
+  updatedAt: string;
+}
+
+export async function updateMyAvatar(avatarUrl: string | null): Promise<UpdateMyAvatarResponse> {
+  return request<UpdateMyAvatarResponse>(
+    "/users/me/avatar",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ avatarUrl })
+    },
+    true
+  );
 }
 
 // ── Profile / Vault / History ───────────────────────────────────────────

@@ -39,6 +39,32 @@ const publicProfileParamsSchema = z.object({
 const publicProfileByUserIdParamsSchema = z.object({
   userId: z.string().cuid()
 });
+const avatarUpdateSchema = z.object({
+  avatarUrl: z
+    .union([z.string().trim().max(1024), z.null()])
+    .optional()
+    .transform((value) => {
+      if (typeof value !== "string") {
+        return null;
+      }
+      const normalized = value.trim();
+      return normalized.length > 0 ? normalized : null;
+    })
+    .refine(
+      (value) => {
+        if (!value) {
+          return true;
+        }
+        try {
+          const url = new URL(value);
+          return url.protocol === "http:" || url.protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "avatarUrl must be a valid http/https URL" }
+    )
+});
 
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
@@ -56,6 +82,14 @@ const isMissingPublicIdColumnError = (error: unknown): boolean => {
     return false;
   }
   return error.message.toLowerCase().includes("publicid");
+};
+
+const isMissingAvatarColumnsError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return message.includes("avatarurl") || message.includes("provideravatarurl");
 };
 
 const toPublicIdSafe = (value: unknown): number | null => {
@@ -113,6 +147,100 @@ const getPublicIdBestEffort = async (userId: string): Promise<number | null> => 
   } catch (error) {
     if (isMissingPublicIdColumnError(error)) {
       return null;
+    }
+    throw error;
+  }
+};
+
+const toOptionalString = (value: unknown): string | null => {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+};
+
+const resolveAvatarUrl = (avatarUrl: string | null, providerAvatarUrl: string | null): string | null => {
+  return avatarUrl ?? providerAvatarUrl ?? null;
+};
+
+const resolveAvatarSource = (
+  avatarUrl: string | null,
+  providerAvatarUrl: string | null
+): "CUSTOM" | "PROVIDER" | "INITIAL" => {
+  if (avatarUrl) {
+    return "CUSTOM";
+  }
+  if (providerAvatarUrl) {
+    return "PROVIDER";
+  }
+  return "INITIAL";
+};
+
+const ensureUserAvatarColumnsBestEffort = async (): Promise<void> => {
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "avatarUrl" TEXT');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "providerAvatarUrl" TEXT');
+  } catch {
+    // ignored
+  }
+};
+
+const getUserAvatarSourcesBestEffort = async (
+  userId: string
+): Promise<{ avatarUrl: string | null; providerAvatarUrl: string | null }> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ avatarUrl: unknown; providerAvatarUrl: unknown }>>`
+      SELECT "avatarUrl", "providerAvatarUrl"
+      FROM "users"
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    return {
+      avatarUrl: toOptionalString(rows[0]?.avatarUrl ?? null),
+      providerAvatarUrl: toOptionalString(rows[0]?.providerAvatarUrl ?? null)
+    };
+  } catch (error) {
+    if (isMissingAvatarColumnsError(error)) {
+      return {
+        avatarUrl: null,
+        providerAvatarUrl: null
+      };
+    }
+    throw error;
+  }
+};
+
+const updateUserAvatarBestEffort = async (
+  userId: string,
+  avatarUrl: string | null
+): Promise<{ avatarUrl: string | null; providerAvatarUrl: string | null; updatedAt: Date }> => {
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{ avatarUrl: unknown; providerAvatarUrl: unknown; updatedAt: Date }>
+    >`
+      UPDATE "users"
+      SET "avatarUrl" = ${avatarUrl},
+          "updatedAt" = NOW()
+      WHERE id = ${userId}
+      RETURNING "avatarUrl", "providerAvatarUrl", "updatedAt"
+    `;
+    const row = rows[0];
+    if (!row) {
+      throw new Error("USER_NOT_FOUND");
+    }
+    return {
+      avatarUrl: toOptionalString(row.avatarUrl ?? null),
+      providerAvatarUrl: toOptionalString(row.providerAvatarUrl ?? null),
+      updatedAt: row.updatedAt
+    };
+  } catch (error) {
+    if (isMissingAvatarColumnsError(error)) {
+      return {
+        avatarUrl: null,
+        providerAvatarUrl: null,
+        updatedAt: new Date()
+      };
     }
     throw error;
   }
@@ -395,6 +523,8 @@ const getUserMinimalById = async (userId: string): Promise<{
 };
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
+  await ensureUserAvatarColumnsBestEffort();
+
   fastify.get("/me", { preHandler: requireAuth }, async (request, reply) => {
     const user = await prisma.user
       .findUnique({
@@ -441,6 +571,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       "publicId" in user
         ? toPublicIdSafe(user.publicId)
         : await getPublicIdBestEffort(request.user.sub);
+    const avatarSources = await getUserAvatarSourcesBestEffort(request.user.sub);
+    const effectiveAvatarUrl = resolveAvatarUrl(avatarSources.avatarUrl, avatarSources.providerAvatarUrl);
+    const avatarSource = resolveAvatarSource(avatarSources.avatarUrl, avatarSources.providerAvatarUrl);
 
     return reply.send({
       id: user.id,
@@ -457,8 +590,37 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         xpAtomic: xpAtomic.toString(),
         xp: toCoinsString(xpAtomic, 0),
         currency: PLATFORM_VIRTUAL_COIN_SYMBOL
-      }
+      },
+      avatarUrl: effectiveAvatarUrl,
+      customAvatarUrl: avatarSources.avatarUrl,
+      providerAvatarUrl: avatarSources.providerAvatarUrl,
+      avatarSource
     });
+  });
+
+  fastify.patch("/me/avatar", { preHandler: requireAuth }, async (request, reply) => {
+    const body = avatarUpdateSchema.parse(request.body);
+    await ensureUserAvatarColumnsBestEffort();
+    try {
+      const updated = await updateUserAvatarBestEffort(request.user.sub, body.avatarUrl ?? null);
+      const effectiveAvatarUrl = resolveAvatarUrl(updated.avatarUrl, updated.providerAvatarUrl);
+      const avatarSource = resolveAvatarSource(updated.avatarUrl, updated.providerAvatarUrl);
+      return reply.send({
+        avatarUrl: effectiveAvatarUrl,
+        customAvatarUrl: updated.avatarUrl,
+        providerAvatarUrl: updated.providerAvatarUrl,
+        avatarSource,
+        updatedAt: updated.updatedAt
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+        return reply.code(404).send({
+          code: "USER_NOT_FOUND",
+          message: "User not found"
+        });
+      }
+      throw error;
+    }
   });
 
   fastify.get("/profile/summary", { preHandler: requireAuth }, async (request, reply) => {

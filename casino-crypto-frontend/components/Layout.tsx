@@ -8,6 +8,7 @@ import {
   depositVault,
   getVaultState,
   getWallets,
+  updateMyAvatar,
   type VaultLockDuration,
   type VaultState,
   type Wallet,
@@ -51,6 +52,12 @@ interface Props {
   userAvatarUrl?: string | null;
 }
 
+const getInitialFromLabel = (label: string | undefined): string => {
+  const normalized = (label || "").trim();
+  if (!normalized) return "U";
+  return normalized.slice(0, 1).toUpperCase();
+};
+
 export default function Layout({ children, onLogout, userEmail, userLevel, userAvatarUrl }: Props) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -73,6 +80,12 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const prevBalanceRef = useRef<string | null>(null);
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
+  const [avatarUrlState, setAvatarUrlState] = useState<string | null>(userAvatarUrl ?? null);
+  const [avatarInputValue, setAvatarInputValue] = useState("");
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarInfo, setAvatarInfo] = useState<string | null>(null);
+  const [avatarSourceLabel, setAvatarSourceLabel] = useState<"CUSTOM" | "PROVIDER" | "INITIAL">("INITIAL");
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -114,6 +127,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     setProfileMenuOpen(false);
   }, [router.pathname]);
 
+  useEffect(() => {
+    setAvatarUrlState(userAvatarUrl ?? null);
+    setAvatarSourceLabel(userAvatarUrl ? "PROVIDER" : "INITIAL");
+  }, [userAvatarUrl]);
+
   const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
 
   useEffect(() => {
@@ -148,6 +166,26 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     setDisplayBalance(currentBal);
   }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
+  const avatarInitial = getInitialFromLabel(displayUsername);
+
+  const submitAvatarUpdate = async (value: string | null) => {
+    setAvatarSaving(true);
+    setAvatarError(null);
+    setAvatarInfo(null);
+    try {
+      const result = await updateMyAvatar(value);
+      setAvatarUrlState(result.avatarUrl ?? null);
+      setAvatarSourceLabel(result.avatarSource ?? (result.avatarUrl ? "CUSTOM" : "INITIAL"));
+      setAvatarInfo(value ? "Avatar updated successfully" : "Custom avatar removed");
+      setAvatarInputValue("");
+      // Keep top-right balance/avatar block updated without full reload.
+      window.dispatchEvent(new Event("refreshBalance"));
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : "Failed to update avatar");
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
 
   const loadVaultState = async () => {
     setVaultLoading(true);
@@ -365,25 +403,31 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               </div>
               <button
                 type="button"
-                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setProfileMenuOpen((prev) => !prev);
+                  setAvatarError(null);
+                  setAvatarInfo(null);
+                }}
                 className="relative h-[32px] w-[32px] shrink-0 rounded-full"
                 title="Open profile options"
               >
-                <div className="h-full w-full overflow-hidden rounded-full bg-[#1b1b1b]">
-                  {userAvatarUrl ? (
-                    <img src={userAvatarUrl} alt="avatar" className="h-full w-full object-cover" />
+                <div className="h-full w-full overflow-hidden rounded-full bg-[#1b1b1b] border border-[#f2cb6a]/45 shadow-[0_0_8px_rgba(242,203,106,0.26)]">
+                  {avatarUrlState ? (
+                    <img src={avatarUrlState} alt="avatar" className="h-full w-full object-cover" />
                   ) : (
-                    <img
-                      src="/assets/69a77514d4212f89fc13bd58f30d7dcf.png"
-                      alt="avatar"
-                      className="h-full w-full object-cover"
-                    />
+                    <div className="flex h-full w-full items-center justify-center bg-[#202020] text-[13px] font-bold text-white">
+                      {avatarInitial}
+                    </div>
                   )}
                 </div>
               </button>
               <button
                 type="button"
-                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setProfileMenuOpen((prev) => !prev);
+                  setAvatarError(null);
+                  setAvatarInfo(null);
+                }}
                 title="Open profile options"
                 style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", display: "flex", alignItems: "center" }}
               >
@@ -467,6 +511,55 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   >
                     LOGOUT
                   </button>
+
+                  <div className="mt-2 rounded-[10px] border border-[#223447] bg-[#0c1b2a] p-3">
+                    <p className="m-0 text-[11px] uppercase tracking-wide text-[#8ea5bd]">Avatar</p>
+                    <p className="m-0 mt-1 text-[11px] text-[#7f95ac]">
+                      Set custom avatar URL. If empty, we fallback to provider photo (Google/Steam) or your initial.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-[30px] w-[30px] overflow-hidden rounded-full border border-[#dcb35c]/45 bg-[#1b1b1b]">
+                        {avatarUrlState ? (
+                          <img src={avatarUrlState} alt="avatar preview" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[12px] font-bold text-white">
+                            {avatarInitial}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-[#9cb4cb]">
+                        {avatarUrlState ? "Current: image avatar" : `Current: initial (${avatarInitial})`}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={avatarInputValue}
+                        onChange={(event) => setAvatarInputValue(event.target.value)}
+                        placeholder="https://..."
+                        className="h-[34px] w-full rounded-[8px] border border-[#2a4258] bg-[#091522] px-2 text-[12px] text-white outline-none"
+                      />
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={avatarSaving}
+                        onClick={() => void submitAvatarUpdate(avatarInputValue.trim().length > 0 ? avatarInputValue.trim() : null)}
+                        className="rounded-[8px] border border-[#f2686a] bg-gradient-to-b from-[#f75a5d] to-[#b73437] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+                      >
+                        {avatarSaving ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={avatarSaving}
+                        onClick={() => void submitAvatarUpdate(null)}
+                        className="rounded-[8px] border border-[#35516d] bg-[#0d2234] px-3 py-1.5 text-[12px] font-semibold text-[#c9d7e5] disabled:opacity-60"
+                      >
+                        Remove custom
+                      </button>
+                    </div>
+                    {avatarError ? <p className="m-0 mt-2 text-[11px] text-[#ff8d93]">{avatarError}</p> : null}
+                    {avatarInfo ? <p className="m-0 mt-2 text-[11px] text-[#8df3a1]">{avatarInfo}</p> : null}
+                  </div>
                 </div>
               )}
             </div>

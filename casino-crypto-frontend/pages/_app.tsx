@@ -51,7 +51,7 @@ export default function App({ Component, pageProps }: AppProps) {
       onLogout={handleLogout}
       userEmail={user?.email}
       userLevel={user?.progression?.level ?? user?.level}
-      userAvatarUrl={null}
+      userAvatarUrl={user?.avatarUrl ?? null}
     >
       <Component {...pageProps} />
     </Layout>
