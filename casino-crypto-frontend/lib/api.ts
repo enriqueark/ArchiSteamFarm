@@ -735,7 +735,7 @@ export async function cashoutMines(gameId: string): Promise<MinesGame> {
 export interface ChatMessage {
   id: string;
   userId: string;
-  publicId: number;
+  userPublicId: number | null;
   username: string;
   userLevel: number;
   avatarUrl: string | null;
@@ -786,21 +786,77 @@ export async function tipRain(amountCoins: number): Promise<{ rain: RainState }>
 export interface TipUserResult {
   id: string;
   fromUserId: string;
+  fromUserPublicId: number | null;
   fromUserLabel: string;
   toUserId: string;
+  toUserPublicId: number | null;
   toUserLabel: string;
   amountAtomic: string;
   message: string | null;
   createdAt: string;
+  silent?: boolean;
 }
 
-export async function tipUser(toUserPublicId: number, amountCoins: number, message?: string): Promise<TipUserResult> {
+export async function tipUser(
+  toUserPublicId: number,
+  amountCoins: number,
+  message?: string,
+  silent?: boolean
+): Promise<TipUserResult> {
   return request<TipUserResult>(
     "/chat/tips",
-    { method: "POST", body: JSON.stringify({ toUserPublicId, amountCoins, ...(message ? { message } : {}) }) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        toUserPublicId,
+        amountCoins,
+        ...(message ? { message } : {}),
+        ...(typeof silent === "boolean" ? { silent } : {})
+      })
+    },
     true,
     true
   );
+}
+
+export interface ChatPublicProfileSummary {
+  user: {
+    id: string;
+    publicId: number | null;
+    username: string;
+    level: number;
+    profileVisible: boolean;
+  };
+  stats: {
+    rewardsRedeemedAtomic: string;
+    rewardsRedeemedCoins: string;
+    wageredTotalAtomic: string;
+    wageredTotalCoins: string;
+    wageredByMode: {
+      caseBattlesAtomic: string;
+      caseBattlesCoins: string;
+      caseOpeningAtomic: string;
+      caseOpeningCoins: string;
+      minesAtomic: string;
+      minesCoins: string;
+      blackjackAtomic: string;
+      blackjackCoins: string;
+      rouletteAtomic: string;
+      rouletteCoins: string;
+    };
+    maxSingleWinAtomic: string;
+    maxSingleWinCoins: string;
+    maxSingleMultiplier: string;
+    currency: string;
+  };
+}
+
+export async function getChatProfileByPublicId(publicId: number): Promise<ChatPublicProfileSummary> {
+  return request<ChatPublicProfileSummary>(`/users/profiles/${publicId}/summary`);
+}
+
+export async function getChatProfileByUserId(userId: string): Promise<ChatPublicProfileSummary> {
+  return request<ChatPublicProfileSummary>(`/users/profiles/by-user/${encodeURIComponent(userId)}/summary`);
 }
 
 // ── User ────────────────────────────────────────────────────────────────
@@ -1069,6 +1125,57 @@ export interface AffiliateDashboard {
 
 export async function getAffiliateDashboard(): Promise<AffiliateDashboard> {
   return request<AffiliateDashboard>("/affiliates/dashboard");
+}
+
+export interface PublicChatProfileSummary {
+  user: {
+    id: string;
+    publicId: number | null;
+    username: string;
+    level: number;
+    profileVisible: boolean;
+  };
+  stats: {
+    rewardsRedeemedAtomic: string;
+    rewardsRedeemedCoins: string;
+    wageredTotalAtomic: string;
+    wageredTotalCoins: string;
+    wageredByMode: {
+      caseBattlesAtomic: string;
+      caseBattlesCoins: string;
+      caseOpeningAtomic: string;
+      caseOpeningCoins: string;
+      minesAtomic: string;
+      minesCoins: string;
+      blackjackAtomic: string;
+      blackjackCoins: string;
+      rouletteAtomic: string;
+      rouletteCoins: string;
+    };
+    maxSingleWinAtomic: string;
+    maxSingleWinCoins: string;
+    maxSingleMultiplier: string;
+    currency: string;
+  };
+}
+
+export async function getPublicChatProfileSummaryByPublicId(publicId: number): Promise<PublicChatProfileSummary> {
+  return request<PublicChatProfileSummary>(`/users/profiles/${publicId}/summary`);
+}
+
+export async function getPublicChatProfileSummaryByUserId(userId: string): Promise<PublicChatProfileSummary> {
+  return request<PublicChatProfileSummary>(`/users/profiles/by-user/${encodeURIComponent(userId)}/summary`);
+}
+
+export async function setMyProfileVisibility(profileVisible: boolean): Promise<{ profileVisible: boolean; updatedAt: string }> {
+  return request<{ profileVisible: boolean; updatedAt: string }>(
+    "/users/me/profile-visibility",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ profileVisible })
+    },
+    true
+  );
 }
 
 export function getApiUrl() {

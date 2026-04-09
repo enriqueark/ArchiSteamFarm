@@ -29,7 +29,7 @@ export type SocketEvent =
       data: {
         id: string;
         userId: string;
-        publicId?: number;
+        userPublicId?: number | null;
         userLabel: string;
         level: number;
         avatarUrl: string | null;
@@ -79,12 +79,31 @@ export type SocketEvent =
       data: {
         id: string;
         fromUserId: string;
+        fromUserPublicId?: number | null;
         fromUserLabel: string;
         toUserId: string;
+        toUserPublicId?: number | null;
         toUserLabel: string;
         amountAtomic: string;
         message: string | null;
         createdAt: string;
+      };
+    }
+  | {
+      type: "rain.settled";
+      data: {
+        roundId: string;
+        startsAt: string;
+        endsAt: string;
+        totalAmountAtomic: string;
+        givenAmountAtomic: string;
+        givenAmountCoins: string;
+        winnerCount: number;
+        winners: Array<{
+          userId: string;
+          userPublicId: number | null;
+          userLabel: string;
+        }>;
       };
     }
   | {
@@ -159,6 +178,8 @@ export class CasinoSocket {
           this.emit({ type: "rain.joined", data: parsed.data || parsed });
         } else if (eventType === "chat.userTip") {
           this.emit({ type: "chat.userTip", data: parsed.data || parsed });
+        } else if (eventType === "rain.settled") {
+          this.emit({ type: "rain.settled", data: parsed.data || parsed });
         } else if (eventType === "chat.presence") {
           this.emit({ type: "chat.presence", data: parsed.data || parsed });
         } else if (eventType === "pong") {

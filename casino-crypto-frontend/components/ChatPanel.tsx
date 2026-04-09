@@ -152,7 +152,7 @@ export default function ChatPanel({ onClose }: Props) {
         upsertMessage({
           id: ev.data.id,
           userId: ev.data.userId,
-          publicId: ev.data.publicId || 0,
+          userPublicId: ev.data.userPublicId ?? null,
           username: ev.data.userLabel,
           userLevel: ev.data.level,
           avatarUrl: ev.data.avatarUrl,
@@ -198,12 +198,27 @@ export default function ChatPanel({ onClose }: Props) {
         upsertMessage({
           id: ev.data.id,
           userId: "system",
-          publicId: 0,
+          userPublicId: null,
           username: "System",
           userLevel: 0,
           avatarUrl: null,
           message: `${ev.data.fromUserLabel} tipped ${ev.data.toUserLabel} ${fromAtomicToCoins(ev.data.amountAtomic)} coins`,
           createdAt: ev.data.createdAt
+        });
+      } else if (ev.type === "rain.settled") {
+        const winnerNames = ev.data.winners.map((winner) => winner.userLabel).slice(0, 6).join(", ");
+        const suffix = ev.data.winners.length > 6 ? ", ..." : "";
+        upsertMessage({
+          id: `rain:settled:${ev.data.roundId}`,
+          userId: "system",
+          userPublicId: null,
+          username: "System",
+          userLevel: 0,
+          avatarUrl: null,
+          message: `Rain just given out ${ev.data.givenAmountCoins} coins to ${ev.data.winnerCount} users${
+            winnerNames ? ` (${winnerNames}${suffix})` : ""
+          }`,
+          createdAt: new Date().toISOString()
         });
       }
     });
@@ -298,9 +313,13 @@ export default function ChatPanel({ onClose }: Props) {
     if (!tipModal || tipSending) return;
     const amount = parseFloat(tipAmount);
     if (!amount || amount < 1) { setTipError("Minimum tip is 1 COIN"); return; }
+    if (!tipModal.userPublicId || tipModal.userPublicId < 1) {
+      setTipError("This user cannot receive tips right now.");
+      return;
+    }
     setTipSending(true); setTipError(null);
     try {
-      await tipUser(tipModal.publicId, amount, tipHide ? undefined : undefined);
+      await tipUser(tipModal.userPublicId, amount, undefined, tipHide);
       setTipModal(null); setTipAmount(""); setTipError(null);
     } catch (e: unknown) { setTipError(e instanceof Error ? e.message : "Tip failed"); }
     finally { setTipSending(false); }
@@ -682,12 +701,19 @@ export default function ChatPanel({ onClose }: Props) {
         <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setContextUser(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "40%", right: 20, background: "#1a1a1a", borderRadius: 12, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,.5)", border: "1px solid #2a2a2a", minWidth: 160 }}>
             <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
-              onClick={() => { window.open(`/profile/${contextUser.publicId}`, "_blank"); setContextUser(null); }}>
+              onClick={() => {
+                const target =
+                  contextUser.userPublicId && contextUser.userPublicId > 0
+                    ? `/api/v1/users/profiles/${contextUser.userPublicId}/summary`
+                    : `/api/v1/users/profiles/by-user/${contextUser.userId}/summary`;
+                window.open(target, "_blank");
+                setContextUser(null);
+              }}>
               <span style={{ fontSize: 14 }}>👤</span>
               <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>View Profile</span>
             </div>
             <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
-              onClick={() => { navigator.clipboard.writeText(String(contextUser.publicId)); setContextUser(null); }}>
+              onClick={() => { navigator.clipboard.writeText(String(contextUser.userPublicId ?? contextUser.userId)); setContextUser(null); }}>
               <span style={{ fontSize: 14 }}>📋</span>
               <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>Copy UID</span>
             </div>
@@ -719,7 +745,9 @@ export default function ChatPanel({ onClose }: Props) {
                   {(tipModal.username || "U")[0].toUpperCase()}
                 </div>
               )}
-              <span style={{ color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }}>{tipModal.username} (id: {tipModal.publicId})</span>
+              <span style={{ color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }}>
+                {tipModal.username} (id: {tipModal.userPublicId ?? "N/A"})
+              </span>
             </div>
 
             <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 4px", fontFamily: '"DM Sans",sans-serif' }}>Tip Amount</p>

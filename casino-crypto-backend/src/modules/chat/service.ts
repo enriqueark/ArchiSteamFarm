@@ -8,7 +8,6 @@ import { getLevelFromXp } from "../progression/service";
 export type ChatMessageState = {
   id: string;
   userId: string;
-  publicId: number | null;
   userPublicId: number | null;
   username: string;
   userLevel: number;
@@ -63,7 +62,6 @@ const toState = (row: {
 }): ChatMessageState => ({
   id: row.id,
   userId: row.userId,
-  publicId: row.user.publicId ?? null,
   userPublicId: row.user.publicId ?? null,
   username: formatUsername(row.user.email, row.userId),
   userLevel: getLevelFromXp(row.user.levelXpAtomic),
