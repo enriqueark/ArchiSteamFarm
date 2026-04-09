@@ -704,8 +704,8 @@ export default function ChatPanel({ onClose }: Props) {
               onClick={() => {
                 const target =
                   contextUser.userPublicId && contextUser.userPublicId > 0
-                    ? `/api/v1/users/profiles/${contextUser.userPublicId}/summary`
-                    : `/api/v1/users/profiles/by-user/${contextUser.userId}/summary`;
+                    ? `/profile/${contextUser.userPublicId}`
+                    : `/profile/user/${contextUser.userId}`;
                 window.open(target, "_blank");
                 setContextUser(null);
               }}>
