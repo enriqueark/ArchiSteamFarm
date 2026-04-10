@@ -591,9 +591,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 6, padding: "8px 10px",
+            display: "flex", flexDirection: "column", gap: 6, padding: sidebarOpen ? "8px 10px" : "8px 4px 8px 12px",
             background: "#0d0d0d", flexShrink: 0,
-            width: sidebarOpen ? 196 : 72, transition: "width 0.25s ease",
+            width: sidebarOpen ? 196 : 78, transition: "width 0.25s ease",
             overflow: "hidden",
           }}>
             {sideLinks.map((item) => {
@@ -601,10 +601,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               return (
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: sidebarOpen ? "0 10px" : "0",
+                  padding: sidebarOpen ? "0 10px" : "0 8px",
                   justifyContent: sidebarOpen ? "flex-start" : "center",
-                  width: sidebarOpen ? "100%" : 44,
-                  alignSelf: sidebarOpen ? "stretch" : "center",
+                  width: "100%",
+                  alignSelf: "stretch",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
