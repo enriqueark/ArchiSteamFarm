@@ -591,7 +591,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 5, padding: "8px 6px",
+            display: "flex", flexDirection: "column", gap: 5, padding: "8px 4px 8px 10px",
             background: "#0d0d0d", flexShrink: 0,
             width: sidebarOpen ? 192 : 64, transition: "width 0.25s ease",
             overflow: "hidden",
@@ -603,7 +603,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   display: "flex", alignItems: "center", gap: 12,
                   padding: sidebarOpen ? "6px 10px" : "6px 0",
                   justifyContent: sidebarOpen ? "flex-start" : "center",
-                  width: sidebarOpen ? "100%" : 50,
+                  width: sidebarOpen ? "100%" : 52,
                   alignSelf: sidebarOpen ? "stretch" : "center",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
