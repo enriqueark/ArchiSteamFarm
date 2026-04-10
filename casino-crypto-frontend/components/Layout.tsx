@@ -574,27 +574,29 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 4, padding: "8px 5px",
+            display: "flex", flexDirection: "column", gap: 4, padding: "8px 0 8px 10px",
             background: "#0d0d0d", flexShrink: 0,
-            width: sidebarOpen ? 180 : 50, transition: "width 0.2s",
-            overflow: "hidden", alignItems: "flex-start",
+            width: sidebarOpen ? 180 : 50, transition: "width 0.25s ease",
+            overflow: "hidden",
           }}>
             {sideLinks.map((item) => {
               const active = router.pathname === item.href;
               return (
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  width: "100%", padding: sidebarOpen ? "6px 10px" : "0",
+                  padding: "6px 0 6px 0",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
-                  justifyContent: sidebarOpen ? "flex-start" : "center",
-                  minHeight: 38,
+                  minHeight: 30,
+                  whiteSpace: "nowrap",
                 }}>
                   <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
-                  {sidebarOpen && (
-                    <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
-                  )}
+                  <span style={{
+                    color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
+                    opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease 0.05s",
+                    pointerEvents: sidebarOpen ? "auto" : "none",
+                  }}>{item.label}</span>
                 </Link>
               );
             })}
