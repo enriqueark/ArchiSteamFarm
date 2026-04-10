@@ -31,8 +31,8 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 32 + (splitOffset || 0);
-  const scale = 0.5;
+  const left = idx * 38 + (splitOffset || 0);
+  const scale = 0.6;
   const w = 150 * scale;
   const h = 210 * scale;
   const base: React.CSSProperties = {
@@ -63,16 +63,16 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
       }} />
       {/* Rank text top-left */}
       <span style={{
-        position: "absolute", top: 10 * scale, left: 14 * scale,
-        fontSize: 28 * scale, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G,
+        position: "absolute", top: 8 * scale, left: 12 * scale,
+        fontSize: 32 * scale, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G,
       }}>{rank}</span>
       {/* Small suit under rank */}
-      {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 42 * scale, left: 12 * scale, width: 24 * scale, height: 24 * scale }} />}
-      {/* Large suit center-bottom */}
+      {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 42 * scale, left: 10 * scale, width: 24 * scale, height: 24 * scale }} />}
+      {/* Large suit center */}
       {largeSvg && <img src={largeSvg} alt="" style={{
-        position: "absolute", bottom: 16 * scale, left: "50%",
+        position: "absolute", bottom: 12 * scale, left: "50%",
         transform: "translateX(-50%)",
-        width: 80 * scale, height: 80 * scale,
+        width: 110 * scale, height: 110 * scale,
       }} />}
     </div>
   );
