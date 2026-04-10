@@ -4,6 +4,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import Footer from "./Footer";
 import LevelBadge from "./LevelBadge";
+import NotificationsPanel from "./NotificationsPanel";
 import {
   depositVault,
   getVaultState,
@@ -78,6 +79,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const prevBalanceRef = useRef<string | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [hasNewNotif, setHasNewNotif] = useState(true);
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
   const [avatarUrlState, setAvatarUrlState] = useState<string | null>(userAvatarUrl ?? null);
@@ -436,10 +439,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               <button
                 type="button"
                 title="Notifications"
-                style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", display: "flex", alignItems: "center", marginLeft: 4 }}
+                onClick={() => setNotifOpen(!notifOpen)}
+                style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", display: "flex", alignItems: "center", marginLeft: 4, position: "relative" }}
               >
                 <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="h-[24px] w-[24px]" />
+                {hasNewNotif && <span style={{ position: "absolute", top: -1, right: -1, width: 8, height: 8, borderRadius: "50%", background: "#f34950", border: "2px solid #0d0d0d" }} />}
               </button>
+              {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => setHasNewNotif(false)} />}
               {profileMenuOpen && (
                 <div className="absolute right-0 top-[44px] z-50 w-[260px] rounded-[14px] border border-[#1f2a38] bg-[#0b1622] shadow-[0_10px_32px_rgba(0,0,0,0.55)] p-2">
                   <button
