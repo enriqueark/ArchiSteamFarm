@@ -173,7 +173,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     prevBalanceRef.current = currentBal;
     setDisplayBalance(currentBal);
   }, [primaryWallet]);
-  const displayUsername = (userEmail?.split("@")[0] || "WildHub").slice(0, 16);
+  const displayUsername = (userEmail?.split("@")[0] || "").slice(0, 20) || "";
   const avatarInitial = getInitialFromLabel(displayUsername);
 
   const submitAvatarUpdate = async (value: string | null) => {

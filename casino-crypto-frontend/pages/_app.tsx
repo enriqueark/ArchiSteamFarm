@@ -49,7 +49,7 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <Layout
       onLogout={handleLogout}
-      userEmail={user?.email}
+      userEmail={user?.username || user?.email}
       userLevel={user?.progression?.level ?? user?.level}
       userAvatarUrl={user?.avatarUrl ?? null}
     >

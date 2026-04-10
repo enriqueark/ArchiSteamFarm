@@ -865,6 +865,7 @@ export interface User {
   id: string;
   publicId?: number | null;
   email: string;
+  username?: string;
   role: string;
   status: string;
   createdAt: string;
@@ -885,6 +886,10 @@ export interface User {
 
 export async function getMe(): Promise<User> {
   return request<User>("/users/me");
+}
+
+export async function updateUsername(username: string): Promise<{ id: string; username: string }> {
+  return request<{ id: string; username: string }>("/users/me/username", { method: "PUT", body: JSON.stringify({ username }) });
 }
 
 export type AvatarSource = "CUSTOM" | "PROVIDER" | "INITIAL";

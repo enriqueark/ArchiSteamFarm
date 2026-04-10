@@ -584,6 +584,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           publicId: true,
           email: true,
+          username: true,
           role: true,
           status: true,
           levelXpAtomic: true,
@@ -591,8 +592,6 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
       .catch((error) => {
-        // Backward compatible fallback for deployments where levelXpAtomic
-        // column is not present yet.
         if (isMissingLevelXpColumnError(error)) {
           return prisma.user.findUnique({
             where: {
@@ -601,6 +600,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               id: true,
               email: true,
+              username: true,
               role: true,
               status: true,
               createdAt: true
@@ -624,10 +624,13 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     const effectiveAvatarUrl = resolveAvatarUrl(avatarSources.avatarUrl, avatarSources.providerAvatarUrl);
     const avatarSource = resolveAvatarSource(avatarSources.avatarUrl, avatarSources.providerAvatarUrl);
 
+    const username = ("username" in user ? user.username : null) || user.email.split("@")[0] || `user#${publicId}`;
+
     return reply.send({
       id: user.id,
       publicId,
       email: user.email,
+      username,
       role: user.role,
       status: user.status,
       createdAt: user.createdAt,
@@ -1287,5 +1290,28 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         hasMore: query.offset + rows.length < total
       }
     });
+  });
+
+  const updateUsernameSchema = z.object({
+    username: z
+      .string()
+      .trim()
+      .min(3, "Username must be at least 3 characters")
+      .max(20, "Username must be at most 20 characters")
+      .regex(/^[a-zA-Z0-9_.-]+$/, "Username can only contain letters, numbers, dots, hyphens and underscores")
+  });
+
+  fastify.put("/me/username", { preHandler: requireAuth }, async (request, reply) => {
+    const body = updateUsernameSchema.parse(request.body);
+    const existing = await prisma.user.findUnique({ where: { username: body.username } });
+    if (existing && existing.id !== request.user.sub) {
+      return reply.code(409).send({ code: "USERNAME_TAKEN", message: "This username is already taken" });
+    }
+    const updated = await prisma.user.update({
+      where: { id: request.user.sub },
+      data: { username: body.username },
+      select: { id: true, username: true }
+    });
+    return reply.send(updated);
   });
 };
