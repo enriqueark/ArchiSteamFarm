@@ -316,7 +316,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         {/* Top nav with hamburger */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
-            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -10 }}>
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 36, height: 36, opacity: 0.7 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
