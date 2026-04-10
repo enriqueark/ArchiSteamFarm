@@ -41,14 +41,7 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
   };
 
   if (faceDown) return (
-    <div style={{ ...base, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 3px 0 #111, 0 2px 0 #1b1b1b, 0 1px 0 #252525", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, transform: "rotate(23deg)", opacity: 0.3 }}>
-        <img src={SUIT_SMALL.S} alt="" style={{ width: 14, height: 14 }} />
-        <img src={SUIT_SMALL.H} alt="" style={{ width: 14, height: 14 }} />
-        <img src={SUIT_SMALL.D} alt="" style={{ width: 14, height: 14 }} />
-        <img src={SUIT_SMALL.C} alt="" style={{ width: 14, height: 14 }} />
-      </div>
-    </div>
+    <div style={{ ...base, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 6px 0 #111, 0 4px 0 #1b1b1b, 0 2px 0 #252525", overflow: "hidden" }} />
   );
 
   const smallSvg = SUIT_SMALL[suit];
@@ -59,32 +52,27 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
       ...base,
       background: "radial-gradient(circle, #fff 0%, #dadada 100%)",
       boxShadow: "inset 0 1px 0 0 rgba(0,0,0,.07), 0 2px 14px 0 rgba(0,0,0,.29)",
-      overflow: "hidden", position: "absolute",
+      overflow: "hidden",
     }}>
       {/* Inner border rectangle */}
       <div style={{
-        position: "absolute",
-        top: (210 - 196) / 2 * scale,
-        left: (150 - 136) / 2 * scale,
-        width: 136 * scale,
-        height: 196 * scale,
+        position: "absolute", inset: 4 * scale,
         border: `1px solid ${clr}`,
         borderRadius: 13 * scale,
         boxSizing: "border-box",
       }} />
       {/* Rank text top-left */}
       <span style={{
-        position: "absolute", top: 8 * scale, left: 10 * scale,
-        fontSize: 32 * scale, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G,
+        position: "absolute", top: 10 * scale, left: 14 * scale,
+        fontSize: 28 * scale, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G,
       }}>{rank}</span>
-      {/* Small suit corner */}
-      {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 36 * scale, left: 10 * scale, width: 24 * scale, height: 24 * scale }} />}
-      {/* Large suit center */}
+      {/* Small suit under rank */}
+      {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 42 * scale, left: 12 * scale, width: 24 * scale, height: 24 * scale }} />}
+      {/* Large suit center-bottom */}
       {largeSvg && <img src={largeSvg} alt="" style={{
-        position: "absolute", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%) rotate(23deg)",
-        width: 48 * scale, height: 48 * scale,
-        filter: "drop-shadow(0 4px 15px rgba(0,0,0,.05))",
+        position: "absolute", bottom: 16 * scale, left: "50%",
+        transform: "translateX(-50%)",
+        width: 80 * scale, height: 80 * scale,
       }} />}
     </div>
   );
