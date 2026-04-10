@@ -330,7 +330,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         {/* Top nav with hamburger */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
-            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -8 }}>
+            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -6 }}>
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 36, height: 36, opacity: 0.7 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
@@ -588,7 +588,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 4, padding: "8px 0 8px 10px",
+            display: "flex", flexDirection: "column", gap: 4, padding: "8px 0 8px 14px",
             background: "#0d0d0d", flexShrink: 0,
             width: sidebarOpen ? 180 : 50, transition: "width 0.25s ease",
             overflow: "hidden",
@@ -598,7 +598,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               return (
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: "6px 0 6px 4px",
+                  padding: "6px 0 6px 6px",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
