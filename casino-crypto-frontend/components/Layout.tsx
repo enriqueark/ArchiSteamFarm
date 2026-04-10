@@ -330,8 +330,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         {/* Top nav with hamburger */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
-            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -6 }}>
-              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 36, height: 36, opacity: 0.7 }} />
+            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -4 }}>
+              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 40, height: 40, opacity: 0.72 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
@@ -590,7 +590,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div style={{
             display: "flex", flexDirection: "column", gap: 4, padding: "8px 2px 8px 12px",
             background: "#0d0d0d", flexShrink: 0,
-            width: sidebarOpen ? 180 : 50, transition: "width 0.25s ease",
+            width: sidebarOpen ? 180 : 58, transition: "width 0.25s ease",
             overflow: "hidden",
           }}>
             {sideLinks.map((item) => {
@@ -598,14 +598,15 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               return (
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: "6px 2px 6px 6px",
+                  padding: sidebarOpen ? "6px 8px" : "6px 0",
+                  justifyContent: sidebarOpen ? "flex-start" : "center",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
-                  minHeight: 30,
+                  minHeight: sidebarOpen ? 30 : 34,
                   whiteSpace: "nowrap",
                 }}>
-                  <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
+                  <img src={item.src} alt={item.label} style={{ width: 32, height: 32, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
                   <span style={{
                     color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
                     opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease 0.05s",
