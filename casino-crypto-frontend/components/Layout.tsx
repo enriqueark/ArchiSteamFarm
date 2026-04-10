@@ -593,16 +593,15 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div style={{
             display: "flex", flexDirection: "column", gap: 6, padding: "8px 8px",
             background: "#0d0d0d", flexShrink: 0,
-            width: sidebarOpen ? 196 : 78, transition: "width 0.25s ease",
+            width: sidebarOpen ? 200 : 88, transition: "width 0.25s ease",
             overflow: "hidden",
           }}>
             {sideLinks.map((item) => {
               const active = router.pathname === item.href;
               return (
                 <Link key={item.label} href={item.href} style={{
-                  display: "flex", alignItems: "center", gap: 12,
+                  display: "flex", alignItems: "center",
                   padding: "0 10px",
-                  justifyContent: "flex-start",
                   width: "100%",
                   alignSelf: "stretch",
                   borderRadius: 8, textDecoration: "none",
@@ -611,29 +610,33 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   minHeight: sidebarOpen ? 40 : 44,
                   whiteSpace: "nowrap",
                   boxSizing: "border-box",
-                  transition: "background 0.2s ease, box-shadow 0.2s ease"
+                  transition: "background 0.2s ease, box-shadow 0.2s ease",
+                  position: "relative",
+                  overflow: "hidden"
                 }}>
                   <div
                     style={{
-                      width: 33,
-                      minWidth: 33,
-                      height: 33,
+                      width: 34,
+                      minWidth: 34,
+                      height: 34,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      marginLeft: sidebarOpen ? 0 : "auto",
-                      marginRight: sidebarOpen ? 0 : "auto",
-                      transition: "margin 0.25s ease"
+                      position: "absolute",
+                      left: sidebarOpen ? 10 : "50%",
+                      transform: sidebarOpen ? "translateX(0)" : "translateX(-50%)",
+                      transition: "left 0.25s ease, transform 0.25s ease"
                     }}
                   >
-                    <img src={item.src} alt={item.label} style={{ width: 33, height: 33, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
+                    <img src={item.src} alt={item.label} style={{ width: 34, height: 34, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
                   </div>
                   <span style={{
                     color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
                     opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease, max-width 0.25s ease",
                     pointerEvents: sidebarOpen ? "auto" : "none",
                     maxWidth: sidebarOpen ? 120 : 0,
-                    overflow: "hidden"
+                    overflow: "hidden",
+                    marginLeft: 44
                   }}>{item.label}</span>
                 </Link>
               );
