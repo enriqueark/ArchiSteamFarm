@@ -80,7 +80,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
   const prevBalanceRef = useRef<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [hasNewNotif, setHasNewNotif] = useState(true);
+  const [hasNewNotif, setHasNewNotif] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("notifSeen") !== "true";
+  });
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
   const [avatarUrlState, setAvatarUrlState] = useState<string | null>(userAvatarUrl ?? null);
@@ -448,7 +451,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   {hasNewNotif && <circle cx="25" cy="5.5" r="4" fill="#F34950"/>}
                 </svg>
               </button>
-              {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => setHasNewNotif(false)} />}
+              {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => { setHasNewNotif(false); localStorage.setItem("notifSeen", "true"); }} />}
               {profileMenuOpen && (
                 <div className="absolute right-0 top-[44px] z-50 w-[260px] rounded-[14px] border border-[#1f2a38] bg-[#0b1622] shadow-[0_10px_32px_rgba(0,0,0,0.55)] p-2">
                   <button
