@@ -56,7 +56,7 @@ interface Props {
 
 const getInitialFromLabel = (label: string | undefined): string => {
   const normalized = (label || "").trim();
-  if (!normalized) return "U";
+  if (!normalized) return "";
   return normalized.slice(0, 1).toUpperCase();
 };
 
@@ -93,6 +93,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarInfo, setAvatarInfo] = useState<string | null>(null);
   const [avatarSourceLabel, setAvatarSourceLabel] = useState<"CUSTOM" | "PROVIDER" | "INITIAL">("INITIAL");
+  const [cachedUsername, setCachedUsername] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    const stored = localStorage.getItem("lastKnownUsername");
+    return (stored || "").trim();
+  });
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -141,6 +146,15 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     setAvatarSourceLabel(userAvatarUrl ? "PROVIDER" : "INITIAL");
   }, [userAvatarUrl]);
 
+  useEffect(() => {
+    const normalized = (userEmail?.split("@")[0] || "").trim();
+    if (!normalized) return;
+    setCachedUsername(normalized);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lastKnownUsername", normalized);
+    }
+  }, [userEmail]);
+
   const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
 
   useEffect(() => {
@@ -174,7 +188,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     prevBalanceRef.current = currentBal;
     setDisplayBalance(currentBal);
   }, [primaryWallet]);
-  const displayUsername = (userEmail?.split("@")[0] || "").slice(0, 20) || "";
+  const displayUsername = (userEmail?.split("@")[0] || cachedUsername || "").slice(0, 20).trim();
   const avatarInitial = getInitialFromLabel(displayUsername);
 
   const submitAvatarUpdate = async (value: string | null) => {
@@ -316,7 +330,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         {/* Top nav with hamburger */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
-            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -10 }}>
+            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", marginLeft: -8 }}>
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 36, height: 36, opacity: 0.7 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
@@ -584,7 +598,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               return (
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: "6px 0 6px 0",
+                  padding: "6px 0 6px 4px",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
