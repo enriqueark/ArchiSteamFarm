@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { DepositStatus, Prisma, WithdrawalStatus } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -66,6 +66,10 @@ const avatarUpdateSchema = z.object({
     )
 });
 
+const notificationsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10)
+});
+
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
@@ -116,6 +120,51 @@ const parseMetadataRecord = (value: unknown): Record<string, unknown> | null => 
     return null;
   }
   return value as Record<string, unknown>;
+};
+
+const parseAmountNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const formatAssetAmount = (value: number): string => {
+  const fixed = value.toFixed(8);
+  return fixed.replace(/\.?0+$/, "");
+};
+
+const resolveDepositAssetAmount = (metadata: unknown): number | null => {
+  const root = parseMetadataRecord(metadata);
+  if (!root) {
+    return null;
+  }
+  const raw = parseMetadataRecord(root.raw);
+  if (!raw) {
+    return null;
+  }
+  const txs = Array.isArray(raw.txs) ? raw.txs : [];
+  const firstTx = txs.length > 0 ? parseMetadataRecord(txs[0]) : null;
+  return (
+    parseAmountNumber(firstTx?.sent_amount) ??
+    parseAmountNumber(raw.amount) ??
+    parseAmountNumber(firstTx?.value) ??
+    parseAmountNumber(raw.value)
+  );
+};
+
+const resolveWithdrawalAssetAmount = (metadata: unknown): number | null => {
+  const root = parseMetadataRecord(metadata);
+  if (!root) {
+    return null;
+  }
+  return parseAmountNumber(root.payoutAmountAsset);
 };
 
 const transactionKindFromReason = (
@@ -595,6 +644,80 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       customAvatarUrl: avatarSources.avatarUrl,
       providerAvatarUrl: avatarSources.providerAvatarUrl,
       avatarSource
+    });
+  });
+
+  fastify.get("/me/cashier-notifications", { preHandler: requireAuth }, async (request, reply) => {
+    const query = notificationsQuerySchema.parse(request.query);
+    const [deposits, withdrawals] = await Promise.all([
+      prisma.deposit.findMany({
+        where: {
+          userId: request.user.sub,
+          status: { in: [DepositStatus.PENDING, DepositStatus.CONFIRMING] }
+        },
+        orderBy: { createdAt: "desc" },
+        take: query.limit
+      }),
+      prisma.withdrawal.findMany({
+        where: {
+          userId: request.user.sub,
+          status: {
+            in: [
+              WithdrawalStatus.PENDING,
+              WithdrawalStatus.IN_REVIEW,
+              WithdrawalStatus.APPROVED,
+              WithdrawalStatus.BROADCASTED,
+              WithdrawalStatus.CONFIRMING
+            ]
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        take: query.limit
+      })
+    ]);
+
+    const depositItems = deposits.map((deposit) => {
+      const amountAsset = resolveDepositAssetAmount(deposit.metadata);
+      const amountLabel = amountAsset !== null ? formatAssetAmount(amountAsset) : toCoinsString(deposit.amountAtomic);
+      const assetLabel = (deposit.asset ?? "USDT").toUpperCase();
+      return {
+        id: `deposit:${deposit.id}`,
+        type: "DEPOSIT" as const,
+        color: "GREEN" as const,
+        status: deposit.status,
+        title: "Deposit is pending",
+        description: `Your deposit of ${amountLabel} ${assetLabel} has been detected and is currently pending.`,
+        createdAt: deposit.createdAt
+      };
+    });
+
+    const withdrawalItems = withdrawals.map((withdrawal) => {
+      const amountAsset = resolveWithdrawalAssetAmount(withdrawal.metadata);
+      const amountLabel =
+        amountAsset !== null ? formatAssetAmount(amountAsset) : toCoinsString(withdrawal.amountAtomic);
+      const assetLabel = (withdrawal.asset ?? "USDT").toUpperCase();
+      return {
+        id: `withdrawal:${withdrawal.id}`,
+        type: "WITHDRAWAL" as const,
+        color: "GREEN" as const,
+        status: withdrawal.status,
+        title: "Withdrawal pending",
+        description: `Your withdrawal of ${amountLabel} ${assetLabel} is being processed and will arrive shortly.`,
+        createdAt: withdrawal.createdAt
+      };
+    });
+
+    const items = [...depositItems, ...withdrawalItems]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, query.limit)
+      .map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString()
+      }));
+
+    return reply.send({
+      items,
+      total: items.length
     });
   });
 

@@ -897,6 +897,25 @@ export interface UpdateMyAvatarResponse {
   updatedAt: string;
 }
 
+export interface CashierNotificationItem {
+  id: string;
+  type: "DEPOSIT" | "WITHDRAWAL";
+  color: "GREEN";
+  status: string;
+  title: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface CashierNotificationsResponse {
+  items: CashierNotificationItem[];
+  total: number;
+}
+
+export async function getMyCashierNotifications(limit = 10): Promise<CashierNotificationsResponse> {
+  return request<CashierNotificationsResponse>(`/users/me/cashier-notifications?limit=${limit}`);
+}
+
 export async function updateMyAvatar(avatarUrl: string | null): Promise<UpdateMyAvatarResponse> {
   return request<UpdateMyAvatarResponse>(
     "/users/me/avatar",
