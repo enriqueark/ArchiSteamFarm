@@ -591,7 +591,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 6, padding: sidebarOpen ? "8px 10px" : "8px 4px 8px 12px",
+            display: "flex", flexDirection: "column", gap: 6, padding: "8px 8px",
             background: "#0d0d0d", flexShrink: 0,
             width: sidebarOpen ? 196 : 78, transition: "width 0.25s ease",
             overflow: "hidden",
@@ -600,8 +600,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               const active = router.pathname === item.href;
               return (
                 <Link key={item.label} href={item.href} style={{
-                  display: "flex", alignItems: "center", gap: sidebarOpen ? 12 : 0,
-                  padding: sidebarOpen ? "0 10px" : "0 8px",
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "0 10px",
                   justifyContent: sidebarOpen ? "flex-start" : "center",
                   width: "100%",
                   alignSelf: "stretch",
@@ -610,14 +610,15 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
                   minHeight: sidebarOpen ? 40 : 44,
                   whiteSpace: "nowrap",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
+                  transition: "background 0.2s ease, box-shadow 0.2s ease"
                 }}>
-                  <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
+                  <img src={item.src} alt={item.label} style={{ width: 33, height: 33, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
                   <span style={{
                     color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
-                    opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease 0.05s",
+                    opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease",
                     pointerEvents: sidebarOpen ? "auto" : "none",
-                    width: sidebarOpen ? "auto" : 0,
+                    maxWidth: sidebarOpen ? 120 : 0,
                     overflow: "hidden"
                   }}>{item.label}</span>
                 </Link>
