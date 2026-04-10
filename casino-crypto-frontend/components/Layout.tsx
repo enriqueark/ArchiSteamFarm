@@ -311,90 +311,46 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar */}
-      <aside
-        style={{
-          display: "flex", flexDirection: "column", gap: 6, padding: 10,
-          background: "#0d0d0d", borderRadius: 18, flexShrink: 0,
-          width: sidebarOpen ? 220 : 62, transition: "width 0.2s",
-          overflow: "hidden", alignItems: "flex-start",
-        }}
-      >
-        {/* Hamburger toggle — top of sidebar */}
-        <div
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", width: "100%", cursor: "pointer", marginBottom: 6 }}
-        >
-          <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 42, height: 42, borderRadius: 8 }} />
-        </div>
+      {/* Left sidebar — always visible as icon strip */}
+      <aside style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 6px", background: "#0d0d0d", flexShrink: 0, width: 50, alignItems: "center" }}>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
-          const hovered = hoveredSideHref === item.href;
-          const highlighted = active || hovered;
-          const background = active
-            ? "linear-gradient(180deg, #ac2e30 0%, #f75154 100%)"
-            : hovered
-              ? "linear-gradient(180deg, #7e2b2e 0%, #bf4246 100%)"
-              : "transparent";
-          const boxShadow = active
-            ? "0 0 14px rgba(247,81,84,0.35)"
-            : hovered
-              ? "0 0 10px rgba(247,81,84,0.18)"
-              : "none";
           return (
-            <Link
-              key={item.label}
-              href={item.href}
-              onMouseEnter={() => setHoveredSideHref(item.href)}
-              onMouseLeave={() => setHoveredSideHref((prev) => (prev === item.href ? null : prev))}
-              style={{
-                display: "flex", alignItems: "center", gap: 14,
-                width: "100%", padding: sidebarOpen ? "8px 12px" : "0",
-                borderRadius: 8, textDecoration: "none",
-                background,
-                boxShadow,
-                justifyContent: sidebarOpen ? "flex-start" : "center",
-                transition: "background 160ms ease, box-shadow 160ms ease, transform 160ms ease",
-                transform: active ? "translateX(1px)" : hovered ? "translateX(0.5px)" : "translateX(0)"
-              }}
-            >
-              <img
-                src={item.src}
-                alt={item.label}
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 0,
-                  display: "block",
-                  flexShrink: 0,
-                  opacity: highlighted ? 1 : 0.74,
-                  transition: "opacity 160ms ease"
-                }}
-              />
-              {sidebarOpen && (
-                <span
-                  style={{
-                    color: highlighted ? "#fff" : "#8f8f8f",
-                    fontSize: 14,
-                    fontFamily: '"Inter",sans-serif',
-                    fontWeight: 500,
-                    whiteSpace: "nowrap",
-                    transition: "color 160ms ease"
-                  }}
-                >
-                  {item.label}
-                </span>
-              )}
+            <Link key={item.label} href={item.href} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 8, textDecoration: "none", background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent", boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none" }}>
+              <img src={item.src} alt={item.label} style={{ width: 32, height: 32, opacity: active ? 1 : 0.7 }} />
             </Link>
           );
         })}
       </aside>
+
+      {/* Sidebar overlay — slides out with labels when hamburger clicked */}
+      {sidebarOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setSidebarOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 220, background: "#0d0d0d", padding: "10px", display: "flex", flexDirection: "column", gap: 6, boxShadow: "4px 0 20px rgba(0,0,0,.5)" }}>
+            <div onClick={() => setSidebarOpen(false)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, cursor: "pointer", marginBottom: 6 }}>
+              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="close" style={{ width: 42, height: 42, borderRadius: 8 }} />
+            </div>
+            {sideLinks.map((item) => {
+              const active = router.pathname === item.href;
+              return (
+                <Link key={item.label} href={item.href} onClick={() => setSidebarOpen(false)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "8px 12px", borderRadius: 8, textDecoration: "none", background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent", boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none" }}>
+                  <img src={item.src} alt={item.label} style={{ width: 38, height: 38, opacity: active ? 1 : 0.7 }} />
+                  <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 14, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Main column */}
       <div className="flex-1 flex min-h-0 flex-col min-w-0">
         {/* Top nav */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 28, height: 28, opacity: 0.7 }} />
+            </button>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
