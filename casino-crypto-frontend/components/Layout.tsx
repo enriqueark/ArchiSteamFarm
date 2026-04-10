@@ -311,37 +311,40 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar — icons always visible, labels as overlay */}
-      <aside style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 5px", background: "#0d0d0d", flexShrink: 0, width: 50, alignItems: "center", position: "relative", zIndex: 101 }}>
-        {/* Hamburger — top of sidebar */}
-        <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 4 }}>
-          <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 28, height: 28, opacity: 0.7 }} />
+      {/* Left sidebar — pushes content when open */}
+      <aside style={{
+        display: "flex", flexDirection: "column", gap: 6, padding: 10,
+        background: "#0d0d0d", flexShrink: 0,
+        width: sidebarOpen ? 200 : 50, transition: "width 0.2s",
+        overflow: "hidden", alignItems: "flex-start",
+      }}>
+        {/* Hamburger — same height as header */}
+        <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{
+          width: sidebarOpen ? "100%" : 30, height: 30,
+          display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center",
+          cursor: "pointer", marginBottom: 8, paddingLeft: sidebarOpen ? 4 : 0,
+        }}>
+          <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 30, height: 30, opacity: 0.7 }} />
         </div>
         {sideLinks.map((item) => {
           const active = router.pathname === item.href;
           return (
-            <Link key={item.label} href={item.href} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 8, textDecoration: "none", background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent", boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none" }}>
-              <img src={item.src} alt={item.label} style={{ width: 30, height: 30, opacity: active ? 1 : 0.7 }} />
+            <Link key={item.label} href={item.href} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              width: "100%", padding: sidebarOpen ? "6px 8px" : "0",
+              borderRadius: 8, textDecoration: "none",
+              background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
+              boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
+              justifyContent: sidebarOpen ? "flex-start" : "center",
+            }}>
+              <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
+              {sidebarOpen && (
+                <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
+              )}
             </Link>
           );
         })}
       </aside>
-
-      {/* Sidebar overlay — labels panel slides out beside icons */}
-      {sidebarOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setSidebarOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 50, top: 0, bottom: 0, width: 170, background: "#0d0d0d", paddingTop: 54, display: "flex", flexDirection: "column", gap: 4, boxShadow: "4px 0 20px rgba(0,0,0,.5)" }}>
-            {sideLinks.map((item) => {
-              const active = router.pathname === item.href;
-              return (
-                <Link key={item.label} href={item.href} onClick={() => setSidebarOpen(false)} style={{ display: "flex", alignItems: "center", height: 38, padding: "0 16px", textDecoration: "none", background: active ? "rgba(247,81,84,.1)" : "transparent" }}>
-                  <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 14, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Main column */}
       <div className="flex-1 flex min-h-0 flex-col min-w-0">
