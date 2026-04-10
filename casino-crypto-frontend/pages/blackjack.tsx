@@ -31,14 +31,18 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 28 + (splitOffset || 0);
-  const s: React.CSSProperties = {
-    width: 65, height: 94, borderRadius: 7, position: "absolute", left, top: 0,
+  const left = idx * 32 + (splitOffset || 0);
+  const scale = 0.5;
+  const w = 150 * scale;
+  const h = 210 * scale;
+  const base: React.CSSProperties = {
+    width: w, height: h, borderRadius: 20 * scale, position: "absolute", left, top: 0,
     animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${idx * 0.3}s both`,
   };
+
   if (faceDown) return (
-    <div style={{ ...s, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 6px 0 #111, 0 4px 0 #1b1b1b, 0 2px 0 #252525", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, transform: "rotate(23deg)", opacity: 0.3 }}>
+    <div style={{ ...base, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 3px 0 #111, 0 2px 0 #1b1b1b, 0 1px 0 #252525", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, transform: "rotate(23deg)", opacity: 0.3 }}>
         <img src={SUIT_SMALL.S} alt="" style={{ width: 14, height: 14 }} />
         <img src={SUIT_SMALL.H} alt="" style={{ width: 14, height: 14 }} />
         <img src={SUIT_SMALL.D} alt="" style={{ width: 14, height: 14 }} />
@@ -46,14 +50,42 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
       </div>
     </div>
   );
+
   const smallSvg = SUIT_SMALL[suit];
   const largeSvg = SUIT_LARGE[suit];
 
   return (
-    <div style={{ ...s, background: "radial-gradient(circle at 30% 20%,#fff,#dadada)", boxShadow: "0 3px 10px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.5)", display: "flex", flexDirection: "column", padding: "5px 6px", overflow: "hidden" }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G }}>{rank}</span>
-      {smallSvg && <img src={smallSvg} alt="" style={{ width: 12, height: 12, marginTop: 1 }} />}
-      {largeSvg && <img src={largeSvg} alt="" style={{ width: 28, height: 28, position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%) rotate(23deg)", opacity: 0.85 }} />}
+    <div style={{
+      ...base,
+      background: "radial-gradient(circle, #fff 0%, #dadada 100%)",
+      boxShadow: "inset 0 1px 0 0 rgba(0,0,0,.07), 0 2px 14px 0 rgba(0,0,0,.29)",
+      overflow: "hidden", position: "absolute",
+    }}>
+      {/* Inner border rectangle */}
+      <div style={{
+        position: "absolute",
+        top: (210 - 196) / 2 * scale,
+        left: (150 - 136) / 2 * scale,
+        width: 136 * scale,
+        height: 196 * scale,
+        border: `1px solid ${clr}`,
+        borderRadius: 13 * scale,
+        boxSizing: "border-box",
+      }} />
+      {/* Rank text top-left */}
+      <span style={{
+        position: "absolute", top: 8 * scale, left: 10 * scale,
+        fontSize: 32 * scale, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G,
+      }}>{rank}</span>
+      {/* Small suit corner */}
+      {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 36 * scale, left: 10 * scale, width: 24 * scale, height: 24 * scale }} />}
+      {/* Large suit center */}
+      {largeSvg && <img src={largeSvg} alt="" style={{
+        position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%, -50%) rotate(23deg)",
+        width: 48 * scale, height: 48 * scale,
+        filter: "drop-shadow(0 4px 15px rgba(0,0,0,.05))",
+      }} />}
     </div>
   );
 }
