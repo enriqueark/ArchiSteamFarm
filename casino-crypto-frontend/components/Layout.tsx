@@ -332,7 +332,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-4 flex-1">
             <div
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: 46, marginLeft: -8 }}
+              style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: 46, marginLeft: 0 }}
             >
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 40, height: 40, opacity: 0.72 }} />
             </div>
@@ -591,9 +591,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Sidebar icons — below header */}
           <div style={{
-            display: "flex", flexDirection: "column", gap: 5, padding: "8px 4px 8px 10px",
+            display: "flex", flexDirection: "column", gap: 5, padding: "8px 6px",
             background: "#0d0d0d", flexShrink: 0,
-            width: sidebarOpen ? 192 : 64, transition: "width 0.25s ease",
+            width: sidebarOpen ? 192 : 68, transition: "width 0.25s ease",
             overflow: "hidden",
           }}>
             {sideLinks.map((item) => {
@@ -603,8 +603,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   display: "flex", alignItems: "center", gap: 12,
                   padding: sidebarOpen ? "6px 10px" : "6px 0",
                   justifyContent: sidebarOpen ? "flex-start" : "center",
-                  width: sidebarOpen ? "100%" : 52,
-                  alignSelf: sidebarOpen ? "stretch" : "center",
+                  width: sidebarOpen ? "100%" : "100%",
+                  alignSelf: "stretch",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
                   boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
