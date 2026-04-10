@@ -16,13 +16,20 @@ interface Props {
 }
 
 export default function NotificationsPanel({ onClose, onClearBadge }: Props) {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    { id: "1", title: "Welcome!", message: "Welcome to REDWATER Casino. Good luck!", type: "green", createdAt: new Date().toISOString() },
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("notifications");
+    if (saved) try { return JSON.parse(saved); } catch { /* ignore */ }
+    return [{ id: "welcome", title: "Welcome!", message: "Welcome to REDWATER Casino. Good luck!", type: "green" as const, createdAt: new Date().toISOString() }];
+  });
 
   useEffect(() => { onClearBadge(); }, [onClearBadge]);
 
-  const clearAll = () => setNotifications([]);
+  const clearAll = () => { setNotifications([]); localStorage.setItem("notifications", "[]"); };
+
+  useEffect(() => {
+    if (notifications.length > 0) localStorage.setItem("notifications", JSON.stringify(notifications));
+  }, [notifications]);
 
   const gradients: Record<string, string> = {
     green: "linear-gradient(180deg, #55ff60 0%, #55ff6000 100%)",
@@ -58,14 +65,20 @@ export default function NotificationsPanel({ onClose, onClearBadge }: Props) {
         )}
         {notifications.map((n) => (
           <div key={n.id} style={{
-            display: "flex", gap: 9, padding: 12, borderRadius: 20,
+            display: "flex", gap: 12, padding: 14, borderRadius: 20,
             backgroundColor: "#0d0d0d",
             backgroundImage: gradients[n.type],
           }}>
-            <img src={iconSvgs[n.type] || iconSvgs.green} alt="" style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0 }} />
+            <div style={{
+              width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+              background: n.type === "green" ? "#22c55e" : "#f59e0b",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ color: "#fff", fontSize: 18, lineHeight: "1" }}>✓</span>
+            </div>
             <div style={{ minWidth: 0 }}>
-              <p style={{ color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: G, margin: "0 0 4px", lineHeight: "16px" }}>{n.title}</p>
-              <p style={{ color: "#828282", fontSize: 13, fontWeight: 400, fontFamily: G, margin: 0, lineHeight: "16px" }}>{n.message}</p>
+              <p style={{ color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: G, margin: "0 0 4px", lineHeight: "18px" }}>{n.title}</p>
+              <p style={{ color: "#828282", fontSize: 13, fontWeight: 400, fontFamily: G, margin: 0, lineHeight: "17px" }}>{n.message}</p>
             </div>
           </div>
         ))}

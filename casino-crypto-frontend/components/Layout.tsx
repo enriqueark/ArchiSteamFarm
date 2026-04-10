@@ -442,8 +442,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 onClick={() => setNotifOpen(!notifOpen)}
                 style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", display: "flex", alignItems: "center", marginLeft: 4, position: "relative" }}
               >
-                <img src="/assets/1b3ec61d438ea6f94b5e896ae009580a.svg" alt="notifications" className="h-[24px] w-[24px]" />
-                {hasNewNotif && <span style={{ position: "absolute", top: -1, right: -1, width: 8, height: 8, borderRadius: "50%", background: "#f34950", border: "2px solid #0d0d0d" }} />}
+                <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M19.7359 26.4423C20.5578 26.3599 21.1131 27.2323 20.7249 27.9385C20.4513 28.4361 20.0657 28.8705 19.6038 29.2263C19.1327 29.5891 18.5862 29.8675 17.9999 30.0544C17.4134 30.2416 16.7906 30.3363 16.1655 30.3363C15.5405 30.3363 14.9177 30.2416 14.3311 30.0544C13.7449 29.8675 13.1984 29.5891 12.7273 29.2263C12.2654 28.8705 11.8798 28.4361 11.6062 27.9385C11.218 27.2323 11.7733 26.3599 12.5952 26.4423C12.8515 26.468 14.8577 26.6641 16.1655 26.6641C17.4734 26.6641 19.4795 26.468 19.7359 26.4423Z" fill="#828282"/>
+                  <path fillRule="evenodd" clipRule="evenodd" d="M11.372 2.7834C14.3909 1.33927 17.9286 1.29014 20.9897 2.64983L21.2633 2.77135C24.4709 4.19609 26.5245 7.28293 26.5245 10.6795V12.364C26.5245 13.718 26.8314 15.0557 27.4241 16.284L27.778 17.0176C29.4033 20.3867 27.2866 24.3247 23.4874 24.9997L23.2733 25.0377C18.5733 25.8728 13.7538 25.8728 9.05388 25.0377C5.20361 24.3537 3.16665 20.2591 5.02981 16.9487L5.33253 16.4109C6.07979 15.0832 6.47109 13.5975 6.47109 12.0879V10.3898C6.47109 7.16587 8.36935 4.21971 11.372 2.7834Z" fill="#828282"/>
+                  {hasNewNotif && <circle cx="25" cy="5.5" r="4" fill="#F34950"/>}
+                </svg>
               </button>
               {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => setHasNewNotif(false)} />}
               {profileMenuOpen && (
