@@ -13,27 +13,47 @@ const PLAY_ICON = `${A}2d7f2642f861986711d393c7536da7fc.svg`;
 const G = '"DM Sans","Gotham",sans-serif';
 const SUIT_SYM: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const SUIT_CLR: Record<string, string> = { S: "#1a1919", H: "#bd0926", D: "#bd0926", C: "#1a1919" };
+const SUIT_SMALL: Record<string, string> = {
+  S: `${A}c159c3c1a437c5d39970f25abe1b18d2.svg`,
+  H: `${A}0f43ed60dcc8b6ae1a74191048e1117b.svg`,
+  D: `${A}07a4e3a803710f1d2d80fdc2381a73a6.svg`,
+  C: `${A}2ed3a41c759a01c6b7ca40c12100d1a8.svg`,
+};
+const SUIT_LARGE: Record<string, string> = {
+  S: `${A}fdad942d9caab4040db40feb9116c57c.svg`,
+  H: `${A}1fbe0a4cfdf293e8b30050ea6359c066.svg`,
+  D: `${A}1f0f7bc2f4657e040fd8e5d31d9b07da.svg`,
+  C: `${A}1e208e0bd7c4587a8979024e10d4792e.svg`,
+};
 
-function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
+function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), suit: s, sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
 function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n = Number(v) / 1e8; return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
-  const { rank, sym, clr } = parseCard(code);
+  const { rank, suit, clr } = parseCard(code);
   const left = idx * 28 + (splitOffset || 0);
   const s: React.CSSProperties = {
     width: 65, height: 94, borderRadius: 7, position: "absolute", left, top: 0,
     animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${idx * 0.3}s both`,
   };
   if (faceDown) return (
-    <div style={{ ...s, background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)", border: "1px solid #444", boxShadow: "0 3px 8px rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 40, height: 58, borderRadius: 4, border: "1px solid #555", background: "repeating-linear-gradient(45deg,#222,#222 3px,#2a2a2a 3px,#2a2a2a 6px)" }} />
+    <div style={{ ...s, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 6px 0 #111, 0 4px 0 #1b1b1b, 0 2px 0 #252525", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, transform: "rotate(23deg)", opacity: 0.3 }}>
+        <img src={SUIT_SMALL.S} alt="" style={{ width: 14, height: 14 }} />
+        <img src={SUIT_SMALL.H} alt="" style={{ width: 14, height: 14 }} />
+        <img src={SUIT_SMALL.D} alt="" style={{ width: 14, height: 14 }} />
+        <img src={SUIT_SMALL.C} alt="" style={{ width: 14, height: 14 }} />
+      </div>
     </div>
   );
+  const smallSvg = SUIT_SMALL[suit];
+  const largeSvg = SUIT_LARGE[suit];
+
   return (
-    <div style={{ ...s, background: "radial-gradient(circle at 30% 20%,#fff,#e0e0e0)", boxShadow: "0 3px 8px rgba(0,0,0,.25)", display: "flex", flexDirection: "column", padding: "4px 6px" }}>
-      <span style={{ fontSize: 14, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G }}>{rank}</span>
-      <span style={{ fontSize: 10, color: clr, lineHeight: "1", marginTop: 1 }}>{sym}</span>
-      <span style={{ fontSize: 22, color: clr, position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", opacity: 0.12 }}>{sym}</span>
+    <div style={{ ...s, background: "radial-gradient(circle at 30% 20%,#fff,#dadada)", boxShadow: "0 3px 10px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.5)", display: "flex", flexDirection: "column", padding: "5px 6px", overflow: "hidden" }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: clr, lineHeight: "1", fontFamily: G }}>{rank}</span>
+      {smallSvg && <img src={smallSvg} alt="" style={{ width: 12, height: 12, marginTop: 1 }} />}
+      {largeSvg && <img src={largeSvg} alt="" style={{ width: 28, height: 28, position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%) rotate(23deg)", opacity: 0.85 }} />}
     </div>
   );
 }
