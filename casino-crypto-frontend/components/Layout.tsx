@@ -311,46 +311,14 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
-      {/* Left sidebar — pushes content when open */}
-      <aside style={{
-        display: "flex", flexDirection: "column", gap: 6, padding: 10,
-        background: "#0d0d0d", flexShrink: 0,
-        width: sidebarOpen ? 200 : 50, transition: "width 0.2s",
-        overflow: "hidden", alignItems: "flex-start",
-      }}>
-        {/* Hamburger — same height as header */}
-        <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{
-          width: sidebarOpen ? "100%" : 30, height: 30,
-          display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center",
-          cursor: "pointer", marginBottom: 8, paddingLeft: sidebarOpen ? 4 : 0,
-        }}>
-          <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 30, height: 30, opacity: 0.7 }} />
-        </div>
-        {sideLinks.map((item) => {
-          const active = router.pathname === item.href;
-          return (
-            <Link key={item.label} href={item.href} style={{
-              display: "flex", alignItems: "center", gap: 12,
-              width: "100%", padding: sidebarOpen ? "6px 8px" : "0",
-              borderRadius: 8, textDecoration: "none",
-              background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
-              boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
-              justifyContent: sidebarOpen ? "flex-start" : "center",
-            }}>
-              <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
-              {sidebarOpen && (
-                <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
-              )}
-            </Link>
-          );
-        })}
-      </aside>
-
-      {/* Main column */}
+      {/* Main column — full width */}
       <div className="flex-1 flex min-h-0 flex-col min-w-0">
-        {/* Top nav */}
+        {/* Top nav with hamburger */}
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
+            <div onClick={() => setSidebarOpen(!sidebarOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 36, height: 36, opacity: 0.7 }} />
+            </div>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
               <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
@@ -604,7 +572,35 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
         {/* Below header: row with [ticker+content] and [chat] */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          {/* Left: ticker + content */}
+          {/* Sidebar icons — below header */}
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 4, padding: "8px 5px",
+            background: "#0d0d0d", flexShrink: 0,
+            width: sidebarOpen ? 180 : 50, transition: "width 0.2s",
+            overflow: "hidden", alignItems: "flex-start",
+          }}>
+            {sideLinks.map((item) => {
+              const active = router.pathname === item.href;
+              return (
+                <Link key={item.label} href={item.href} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  width: "100%", padding: sidebarOpen ? "6px 10px" : "0",
+                  borderRadius: 8, textDecoration: "none",
+                  background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
+                  boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
+                  justifyContent: sidebarOpen ? "flex-start" : "center",
+                  minHeight: 38,
+                }}>
+                  <img src={item.src} alt={item.label} style={{ width: 30, height: 30, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
+                  {sidebarOpen && (
+                    <span style={{ color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500, whiteSpace: "nowrap" }}>{item.label}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Right: ticker + content */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
             {/* Live ticker */}
             <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden shrink-0">
