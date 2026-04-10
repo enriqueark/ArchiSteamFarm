@@ -602,7 +602,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 <Link key={item.label} href={item.href} style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "0 10px",
-                  justifyContent: sidebarOpen ? "flex-start" : "center",
+                  justifyContent: "flex-start",
                   width: "100%",
                   alignSelf: "stretch",
                   borderRadius: 8, textDecoration: "none",
@@ -613,10 +613,24 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   boxSizing: "border-box",
                   transition: "background 0.2s ease, box-shadow 0.2s ease"
                 }}>
-                  <img src={item.src} alt={item.label} style={{ width: 33, height: 33, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
+                  <div
+                    style={{
+                      width: 33,
+                      minWidth: 33,
+                      height: 33,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginLeft: sidebarOpen ? 0 : "auto",
+                      marginRight: sidebarOpen ? 0 : "auto",
+                      transition: "margin 0.25s ease"
+                    }}
+                  >
+                    <img src={item.src} alt={item.label} style={{ width: 33, height: 33, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
+                  </div>
                   <span style={{
                     color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
-                    opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease",
+                    opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease, max-width 0.25s ease",
                     pointerEvents: sidebarOpen ? "auto" : "none",
                     maxWidth: sidebarOpen ? 120 : 0,
                     overflow: "hidden"
