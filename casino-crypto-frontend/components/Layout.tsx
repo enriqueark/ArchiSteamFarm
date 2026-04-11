@@ -623,9 +623,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       alignItems: "center",
                       justifyContent: "center",
                       position: "absolute",
-                      left: sidebarOpen ? 10 : "50%",
-                      transform: sidebarOpen ? "translateX(0)" : "translateX(-50%)",
-                      transition: "left 0.25s ease, transform 0.25s ease"
+                      left: 19
                     }}
                   >
                     <img src={item.src} alt={item.label} style={{ width: 34, height: 34, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
