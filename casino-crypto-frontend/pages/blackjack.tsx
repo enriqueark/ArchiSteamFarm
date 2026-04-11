@@ -62,19 +62,6 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
             border: "1px solid rgba(255,255,255,0.14)"
           }}
         />
-        <img
-          src={SUIT_LARGE.C}
-          alt=""
-          style={{
-            position: "absolute",
-            width: 90 * scale,
-            height: 90 * scale,
-            left: "50%",
-            top: "54%",
-            transform: "translate(-50%,-50%)",
-            opacity: 0.22
-          }}
-        />
       </div>
     );
   }
@@ -103,11 +90,13 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
       }}>{rank}</span>
       {/* Small suit under rank */}
       {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 42 * scale, left: 10 * scale, width: 24 * scale, height: 24 * scale }} />}
-      {/* Large suit center */}
+      {/* Large suit bottom-right (as reference) */}
       {largeSvg && <img src={largeSvg} alt="" style={{
-        position: "absolute", bottom: 10 * scale, left: "50%",
-        transform: "translateX(-50%)",
-        width: 98 * scale, height: 98 * scale,
+        position: "absolute",
+        bottom: 12 * scale,
+        right: 12 * scale,
+        width: 70 * scale,
+        height: 70 * scale,
       }} />}
     </div>
   );
@@ -244,6 +233,7 @@ export default function BlackjackPage() {
               }}>
                 {calcDisplay(dealerDisplayCards)}
               </span>
+              <div style={{ marginTop: 2, color: "#3f434b", fontSize: 30, letterSpacing: 1.2, fontWeight: 700, fontFamily: G }}>BLACKJACK</div>
             </div>
           </div>
         )}
@@ -273,22 +263,6 @@ export default function BlackjackPage() {
             {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 12, fontWeight: 700, marginTop: 3, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
           </div>
         )}
-
-        {/* Small table logo (bottom-right) */}
-        <div
-          style={{
-            position: "absolute",
-            right: "15%",
-            bottom: "13.5%",
-            color: "rgba(89,95,107,0.62)",
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: 1,
-            fontFamily: G
-          }}
-        >
-          BLACKJACK
-        </div>
 
         {/* Chips on table */}
         <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
