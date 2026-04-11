@@ -31,8 +31,8 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 38 + (splitOffset || 0);
-  const scale = 0.62;
+  const left = idx * 42 + (splitOffset || 0);
+  const scale = 0.68;
   const w = 150 * scale;
   const h = 210 * scale;
   const base: React.CSSProperties = {
@@ -60,6 +60,19 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
             inset: 6 * scale,
             borderRadius: 12 * scale,
             border: "1px solid rgba(255,255,255,0.14)"
+          }}
+        />
+        <img
+          src={SUIT_LARGE.C}
+          alt=""
+          style={{
+            position: "absolute",
+            width: 90 * scale,
+            height: 90 * scale,
+            left: "50%",
+            top: "54%",
+            transform: "translate(-50%,-50%)",
+            opacity: 0.22
           }}
         />
       </div>
@@ -92,9 +105,9 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
       {smallSvg && <img src={smallSvg} alt="" style={{ position: "absolute", top: 42 * scale, left: 10 * scale, width: 24 * scale, height: 24 * scale }} />}
       {/* Large suit center */}
       {largeSvg && <img src={largeSvg} alt="" style={{
-        position: "absolute", bottom: 12 * scale, left: "50%",
+        position: "absolute", bottom: 10 * scale, left: "50%",
         transform: "translateX(-50%)",
-        width: 110 * scale, height: 110 * scale,
+        width: 98 * scale, height: 98 * scale,
       }} />}
     </div>
   );
@@ -209,25 +222,39 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 106, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 38 + 72 }}>
-              <Card code={dCards[0]} idx={0} tiltDeg={-4} />
-              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown tiltDeg={4} /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} tiltDeg={4 + i} />)}
+          <div style={{ position: "absolute", top: "9%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", height: 116, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 42 + 78 }}>
+              <Card code={dCards[0]} idx={0} />
+              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
             <div style={{ marginTop: 4, textAlign: "center" }}>
-              <span style={{ color: "#5f666f", fontSize: 22, fontWeight: 700, fontFamily: G }}>{calcDisplay(dealerDisplayCards)}</span>
-              <div style={{ marginTop: 2, color: "#3f434b", fontSize: 30, letterSpacing: 1.2, fontWeight: 700, fontFamily: G }}>BLACKJACK</div>
+              <span style={{
+                display: "inline-flex",
+                minWidth: 22,
+                height: 22,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 999,
+                padding: "0 8px",
+                background: "rgba(0,0,0,0.5)",
+                color: "#d3d7dd",
+                fontSize: 14,
+                fontWeight: 700,
+                fontFamily: G
+              }}>
+                {calcDisplay(dealerDisplayCards)}
+              </span>
             </div>
           </div>
         )}
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "21.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "20.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
-                <div style={{ position: "relative", height: 106, width: h.cards.length * 38 + 72 }}>
-                  {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} tiltDeg={ci === 0 ? -4 : 4} />)}
+                <div style={{ position: "relative", height: 116, width: h.cards.length * 42 + 78 }}>
+                  {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} tiltDeg={ci === 0 ? -6 : 5} />)}
                 </div>
                 <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 10px", borderRadius: 999, fontSize: 26, fontWeight: 700, fontFamily: G, marginTop: 4, lineHeight: 1 }}>
                   {calcDisplay(h.cards)}
@@ -246,6 +273,22 @@ export default function BlackjackPage() {
             {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 12, fontWeight: 700, marginTop: 3, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
           </div>
         )}
+
+        {/* Small table logo (bottom-right) */}
+        <div
+          style={{
+            position: "absolute",
+            right: "15%",
+            bottom: "13.5%",
+            color: "rgba(89,95,107,0.62)",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 1,
+            fontFamily: G
+          }}
+        >
+          BLACKJACK
+        </div>
 
         {/* Chips on table */}
         <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
