@@ -598,22 +598,44 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           }}>
             {sideLinks.map((item) => {
               const active = router.pathname === item.href;
+              const hovered = hoveredSideHref === item.href;
+              const highlighted = active || hovered;
               return (
-                <Link key={item.label} href={item.href} style={{
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onMouseEnter={() => setHoveredSideHref(item.href)}
+                  onMouseLeave={() => setHoveredSideHref((prev) => (prev === item.href ? null : prev))}
+                  style={{
                   display: "flex", alignItems: "center",
                   padding: "0 10px",
                   width: "100%",
                   alignSelf: "stretch",
                   borderRadius: 8, textDecoration: "none",
                   background: active ? "linear-gradient(180deg,#ac2e30,#f75154)" : "transparent",
-                  boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : "none",
+                  boxShadow: active ? "0 0 10px rgba(247,81,84,0.3)" : hovered ? "0 0 8px rgba(247,81,84,0.18)" : "none",
                   minHeight: sidebarOpen ? 40 : 44,
                   whiteSpace: "nowrap",
                   boxSizing: "border-box",
                   transition: "background 0.2s ease, box-shadow 0.2s ease",
                   position: "relative",
                   overflow: "hidden"
-                }}>
+                }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 2,
+                      height: highlighted ? 22 : 0,
+                      borderRadius: 999,
+                      background: "#f75154",
+                      boxShadow: highlighted ? "0 0 8px rgba(247,81,84,0.55)" : "none",
+                      transition: "height 0.2s ease, box-shadow 0.2s ease"
+                    }}
+                  />
                   <div
                     style={{
                       width: 34,
@@ -626,10 +648,21 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       left: 19
                     }}
                   >
-                    <img src={item.src} alt={item.label} style={{ width: 34, height: 34, flexShrink: 0, opacity: active ? 1 : 0.74 }} />
+                    <img
+                      src={item.src}
+                      alt={item.label}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        flexShrink: 0,
+                        opacity: highlighted ? 1 : 0.74,
+                        filter: hovered && !active ? "brightness(1.35) grayscale(1)" : "none",
+                        transition: "opacity 0.2s ease, filter 0.2s ease"
+                      }}
+                    />
                   </div>
                   <span style={{
-                    color: active ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
+                    color: highlighted ? "#fff" : "#8f8f8f", fontSize: 13, fontFamily: '"DM Sans",sans-serif', fontWeight: 500,
                     opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s ease, max-width 0.25s ease",
                     pointerEvents: sidebarOpen ? "auto" : "none",
                     maxWidth: sidebarOpen ? 120 : 0,
