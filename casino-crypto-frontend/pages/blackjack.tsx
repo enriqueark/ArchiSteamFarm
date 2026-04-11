@@ -216,7 +216,7 @@ export default function BlackjackPage() {
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
-            <div style={{ marginTop: 4, textAlign: "center" }}>
+            <div style={{ marginTop: 6, textAlign: "center" }}>
               <span style={{
                 display: "inline-flex",
                 minWidth: 22,
@@ -233,20 +233,33 @@ export default function BlackjackPage() {
               }}>
                 {calcDisplay(dealerDisplayCards)}
               </span>
-              <div style={{ marginTop: 2, color: "#3f434b", fontSize: 30, letterSpacing: 1.2, fontWeight: 700, fontFamily: G }}>BLACKJACK</div>
             </div>
           </div>
         )}
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "34.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "30%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
                 <div style={{ position: "relative", height: 116, width: h.cards.length * 42 + 78 }}>
                   {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} tiltDeg={ci === 0 ? -6 : 5} />)}
                 </div>
-                <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 10px", borderRadius: 999, fontSize: 26, fontWeight: 700, fontFamily: G, marginTop: 4, lineHeight: 1 }}>
+                <span style={{
+                  display: "inline-flex",
+                  minWidth: 22,
+                  height: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 999,
+                  padding: "0 8px",
+                  background: "rgba(0,0,0,0.56)",
+                  color: "#d3d7dd",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  fontFamily: G,
+                  marginTop: 6
+                }}>
                   {calcDisplay(h.cards)}
                 </span>
               </div>
