@@ -29,7 +29,7 @@ const SUIT_LARGE: Record<string, string> = {
 function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), suit: s, sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
 function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n = Number(v) / 1e8; return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
+function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number }) {
   const { rank, suit, clr } = parseCard(code);
   const left = idx * 38 + (splitOffset || 0);
   const scale = 0.62;
@@ -38,6 +38,8 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
   const base: React.CSSProperties = {
     width: w, height: h, borderRadius: 20 * scale, position: "absolute", left, top: 0,
     animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${idx * 0.3}s both`,
+    transform: `rotate(${tiltDeg}deg)`,
+    transformOrigin: "50% 85%"
   };
 
   if (faceDown) {
@@ -182,6 +184,7 @@ export default function BlackjackPage() {
   const hand = hands[activeIdx];
   const dCards = game?.dealerVisibleCards || [];
   const isSplit = hands.length > 1;
+  const dealerDisplayCards = game?.dealerRevealed ? (game.dealerCards || []).slice(0, Math.max(1, revealedDealerCount)) : dCards;
 
   const calcDisplay = (cards: string[]) => {
     let total = 0, aces = 0;
@@ -208,12 +211,13 @@ export default function BlackjackPage() {
         {game && dCards.length > 0 && (
           <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 106, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 38 + 72 }}>
-              <Card code={dCards[0]} idx={0} />
-              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
+              <Card code={dCards[0]} idx={0} tiltDeg={-4} />
+              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown tiltDeg={4} /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} tiltDeg={4 + i} />)}
             </div>
-            <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 2 }}>
-              {game.dealerRevealed ? calcDisplay((game.dealerCards || []).slice(0, revealedDealerCount)) : calcDisplay([dCards[0]])}
-            </span>
+            <div style={{ marginTop: 4, textAlign: "center" }}>
+              <span style={{ color: "#5f666f", fontSize: 22, fontWeight: 700, fontFamily: G }}>{calcDisplay(dealerDisplayCards)}</span>
+              <div style={{ marginTop: 2, color: "#3f434b", fontSize: 30, letterSpacing: 1.2, fontWeight: 700, fontFamily: G }}>BLACKJACK</div>
+            </div>
           </div>
         )}
 
@@ -223,9 +227,9 @@ export default function BlackjackPage() {
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
                 <div style={{ position: "relative", height: 106, width: h.cards.length * 38 + 72 }}>
-                  {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} />)}
+                  {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} tiltDeg={ci === 0 ? -4 : 4} />)}
                 </div>
-                <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 2 }}>
+                <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 10px", borderRadius: 999, fontSize: 26, fontWeight: 700, fontFamily: G, marginTop: 4, lineHeight: 1 }}>
                   {calcDisplay(h.cards)}
                 </span>
               </div>
@@ -245,9 +249,9 @@ export default function BlackjackPage() {
 
         {/* Chips on table */}
         <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
-          <Chip val={game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs} label="Pairs" />
-          <Chip val={game ? fmtCoins(game.mainBetAtomic) : bet} label="Bet" />
           <Chip val={game ? fmtCoins(game.sideBet21Plus3Atomic) : side21} label="21+3" />
+          <Chip val={game ? fmtCoins(game.mainBetAtomic) : bet} label="Bet" />
+          <Chip val={game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs} label="Pairs" />
         </div>
       </div>
 
@@ -282,10 +286,10 @@ export default function BlackjackPage() {
         ) : (
           <div style={{ display: "flex", gap: 8, width: "100%" }}>
             {([
-              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, iconBg: "#22c55e", iconSym: "+" },
-              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, iconBg: "#ef4444", iconSym: "◼" },
-              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, iconBg: "#3b82f6", iconSym: "⇔" },
-              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, iconBg: "#f59e0b", iconSym: "⇈" },
+              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, iconBg: "#33f266", iconSym: "+" },
+              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, iconBg: "#d90f2d", iconSym: "⤿" },
+              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, iconBg: "#47b6ff", iconSym: "↔" },
+              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, iconBg: "#ffbe2f", iconSym: "⟰" },
             ]).map(({ a, l, dis, iconBg, iconSym }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
