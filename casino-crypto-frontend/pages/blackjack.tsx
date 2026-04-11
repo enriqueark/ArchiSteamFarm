@@ -31,8 +31,8 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 38 + (splitOffset || 0);
-  const scale = 0.6;
+  const left = idx * 44 + (splitOffset || 0);
+  const scale = 0.76;
   const w = 150 * scale;
   const h = 210 * scale;
   const base: React.CSSProperties = {
@@ -40,9 +40,29 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
     animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${idx * 0.3}s both`,
   };
 
-  if (faceDown) return (
-    <div style={{ ...base, background: "linear-gradient(180deg,#1a1a1a,#282828)", border: "1px solid #7b7979", boxShadow: "0 6px 0 #111, 0 4px 0 #1b1b1b, 0 2px 0 #252525", overflow: "hidden" }} />
-  );
+  if (faceDown) {
+    return (
+      <div
+        style={{
+          ...base,
+          background:
+            "radial-gradient(circle at 30% 20%, #353535 0%, #191919 55%, #111 100%)",
+          border: "1px solid #5f5f5f",
+          boxShadow: "0 8px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)",
+          overflow: "hidden"
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 6 * scale,
+            borderRadius: 12 * scale,
+            border: "1px solid rgba(255,255,255,0.14)"
+          }}
+        />
+      </div>
+    );
+  }
 
   const smallSvg = SUIT_SMALL[suit];
   const largeSvg = SUIT_LARGE[suit];
@@ -80,14 +100,26 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
 
 function Chip({ val, label }: { val: string; label: string }) {
   return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 3px", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, fontFamily: G }}>$</span>
+    <div style={{ textAlign: "center", minWidth: 104 }}>
+      <p style={{ color: "#6f6f6f", fontSize: 31, margin: "0 0 3px", fontFamily: G }}>{label}</p>
+      <div
+        style={{
+          height: 54,
+          borderRadius: 12,
+          background: "linear-gradient(180deg,#161616,#0d0d0d)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 9,
+          padding: "0 16px",
+          boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424"
+        }}
+      >
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, fontFamily: G }}>$</span>
+        </div>
+        <span style={{ color: "#fff", fontSize: 32, fontWeight: 700, fontFamily: G }}>{val}</span>
       </div>
-      <div style={{ background: "rgba(0,0,0,.7)", borderRadius: 8, padding: "2px 8px", marginBottom: 2, display: "inline-block" }}>
-        <span style={{ color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: G }}>{val}</span>
-      </div>
-      <p style={{ color: "#828282", fontSize: 9, margin: 0, fontFamily: G }}>{label}</p>
     </div>
   );
 }
@@ -163,7 +195,7 @@ export default function BlackjackPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       {/* Table */}
-      <div style={{ position: "relative", width: "100%", maxWidth: 800, aspectRatio: "988/682" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 960, aspectRatio: "988/682" }}>
         <img src={tableImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0 }} />
         {overlay && <img src={overlay} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0, pointerEvents: "none" }} />}
 
@@ -174,8 +206,8 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 98, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 28 + 65 }}>
+          <div style={{ position: "absolute", top: "8%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", height: 126, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 44 + 84 }}>
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
@@ -187,10 +219,10 @@ export default function BlackjackPage() {
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "22%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "20%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 58 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
-                <div style={{ position: "relative", height: 98, width: h.cards.length * 28 + 65 }}>
+                <div style={{ position: "relative", height: 126, width: h.cards.length * 44 + 84 }}>
                   {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} />)}
                 </div>
                 <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 2 }}>
@@ -212,7 +244,7 @@ export default function BlackjackPage() {
         )}
 
         {/* Chips on table */}
-        <div style={{ position: "absolute", bottom: "6%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 24 }}>
+        <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 16 }}>
           <Chip val={game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs} label="Pairs" />
           <Chip val={game ? fmtCoins(game.mainBetAtomic) : bet} label="Bet" />
           <Chip val={game ? fmtCoins(game.sideBet21Plus3Atomic) : side21} label="21+3" />
@@ -220,7 +252,7 @@ export default function BlackjackPage() {
       </div>
 
       {/* Control bar */}
-      <div style={{ width: "100%", maxWidth: 729, borderRadius: 20, padding: "12px 16px", marginTop: -20, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", position: "relative", zIndex: 10 }}>
+      <div style={{ width: "100%", maxWidth: 760, borderRadius: 20, padding: "12px 16px", marginTop: -18, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", position: "relative", zIndex: 10 }}>
         {!active ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
             {/* 3 bet inputs in a row */}
@@ -257,12 +289,12 @@ export default function BlackjackPage() {
             ]).map(({ a, l, dis, iconBg, iconSym }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, minHeight: 50, padding: "16px 20px", borderRadius: 12, border: "none",
+                  flex: 1, minHeight: 56, padding: "14px 16px", borderRadius: 12, border: "none",
                   cursor: dis ? "default" : "pointer",
                   background: "#1a1a1a",
                   boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  color: "#fff", fontSize: 18, fontWeight: 500, fontFamily: G,
+                  color: "#fff", fontSize: 31, fontWeight: 600, fontFamily: G,
                   opacity: dis ? 0.3 : 1,
                 }}>
                 <span style={{ width: 26, height: 26, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>{iconSym}</span>
