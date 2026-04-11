@@ -332,9 +332,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-4 flex-1">
             <div
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: 44, marginLeft: 0 }}
+              style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: 48, marginLeft: 0 }}
             >
-              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 38, height: 38, opacity: 0.72 }} />
+              <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 40, height: 40, opacity: 0.76 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
               <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
