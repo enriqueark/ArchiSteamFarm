@@ -31,8 +31,8 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 44 + (splitOffset || 0);
-  const scale = 0.76;
+  const left = idx * 38 + (splitOffset || 0);
+  const scale = 0.62;
   const w = 150 * scale;
   const h = 210 * scale;
   const base: React.CSSProperties = {
@@ -100,25 +100,25 @@ function Card({ code, faceDown, idx, flipping, splitOffset }: { code: string; fa
 
 function Chip({ val, label }: { val: string; label: string }) {
   return (
-    <div style={{ textAlign: "center", minWidth: 104 }}>
-      <p style={{ color: "#6f6f6f", fontSize: 31, margin: "0 0 3px", fontFamily: G }}>{label}</p>
+    <div style={{ textAlign: "center" }}>
+      <p style={{ color: "#6f6f6f", fontSize: 15, margin: "0 0 4px", fontFamily: G, fontWeight: 600 }}>{label}</p>
       <div
         style={{
-          height: 54,
-          borderRadius: 12,
+          height: 44,
+          borderRadius: 10,
           background: "linear-gradient(180deg,#161616,#0d0d0d)",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 9,
-          padding: "0 16px",
+          gap: 8,
+          padding: "0 14px",
           boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424"
         }}
       >
-        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, fontFamily: G }}>$</span>
+        <div style={{ width: 22, height: 22, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
+          <span style={{ color: "#fff", fontSize: 10, fontWeight: 700, fontFamily: G }}>$</span>
         </div>
-        <span style={{ color: "#fff", fontSize: 32, fontWeight: 700, fontFamily: G }}>{val}</span>
+        <span style={{ color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: G }}>{val}</span>
       </div>
     </div>
   );
@@ -195,7 +195,7 @@ export default function BlackjackPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       {/* Table */}
-      <div style={{ position: "relative", width: "100%", maxWidth: 960, aspectRatio: "988/682" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 860, aspectRatio: "988/682" }}>
         <img src={tableImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0 }} />
         {overlay && <img src={overlay} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 16, position: "absolute", inset: 0, pointerEvents: "none" }} />}
 
@@ -206,8 +206,8 @@ export default function BlackjackPage() {
 
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
-          <div style={{ position: "absolute", top: "8%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 126, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 44 + 84 }}>
+          <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ position: "relative", height: 106, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 38 + 72 }}>
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
@@ -219,10 +219,10 @@ export default function BlackjackPage() {
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "20%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 58 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "21.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
-                <div style={{ position: "relative", height: 126, width: h.cards.length * 44 + 84 }}>
+                <div style={{ position: "relative", height: 106, width: h.cards.length * 38 + 72 }}>
                   {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} />)}
                 </div>
                 <span style={{ background: "rgba(0,0,0,.75)", color: "#fff", padding: "2px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: G, marginTop: 2 }}>
@@ -244,7 +244,7 @@ export default function BlackjackPage() {
         )}
 
         {/* Chips on table */}
-        <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 16 }}>
+        <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
           <Chip val={game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs} label="Pairs" />
           <Chip val={game ? fmtCoins(game.mainBetAtomic) : bet} label="Bet" />
           <Chip val={game ? fmtCoins(game.sideBet21Plus3Atomic) : side21} label="21+3" />
@@ -252,7 +252,7 @@ export default function BlackjackPage() {
       </div>
 
       {/* Control bar */}
-      <div style={{ width: "100%", maxWidth: 760, borderRadius: 20, padding: "12px 16px", marginTop: -18, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", position: "relative", zIndex: 10 }}>
+      <div style={{ width: "100%", maxWidth: 740, borderRadius: 20, padding: "12px 16px", marginTop: -20, background: "linear-gradient(180deg,#161616,#0d0d0d)", boxShadow: "0 -5px 30px #090909", position: "relative", zIndex: 10 }}>
         {!active ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
             {/* 3 bet inputs in a row */}
@@ -289,15 +289,15 @@ export default function BlackjackPage() {
             ]).map(({ a, l, dis, iconBg, iconSym }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, minHeight: 56, padding: "14px 16px", borderRadius: 12, border: "none",
+                  flex: 1, minHeight: 50, padding: "14px 16px", borderRadius: 12, border: "none",
                   cursor: dis ? "default" : "pointer",
                   background: "#1a1a1a",
                   boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  color: "#fff", fontSize: 31, fontWeight: 600, fontFamily: G,
+                  color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
                   opacity: dis ? 0.3 : 1,
                 }}>
-                <span style={{ width: 26, height: 26, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>{iconSym}</span>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>{iconSym}</span>
                 {l}
               </button>
             ))}
