@@ -1,6 +1,12 @@
 let ctx: AudioContext | null = null;
 const DEAL_SOUND_SRC = "/sounds/flipcard-91468.mp3";
 const DEAL_POOL_SIZE = 8;
+const DEAL_VARIANTS = [
+  { rate: 0.97, offset: 0.0, volume: 0.58 },
+  { rate: 1.0, offset: 0.012, volume: 0.62 },
+  { rate: 1.035, offset: 0.022, volume: 0.56 },
+] as const;
+let lastDealVariant = -1;
 let dealPool: HTMLAudioElement[] | null = null;
 let dealPoolIdx = 0;
 
@@ -10,7 +16,14 @@ function getCtx(): AudioContext {
   return ctx;
 }
 
-export function playDealSound() {
+function pickDealVariant() {
+  let next = Math.floor(Math.random() * DEAL_VARIANTS.length);
+  if (next === lastDealVariant) next = (next + 1) % DEAL_VARIANTS.length;
+  lastDealVariant = next;
+  return DEAL_VARIANTS[next];
+}
+
+function playDealSoundNow() {
   try {
     if (typeof Audio === "undefined") return;
     if (!dealPool) {
@@ -22,9 +35,14 @@ export function playDealSound() {
         dealPool.push(a);
       }
     }
+
+    const variant = pickDealVariant();
     const a = dealPool[dealPoolIdx];
     dealPoolIdx = (dealPoolIdx + 1) % DEAL_POOL_SIZE;
-    a.currentTime = 0;
+    a.pause();
+    a.playbackRate = variant.rate;
+    a.volume = Math.max(0.35, Math.min(0.8, variant.volume + (Math.random() - 0.5) * 0.05));
+    a.currentTime = Math.min(0.035, variant.offset + Math.random() * 0.006);
     a.play().catch(() => {
       // Fallback so there is always audible feedback if media play is blocked.
       try {
@@ -34,8 +52,9 @@ export function playDealSound() {
         const osc = c.createOscillator();
         const gain = c.createGain();
         osc.type = "square";
-        osc.frequency.setValueAtTime(1800, t);
-        osc.frequency.exponentialRampToValueAtTime(900, t + dur);
+        const f = 1700 * variant.rate;
+        osc.frequency.setValueAtTime(f, t);
+        osc.frequency.exponentialRampToValueAtTime(850 * variant.rate, t + dur);
         gain.gain.setValueAtTime(0.0001, t);
         gain.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -46,6 +65,17 @@ export function playDealSound() {
       } catch {}
     });
   } catch {}
+}
+
+export function playDealSound(options?: { delayMs?: number }) {
+  const delayMs = options?.delayMs ?? 0;
+  if (delayMs <= 0) {
+    playDealSoundNow();
+    return;
+  }
+  setTimeout(() => {
+    playDealSoundNow();
+  }, delayMs);
 }
 
 export function playWinSound() {
