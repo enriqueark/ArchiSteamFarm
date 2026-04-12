@@ -248,9 +248,10 @@ function forceStatValue(doc: Document, id: string, text: string) {
 function replaceElementWithDiv(doc: Document, id: string): HTMLDivElement | null {
   const original = doc.getElementById(id);
   if (!original) return null;
-  if (original instanceof HTMLDivElement) {
+  // Avoid instanceof checks here: iframe elements live in a different JS realm.
+  if (original.tagName.toLowerCase() === "div") {
     // Keep existing runtime handlers/styles across re-hydrations.
-    return original;
+    return original as HTMLDivElement;
   }
   const replacement = doc.createElement("div");
   replacement.id = original.id;
