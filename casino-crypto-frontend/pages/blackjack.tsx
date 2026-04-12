@@ -216,7 +216,7 @@ export default function BlackjackPage() {
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
-            <div style={{ marginTop: 30, textAlign: "center" }}>
+            <div style={{ marginTop: 34, textAlign: "center" }}>
               <span style={{
                 display: "inline-flex",
                 minWidth: 22,
@@ -239,7 +239,7 @@ export default function BlackjackPage() {
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "30%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "28.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
                 <div style={{ position: "relative", height: 116, width: h.cards.length * 42 + 78 }}>
@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 14,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 28
+                  marginTop: 32
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
