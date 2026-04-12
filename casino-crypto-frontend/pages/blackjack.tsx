@@ -181,7 +181,13 @@ export default function BlackjackPage() {
 
   const act = async (a: BlackjackAction) => {
     if (!game) return; setErr(null); setLd(true);
-    try { const g = await actBlackjack(game.gameId, a); setGame(g); playDealSound(); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try {
+      const prevCards = hands[activeIdx]?.cards.length || 0;
+      const g = await actBlackjack(game.gameId, a);
+      setGame(g);
+      const nextCards = g.playerHands?.[g.activeHandIndex || 0]?.cards.length || 0;
+      if (nextCards > prevCards) playDealSound();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
 
   const hands = game?.playerHands || [];
