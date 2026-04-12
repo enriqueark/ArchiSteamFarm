@@ -239,7 +239,7 @@ export default function BlackjackPage() {
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "28.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "26%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
                 <div style={{ position: "relative", height: 116, width: h.cards.length * 42 + 78 }}>
@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 14,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 32
+                  marginTop: 38
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
