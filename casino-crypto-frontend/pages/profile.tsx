@@ -95,6 +95,46 @@ function normalizeEmbeddedAssetPaths(doc: Document) {
   });
 }
 
+function injectRuntimeProfileStyles(doc: Document) {
+  const styleId = "rw-profile-runtime-overrides";
+  const existing = doc.getElementById(styleId) as HTMLStyleElement | null;
+  if (existing) return;
+  const style = doc.createElement("style");
+  style.id = styleId;
+  style.textContent = `
+    #n20731419, #n20731424, #n20731429, #n20731434 {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      column-gap: 24px !important;
+      align-items: center !important;
+    }
+    #n20731434 {
+      grid-template-columns: minmax(0, 1fr) 506px !important;
+    }
+    #n20731438 {
+      width: 100% !important;
+      justify-content: flex-end !important;
+    }
+    #n20731423, #n20731428, #n20731433, #n20731442, #n20731455, #n20731478 {
+      margin-left: auto !important;
+      overflow: hidden !important;
+    }
+    #n20731423 a, #n20731428 a, #n20731433 a, #n20731442 a, #n20731455 a, #n20731478 a {
+      display: block !important;
+      width: 100% !important;
+      text-decoration: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    #n20731423 a:focus, #n20731428 a:focus, #n20731433 a:focus, #n20731442 a:focus, #n20731455 a:focus, #n20731478 a:focus {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  `;
+  doc.head.appendChild(style);
+}
+
 function withCacheBust(url: string, token: string): string {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}rw_profile=${encodeURIComponent(token)}`;
@@ -233,6 +273,7 @@ export default function ProfilePage() {
     body.style.overflow = "hidden";
 
     normalizeEmbeddedAssetPaths(doc);
+    injectRuntimeProfileStyles(doc);
 
     const root = doc.getElementById("n20731272");
     const footer = doc.getElementById("n20731273");

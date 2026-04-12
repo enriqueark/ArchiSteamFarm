@@ -1844,7 +1844,7 @@
   box-sizing: border-box;
 }
 .content-qr-frame-i2 {
-  gap: 130px;
+  gap: 48px;
   width: 100%;
   max-width: 1245px;
   align-self: stretch;
@@ -1948,7 +1948,7 @@
   box-sizing: border-box;
 }
 .content-qr-frame-wa {
-  gap: 130px;
+  gap: 48px;
   width: 100%;
   max-width: 1245px;
   align-self: stretch;
@@ -2051,7 +2051,7 @@
   box-sizing: border-box;
 }
 .content-qr-frame9l {
-  gap: 130px;
+  gap: 48px;
   width: 100%;
   max-width: 1245px;
   align-self: stretch;
@@ -2155,7 +2155,7 @@
   box-sizing: border-box;
 }
 .content-qr-frame0b {
-  gap: 130px;
+  gap: 48px;
   width: 100%;
   max-width: 1245px;
   align-self: stretch;
@@ -2212,11 +2212,11 @@
   text-decoration: none;
 }
 .content-qr-frame8f {
-  gap: 12px;
+  gap: 10px;
   width: fit-content;
   height: auto;
   max-width: none;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 .content-qr-frame-jg,.content-qr-frame-qw,.content-qr-frame8f {
   display: flex;
