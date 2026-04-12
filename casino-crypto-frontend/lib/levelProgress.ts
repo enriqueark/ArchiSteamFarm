@@ -85,3 +85,12 @@ export function getLevelProgressFromXpAtomic(xpAtomic?: string) {
     ratio
   };
 }
+
+export function getLevelAccentColor(level: number): string {
+  if (level >= 100) return "#ffffff";
+  if (level <= 19) return "#53ff87";
+  if (level <= 39) return "#53a3ff";
+  if (level <= 59) return "#ffc353";
+  if (level <= 79) return "#c053ff";
+  return "#ff5353";
+}

@@ -8,7 +8,7 @@ import {
   type User
 } from "@/lib/api";
 import { useToast } from "@/lib/toast";
-import { getLevelProgressFromXpAtomic } from "@/lib/levelProgress";
+import { getLevelAccentColor, getLevelProgressFromXpAtomic } from "@/lib/levelProgress";
 import { getGameVolume, setGameVolume } from "@/lib/gameAudio";
 
 type HydratedProfile = {
@@ -245,6 +245,7 @@ export default function ProfilePage() {
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
   const [volumeValue, setVolumeValue] = useState<number>(() => getGameVolume());
+  const isDraggingVolumeRef = useRef(false);
   const cacheBustRef = useRef(`${Date.now()}`);
 
   useEffect(() => {
@@ -347,6 +348,14 @@ export default function ProfilePage() {
       setContainerParagraphText(doc, "n20731398", hydratedProfile.stats.cases);
       setContainerParagraphText(doc, "n20731407", hydratedProfile.stats.blackjack);
       setContainerParagraphText(doc, "n20731416", hydratedProfile.stats.mines);
+      const statValueIds = ["n20731371", "n20731380", "n20731389", "n20731398", "n20731407", "n20731416"];
+      statValueIds.forEach((id) => {
+        const node = doc.getElementById(id);
+        const p = node?.querySelector("p");
+        if (!p) return;
+        p.style.color = "#ffc353";
+        p.style.fontWeight = "600";
+      });
       setContainerParagraphText(doc, "n20731441", hydratedProfile.email);
       setContainerParagraphText(
         doc,
@@ -371,11 +380,13 @@ export default function ProfilePage() {
       const xpParagraph = doc.getElementById("n20731355")?.querySelector("p");
       if (xpParagraph) {
         const spans = xpParagraph.querySelectorAll("span");
+        const xpCurrentFormatted = hydratedProfile.xpCurrent.toLocaleString("en-US", { maximumFractionDigits: 0 });
+        const xpTargetFormatted = hydratedProfile.xpTarget.toLocaleString("en-US", { maximumFractionDigits: 0 });
         if (spans.length >= 2) {
-          spans[0].textContent = hydratedProfile.xpCurrent.toLocaleString("en-US");
-          spans[1].textContent = `/${hydratedProfile.xpTarget.toLocaleString("en-US")}XP`;
+          spans[0].textContent = xpCurrentFormatted;
+          spans[1].textContent = `/${xpTargetFormatted}XP`;
         } else {
-          xpParagraph.textContent = `${hydratedProfile.xpCurrent.toLocaleString("en-US")}/${hydratedProfile.xpTarget.toLocaleString("en-US")}XP`;
+          xpParagraph.textContent = `${xpCurrentFormatted}/${xpTargetFormatted}XP`;
         }
       }
 
@@ -390,9 +401,22 @@ export default function ProfilePage() {
           `linear-gradient(90deg, #f75154 0%, #f75154 ${(ratio * 100).toFixed(3)}%, #222222 ${(ratio * 100).toFixed(3)}%, #222222 100%)`;
       }
 
+      const levelPill = doc.getElementById("n20731353");
+      if (levelPill) {
+        const tierColor = getLevelAccentColor(hydratedProfile.level);
+        levelPill.style.borderColor = tierColor;
+        levelPill.style.color = tierColor;
+        levelPill.style.boxShadow = `0 0 8px ${tierColor}40, inset 0 0 4px ${tierColor}20`;
+      }
+
       const statsSection = doc.getElementById("n20731359");
       if (statsSection) {
         statsSection.style.paddingRight = "0";
+        const cards = Array.from(statsSection.children) as HTMLElement[];
+        cards.forEach((card) => {
+          card.style.maxWidth = "none";
+          card.style.width = "100%";
+        });
       }
     }
 
@@ -401,8 +425,41 @@ export default function ProfilePage() {
       if (volumeBar) {
         const pct = Math.max(0, Math.min(100, Math.round(nextVolume * 100)));
         volumeBar.style.borderRadius = "999px";
-        volumeBar.style.background =
-          `linear-gradient(90deg, #f75154 0%, #f75154 ${pct}%, #232323 ${pct}%, #232323 100%)`;
+        volumeBar.style.background = "#232323";
+        volumeBar.style.position = "relative";
+        volumeBar.style.overflow = "hidden";
+
+        let fill = doc.getElementById("rw-volume-fill") as HTMLDivElement | null;
+        if (!fill) {
+          fill = doc.createElement("div");
+          fill.id = "rw-volume-fill";
+          fill.style.position = "absolute";
+          fill.style.left = "0";
+          fill.style.top = "0";
+          fill.style.bottom = "0";
+          fill.style.background = "linear-gradient(90deg, #f75154 0%, #ff6666 100%)";
+          fill.style.borderRadius = "999px";
+          fill.style.pointerEvents = "none";
+          volumeBar.appendChild(fill);
+        }
+        fill.style.width = `${pct}%`;
+
+        let thumb = doc.getElementById("rw-volume-thumb") as HTMLDivElement | null;
+        if (!thumb) {
+          thumb = doc.createElement("div");
+          thumb.id = "rw-volume-thumb";
+          thumb.style.position = "absolute";
+          thumb.style.top = "50%";
+          thumb.style.width = "14px";
+          thumb.style.height = "14px";
+          thumb.style.borderRadius = "999px";
+          thumb.style.background = "#ffffff";
+          thumb.style.transform = "translate(-50%, -50%)";
+          thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
+          thumb.style.pointerEvents = "none";
+          volumeBar.appendChild(thumb);
+        }
+        thumb.style.left = `${pct}%`;
       }
     };
     updateVolumeVisual(volumeValue);
@@ -421,12 +478,19 @@ export default function ProfilePage() {
       volumeTrack.style.cursor = "pointer";
       volumeTrack.onpointerdown = (event: PointerEvent) => {
         event.preventDefault();
+        isDraggingVolumeRef.current = true;
         setFromClientX(event.clientX);
       };
       volumeTrack.onpointermove = (event: PointerEvent) => {
-        if ((event.buttons & 1) === 1) {
+        if (isDraggingVolumeRef.current || (event.buttons & 1) === 1) {
           setFromClientX(event.clientX);
         }
+      };
+      volumeTrack.onpointerup = () => {
+        isDraggingVolumeRef.current = false;
+      };
+      volumeTrack.onpointercancel = () => {
+        isDraggingVolumeRef.current = false;
       };
     };
     bindVolumeSlider();
