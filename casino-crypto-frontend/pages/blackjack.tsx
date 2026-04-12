@@ -232,19 +232,19 @@ export default function BlackjackPage() {
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-              d="M7 20V12.2a1.1 1.1 0 0 1 2.2 0V6.4a1.1 1.1 0 1 1 2.2 0V12h.9V5.4a1.1 1.1 0 1 1 2.2 0V12h.9V6.5a1.1 1.1 0 1 1 2.2 0V12h.9V8.8a1.1 1.1 0 1 1 2.2 0V17c0 2.5-2 4.5-4.5 4.5H11.5C9 21.5 7 20.1 7 20Z"
+              d="M6.7 20.2V11.7a1.2 1.2 0 1 1 2.4 0V6.5a1.2 1.2 0 1 1 2.4 0v5.2h.9V5.7a1.2 1.2 0 1 1 2.4 0v6h.9V6.2a1.2 1.2 0 1 1 2.4 0v5.5h.9V8.6a1.2 1.2 0 1 1 2.4 0v8.5c0 2.8-2.2 5.1-5 5.1h-5.4c-2.6 0-4.7-1.9-4.7-2Z"
               fill="#0b0c0f"
             />
           </svg>
         )}
         {kind === "split" && (
-          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M9 14V9" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" />
-            <path d="M9 9L5 5.4M9 9L13 5.4" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" />
-            <path d="M5 5.4L7.2 5L5.3 3.2Z" fill="#0b0c0f" />
-            <path d="M13 5.4L10.8 5L12.7 3.2Z" fill="#0b0c0f" />
+          <svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M9 14.4V9.1" stroke="#0b0c0f" strokeWidth="2.45" strokeLinecap="round" />
+            <path d="M9 9.1L4.5 5.1M9 9.1L13.5 5.1" stroke="#0b0c0f" strokeWidth="2.45" strokeLinecap="round" />
+            <path d="M4.5 5.1L7 4.8L4.7 2.8Z" fill="#0b0c0f" />
+            <path d="M13.5 5.1L11 4.8L13.3 2.8Z" fill="#0b0c0f" />
           </svg>
         )}
       </>
