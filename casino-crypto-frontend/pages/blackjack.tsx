@@ -21,9 +21,9 @@ const SUIT_SMALL: Record<string, string> = {
 };
 const SUIT_LARGE: Record<string, string> = {
   S: `${A}fdad942d9caab4040db40feb9116c57c.svg`,
-  H: `${A}1fbe0a4cfdf293e8b30050ea6359c066.svg`,
-  D: `${A}1f0f7bc2f4657e040fd8e5d31d9b07da.svg`,
-  C: `${A}1e208e0bd7c4587a8979024e10d4792e.svg`,
+  H: `${A}8f180e7caaabdd91e67b57c49a1d6044.svg`,
+  D: `${A}1bdeac386520fad53c8d2ef77ad93015.svg`,
+  C: `${A}5602b9f08e4001f052bd3f0277ed3bbb.svg`,
 };
 
 function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), suit: s, sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
@@ -207,7 +207,7 @@ export default function BlackjackPage() {
           style={{
             width: 32,
             height: 32,
-            clipPath: "polygon(25% 6%, 75% 6%, 94% 50%, 75% 94%, 25% 94%, 6% 50%)",
+            borderRadius: "50%",
             background: "#ffc844",
             display: "flex",
             alignItems: "center",
@@ -215,9 +215,9 @@ export default function BlackjackPage() {
             flexShrink: 0
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3.2 6L8 1.5L12.8 6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3.2 12.4L8 7.9L12.8 12.4" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4.2 8L9 3.2L13.8 8" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4.2 14.2L9 9.4L13.8 14.2" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       );
@@ -232,19 +232,19 @@ export default function BlackjackPage() {
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-              d="M5.2 13.2V8.4c0-.6.5-1.1 1.1-1.1h.15V4.1c0-.6.5-1.1 1.1-1.1.61 0 1.11.5 1.11 1.1v2.7h.55V5c0-.6.5-1.1 1.11-1.1.61 0 1.11.5 1.11 1.1v1.8h.55V5.7c0-.6.5-1.1 1.11-1.1.61 0 1.11.5 1.11 1.1v4.5c0 2.6-1.95 4.1-4.2 4.1H9.1c-2.2 0-3.9-1.4-3.9-1.1Z"
+              d="M7 20V12.2a1.1 1.1 0 0 1 2.2 0V6.4a1.1 1.1 0 1 1 2.2 0V12h.9V5.4a1.1 1.1 0 1 1 2.2 0V12h.9V6.5a1.1 1.1 0 1 1 2.2 0V12h.9V8.8a1.1 1.1 0 1 1 2.2 0V17c0 2.5-2 4.5-4.5 4.5H11.5C9 21.5 7 20.1 7 20Z"
               fill="#0b0c0f"
             />
           </svg>
         )}
         {kind === "split" && (
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 13V8.6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M8 8.6L4.1 5.2M8 8.6L11.9 5.2" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M4.1 5.2L6.2 5.2L4.1 3.1Z" fill="#0b0c0f" />
-            <path d="M11.9 5.2L9.8 5.2L11.9 3.1Z" fill="#0b0c0f" />
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M9 14V9" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" />
+            <path d="M9 9L5 5.4M9 9L13 5.4" stroke="#0b0c0f" strokeWidth="2.35" strokeLinecap="round" />
+            <path d="M5 5.4L7.2 5L5.3 3.2Z" fill="#0b0c0f" />
+            <path d="M13 5.4L10.8 5L12.7 3.2Z" fill="#0b0c0f" />
           </svg>
         )}
       </>
