@@ -205,42 +205,42 @@ export default function BlackjackPage() {
       return (
         <span
           style={{
-            width: 36,
-            height: 36,
+            width: 24,
+            height: 24,
             clipPath: "polygon(25% 6%, 75% 6%, 94% 50%, 75% 94%, 25% 94%, 6% 50%)",
-            background: "#ffc844",
+            background: "#ffbe2f",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M4 11L9 6L14 11" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M4 15L9 10L14 15" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2.5 6.2L6 2.8L9.5 6.2" stroke="#0b0c0f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2.5 9.5L6 6.1L9.5 9.5" stroke="#0b0c0f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       );
     }
 
-    const bg = kind === "hit" ? "#43ff69" : kind === "stand" ? "#d70d33" : "#4cb8ff";
+    const bg = kind === "hit" ? "#33f266" : kind === "stand" ? "#d90f2d" : "#47b6ff";
     const glyph = (
       <>
         {kind === "hit" && (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3V13M3 8H13" stroke="#0b0c0f" strokeWidth="2.4" strokeLinecap="round" />
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 2.3V9.7M2.3 6H9.7" stroke="#0b0c0f" strokeWidth="2" strokeLinecap="round" />
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-            <path d="M8.5 2.2a6.3 6.3 0 1 1-5.9 8.5" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M3.2 3.1v4.2h4.2" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <path d="M6.5 2a4.7 4.7 0 1 1-4.3 6.4" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" />
+            <path d="M2.7 2.7v3.1h3.1" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
         {kind === "split" && (
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <circle cx="9" cy="4" r="2.2" fill="#0b0c0f" />
-            <path d="M9 6.2V14.2M9 8.2L4.2 12.6M9 8.2L13.8 12.6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <circle cx="7" cy="3.1" r="1.4" fill="#0b0c0f" />
+            <path d="M7 4.9V11.1M7 6.2L3.8 9.2M7 6.2L10.2 9.2" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" />
           </svg>
         )}
       </>
@@ -249,8 +249,8 @@ export default function BlackjackPage() {
     return (
       <span
         style={{
-          width: 36,
-          height: 36,
+          width: 24,
+          height: 24,
           borderRadius: "50%",
           background: bg,
           display: "flex",
@@ -381,7 +381,7 @@ export default function BlackjackPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 10, width: "100%" }}>
+          <div style={{ display: "flex", gap: 8, width: "100%" }}>
             {([
               { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "hit" as const },
               { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "stand" as const },
@@ -390,14 +390,13 @@ export default function BlackjackPage() {
             ]).map(({ a, l, dis, icon }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, minHeight: 58, padding: "12px 18px", borderRadius: 15, border: "none",
+                  flex: 1, minHeight: 50, padding: "14px 16px", borderRadius: 12, border: "none",
                   cursor: dis ? "default" : "pointer",
-                  background: "linear-gradient(180deg,#1e2023,#131518)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.02)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 11,
-                  color: "#b8bcc2", fontSize: 35, fontWeight: 700, fontFamily: G,
-                  letterSpacing: 0.1,
-                  opacity: dis ? 0.46 : 1,
+                  background: "#1a1a1a",
+                  boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
+                  opacity: dis ? 0.3 : 1,
                 }}>
                 {renderActionIcon(icon)}
                 {l}
