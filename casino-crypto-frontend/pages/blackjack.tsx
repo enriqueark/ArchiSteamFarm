@@ -219,15 +219,15 @@ export default function BlackjackPage() {
             <div style={{ marginTop: 34, textAlign: "center" }}>
               <span style={{
                 display: "inline-flex",
-                minWidth: 22,
-                height: 22,
+                minWidth: 30,
+                height: 30,
                 alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 999,
-                padding: "0 8px",
+                padding: "0 12px",
                 background: "rgba(0,0,0,0.5)",
                 color: "#d3d7dd",
-                fontSize: 14,
+                fontSize: 18,
                 fontWeight: 700,
                 fontFamily: G
               }}>
