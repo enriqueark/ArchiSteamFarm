@@ -127,6 +127,7 @@ function injectRuntimeProfileStyles(doc: Document) {
       display: block !important;
       border-radius: 999px !important;
       overflow: hidden !important;
+      background: #232323 !important;
     }
     #n20731419, #n20731424, #n20731429, #n20731434 {
       display: grid !important;
@@ -157,6 +158,16 @@ function injectRuntimeProfileStyles(doc: Document) {
       outline: none !important;
       box-shadow: none !important;
     }
+    #n20731447 {
+      background: #232323 !important;
+      border-radius: 999px !important;
+      overflow: hidden !important;
+      position: relative !important;
+    }
+    #n20731447::before, #n20731447::after {
+      content: none !important;
+      display: none !important;
+    }
     #n20731359 {
       display: grid !important;
       grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -170,6 +181,81 @@ function injectRuntimeProfileStyles(doc: Document) {
     }
   `;
   doc.head.appendChild(style);
+}
+
+function forceStatValue(doc: Document, id: string, text: string) {
+  const container = doc.getElementById(id);
+  if (!container) return;
+  let paragraph = container.querySelector("p");
+  if (!paragraph) {
+    paragraph = doc.createElement("p");
+    container.innerHTML = "";
+    container.appendChild(paragraph);
+  }
+  paragraph.textContent = text;
+  paragraph.setAttribute(
+    "style",
+    "margin:0;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;"
+  );
+}
+
+function forceXpProgress(doc: Document, ratio: number) {
+  const bar = doc.getElementById("n20731356");
+  if (!bar) return;
+  bar.innerHTML = "";
+  bar.style.width = "1035px";
+  bar.style.maxWidth = "1035px";
+  bar.style.height = "12px";
+  bar.style.borderRadius = "999px";
+  bar.style.background = "#232323";
+  bar.style.position = "relative";
+  bar.style.overflow = "hidden";
+
+  const fill = doc.createElement("div");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.top = "0";
+  fill.style.bottom = "0";
+  fill.style.width = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(3)}%`;
+  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
+  bar.appendChild(fill);
+}
+
+function forceVolumeProgress(doc: Document, ratio: number) {
+  const bar = doc.getElementById("n20731447");
+  if (!bar) return;
+  bar.innerHTML = "";
+  bar.style.width = "251px";
+  bar.style.maxWidth = "251px";
+  bar.style.height = "22px";
+  bar.style.borderRadius = "999px";
+  bar.style.background = "#232323";
+  bar.style.position = "relative";
+  bar.style.overflow = "hidden";
+
+  const fill = doc.createElement("div");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.top = "0";
+  fill.style.bottom = "0";
+  fill.style.width = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(3)}%`;
+  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
+  fill.style.borderRadius = "999px";
+  fill.style.pointerEvents = "none";
+  bar.appendChild(fill);
+
+  const thumb = doc.createElement("div");
+  thumb.style.position = "absolute";
+  thumb.style.top = "50%";
+  thumb.style.left = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(3)}%`;
+  thumb.style.width = "14px";
+  thumb.style.height = "14px";
+  thumb.style.borderRadius = "999px";
+  thumb.style.background = "#ffffff";
+  thumb.style.transform = "translate(-50%, -50%)";
+  thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
+  thumb.style.pointerEvents = "none";
+  bar.appendChild(thumb);
 }
 
 function withCacheBust(url: string, token: string): string {
@@ -342,20 +428,12 @@ export default function ProfilePage() {
 
       setContainerParagraphText(doc, "n20731347", hydratedProfile.username);
       setContainerParagraphText(doc, "n20731354", String(hydratedProfile.level));
-      setContainerParagraphText(doc, "n20731371", hydratedProfile.stats.totalPlayed);
-      setContainerParagraphText(doc, "n20731380", hydratedProfile.stats.battles);
-      setContainerParagraphText(doc, "n20731389", hydratedProfile.stats.roulette);
-      setContainerParagraphText(doc, "n20731398", hydratedProfile.stats.cases);
-      setContainerParagraphText(doc, "n20731407", hydratedProfile.stats.blackjack);
-      setContainerParagraphText(doc, "n20731416", hydratedProfile.stats.mines);
-      const statValueIds = ["n20731371", "n20731380", "n20731389", "n20731398", "n20731407", "n20731416"];
-      statValueIds.forEach((id) => {
-        const node = doc.getElementById(id);
-        const p = node?.querySelector("p");
-        if (!p) return;
-        p.style.color = "#ffc353";
-        p.style.fontWeight = "600";
-      });
+      forceStatValue(doc, "n20731371", hydratedProfile.stats.totalPlayed);
+      forceStatValue(doc, "n20731380", hydratedProfile.stats.battles);
+      forceStatValue(doc, "n20731389", hydratedProfile.stats.roulette);
+      forceStatValue(doc, "n20731398", hydratedProfile.stats.cases);
+      forceStatValue(doc, "n20731407", hydratedProfile.stats.blackjack);
+      forceStatValue(doc, "n20731416", hydratedProfile.stats.mines);
       setContainerParagraphText(doc, "n20731441", hydratedProfile.email);
       setContainerParagraphText(
         doc,
@@ -390,16 +468,7 @@ export default function ProfilePage() {
         }
       }
 
-      const xpBar = doc.getElementById("n20731356");
-      if (xpBar) {
-        xpBar.style.width = "1035px";
-        xpBar.style.height = "12px";
-        xpBar.style.maxWidth = "1035px";
-        xpBar.style.borderRadius = "999px";
-        const ratio = Math.max(0, Math.min(1, hydratedProfile.xpRatio));
-        xpBar.style.background =
-          `linear-gradient(90deg, #f75154 0%, #f75154 ${(ratio * 100).toFixed(3)}%, #222222 ${(ratio * 100).toFixed(3)}%, #222222 100%)`;
-      }
+      forceXpProgress(doc, hydratedProfile.xpRatio);
 
       const levelPill = doc.getElementById("n20731353");
       if (levelPill) {
@@ -428,6 +497,7 @@ export default function ProfilePage() {
         volumeBar.style.background = "#232323";
         volumeBar.style.position = "relative";
         volumeBar.style.overflow = "hidden";
+        volumeBar.innerHTML = "";
 
         let fill = doc.getElementById("rw-volume-fill") as HTMLDivElement | null;
         if (!fill) {
