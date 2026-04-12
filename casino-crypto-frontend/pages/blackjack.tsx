@@ -215,9 +215,9 @@ export default function BlackjackPage() {
             flexShrink: 0
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M3.1 6.4L7 2.6L10.9 6.4" stroke="#0b0c0f" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3.1 10.2L7 6.4L10.9 10.2" stroke="#0b0c0f" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3.2 6L8 1.5L12.8 6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3.2 12.4L8 7.9L12.8 12.4" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       );
@@ -232,19 +232,19 @@ export default function BlackjackPage() {
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="17" height="17" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
-              d="M4.5 10.9V7.2c0-.45.37-.82.82-.82h.11V3.95c0-.45.37-.82.82-.82.45 0 .82.37.82.82v2.11h.42V4.7c0-.45.37-.82.82-.82s.82.37.82.82v1.36h.42V5.25c0-.45.37-.82.82-.82s.82.37.82.82v3.45c0 2.02-1.51 3.17-3.25 3.17H7.52c-1.7 0-3.02-1.08-3.02-.97Z"
+              d="M5.2 13.2V8.4c0-.6.5-1.1 1.1-1.1h.15V4.1c0-.6.5-1.1 1.1-1.1.61 0 1.11.5 1.11 1.1v2.7h.55V5c0-.6.5-1.1 1.11-1.1.61 0 1.11.5 1.11 1.1v1.8h.55V5.7c0-.6.5-1.1 1.11-1.1.61 0 1.11.5 1.11 1.1v4.5c0 2.6-1.95 4.1-4.2 4.1H9.1c-2.2 0-3.9-1.4-3.9-1.1Z"
               fill="#0b0c0f"
             />
           </svg>
         )}
         {kind === "split" && (
-          <svg width="17" height="17" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-            <path d="M7.5 12V7.5" stroke="#0b0c0f" strokeWidth="2.3" strokeLinecap="round" />
-            <path d="M7.5 7.5L4.3 4.8M7.5 7.5L10.7 4.8" stroke="#0b0c0f" strokeWidth="2.3" strokeLinecap="round" />
-            <path d="M4.3 4.8L5.9 4.5L4.6 6.1Z" fill="#0b0c0f" />
-            <path d="M10.7 4.8L9.1 4.5L10.4 6.1Z" fill="#0b0c0f" />
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 13V8.6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M8 8.6L4.1 5.2M8 8.6L11.9 5.2" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M4.1 5.2L6.2 5.2L4.1 3.1Z" fill="#0b0c0f" />
+            <path d="M11.9 5.2L9.8 5.2L11.9 3.1Z" fill="#0b0c0f" />
           </svg>
         )}
       </>
