@@ -52,6 +52,7 @@ export default function App({ Component, pageProps }: AppProps) {
       userEmail={user?.username || user?.email}
       userLevel={user?.progression?.level ?? user?.level}
       userAvatarUrl={user?.avatarUrl ?? null}
+      hideFooter={Component.name === "ProfilePage"}
     >
       <Component {...pageProps} />
     </Layout>

@@ -1,3 +1,5 @@
+import { getGameVolume } from "./gameAudio";
+
 let ctx: AudioContext | null = null;
 const DEAL_VARIANTS = [
   { baseHz: 1500, noiseGain: 0.075, clickGain: 0.06 },
@@ -21,6 +23,8 @@ function pickDealVariant() {
 
 function playDealSoundNow() {
   try {
+    const volume = getGameVolume();
+    if (volume <= 0) return;
     const c = getCtx();
     const t = c.currentTime;
     const variant = pickDealVariant();
@@ -42,7 +46,7 @@ function playDealSoundNow() {
     noiseFilter.Q.value = 0.8;
     const noiseGain = c.createGain();
     noiseGain.gain.setValueAtTime(0.0001, t);
-    noiseGain.gain.exponentialRampToValueAtTime(variant.noiseGain, t + 0.008);
+    noiseGain.gain.exponentialRampToValueAtTime(variant.noiseGain * volume, t + 0.008);
     noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
@@ -57,7 +61,7 @@ function playDealSoundNow() {
     click.frequency.exponentialRampToValueAtTime(variant.baseHz * 0.45, t + 0.05);
     const clickGain = c.createGain();
     clickGain.gain.setValueAtTime(0.0001, t + 0.015);
-    clickGain.gain.exponentialRampToValueAtTime(variant.clickGain, t + 0.022);
+    clickGain.gain.exponentialRampToValueAtTime(variant.clickGain * volume, t + 0.022);
     clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
     click.connect(clickGain);
     clickGain.connect(c.destination);
@@ -79,6 +83,8 @@ export function playDealSound(options?: { delayMs?: number }) {
 
 export function playWinSound() {
   try {
+    const volume = getGameVolume();
+    if (volume <= 0) return;
     const c = getCtx();
     const t = c.currentTime;
     [523, 659, 784, 1047].forEach((f, i) => {
@@ -87,7 +93,7 @@ export function playWinSound() {
       osc.type = "sine";
       osc.frequency.value = f;
       g.gain.setValueAtTime(0, t + i * 0.1);
-      g.gain.linearRampToValueAtTime(0.1, t + i * 0.1 + 0.02);
+      g.gain.linearRampToValueAtTime(0.1 * volume, t + i * 0.1 + 0.02);
       g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.2);
       osc.connect(g);
       g.connect(c.destination);
@@ -99,6 +105,8 @@ export function playWinSound() {
 
 export function playLoseSound() {
   try {
+    const volume = getGameVolume();
+    if (volume <= 0) return;
     const c = getCtx();
     const t = c.currentTime;
     [350, 280, 220].forEach((f, i) => {
@@ -107,7 +115,7 @@ export function playLoseSound() {
       osc.type = "triangle";
       osc.frequency.value = f;
       g.gain.setValueAtTime(0, t + i * 0.15);
-      g.gain.linearRampToValueAtTime(0.08, t + i * 0.15 + 0.02);
+      g.gain.linearRampToValueAtTime(0.08 * volume, t + i * 0.15 + 0.02);
       g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.15 + 0.3);
       osc.connect(g);
       g.connect(c.destination);

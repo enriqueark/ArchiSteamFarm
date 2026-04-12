@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 import { refreshBalance } from "@/lib/refreshBalance";
+import { getGameVolume } from "@/lib/gameAudio";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -78,9 +79,11 @@ export default function MinesPage() {
     const ctx = getAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
+    const volume = getGameVolume();
+    if (volume <= 0) return;
     const out = ctx.createGain();
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.exponentialRampToValueAtTime(0.028, now + 0.03);
+    out.gain.exponentialRampToValueAtTime(0.028 * volume, now + 0.03);
     out.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
     out.connect(ctx.destination);
 
@@ -106,10 +109,12 @@ export default function MinesPage() {
     const ctx = getAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
+    const volume = getGameVolume();
+    if (volume <= 0) return;
 
     const out = ctx.createGain();
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.exponentialRampToValueAtTime(0.034, now + 0.03);
+    out.gain.exponentialRampToValueAtTime(0.034 * volume, now + 0.03);
     out.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
     out.connect(ctx.destination);
 

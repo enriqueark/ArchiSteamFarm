@@ -8,6 +8,8 @@ import {
   type User
 } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import { getLevelProgressFromXpAtomic } from "@/lib/levelProgress";
+import { getGameVolume, setGameVolume } from "@/lib/gameAudio";
 
 type HydratedProfile = {
   avatarUrl: string | null;
@@ -16,8 +18,10 @@ type HydratedProfile = {
   email: string;
   level: number;
   profileVisible: boolean;
+  xpAtomic: string;
   xpCurrent: number;
   xpTarget: number;
+  xpRatio: number;
   stats: {
     totalPlayed: string;
     battles: string;
@@ -29,7 +33,6 @@ type HydratedProfile = {
 };
 
 const PROFILE_CANVAS_WIDTH = 1286;
-const PROFILE_XP_TARGET = 1000;
 const PROFILE_FETCH_RETRIES = 3;
 const PROFILE_FETCH_RETRY_DELAY_MS = 350;
 const FALLBACK_PROFILE: HydratedProfile = {
@@ -39,8 +42,10 @@ const FALLBACK_PROFILE: HydratedProfile = {
   email: "",
   level: 1,
   profileVisible: true,
+  xpAtomic: "0",
   xpCurrent: 0,
-  xpTarget: PROFILE_XP_TARGET,
+  xpTarget: 1000,
+  xpRatio: 0,
   stats: {
     totalPlayed: "0.00",
     battles: "0.00",
@@ -50,13 +55,6 @@ const FALLBACK_PROFILE: HydratedProfile = {
     mines: "0.00"
   }
 };
-
-function toSafeInteger(input: unknown): number {
-  const raw = typeof input === "string" ? input.replace(/,/g, "") : String(input ?? "0");
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.floor(parsed));
-}
 
 function toCoinsDisplay(input: unknown): string {
   const raw = typeof input === "string" ? input.replace(/,/g, "") : String(input ?? "0");
@@ -102,6 +100,34 @@ function injectRuntimeProfileStyles(doc: Document) {
   const style = doc.createElement("style");
   style.id = styleId;
   style.textContent = `
+    #n20731350 {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+    }
+    #n20731351 {
+      width: 1035px !important;
+      max-width: 1035px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 16px !important;
+    }
+    #n20731353 {
+      margin-top: 0 !important;
+      transform: translateY(0) !important;
+    }
+    #n20731355 {
+      margin-top: 0 !important;
+      transform: translateY(0) !important;
+    }
+    #n20731356 {
+      width: 1035px !important;
+      max-width: 1035px !important;
+      display: block !important;
+      border-radius: 999px !important;
+      overflow: hidden !important;
+    }
     #n20731419, #n20731424, #n20731429, #n20731434 {
       display: grid !important;
       grid-template-columns: minmax(0, 1fr) auto !important;
@@ -130,6 +156,17 @@ function injectRuntimeProfileStyles(doc: Document) {
     #n20731423 a:focus, #n20731428 a:focus, #n20731433 a:focus, #n20731442 a:focus, #n20731455 a:focus, #n20731478 a:focus {
       outline: none !important;
       box-shadow: none !important;
+    }
+    #n20731359 {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 20px !important;
+      width: 1245px !important;
+      max-width: 1245px !important;
+    }
+    #n20731359 > div {
+      width: 100% !important;
+      max-width: none !important;
     }
   `;
   doc.head.appendChild(style);
@@ -171,9 +208,9 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
   const usernameFromAuth = user.username?.trim() || user.email.split("@")[0] || "Player";
   const username = summary?.user.username?.trim() || usernameFromAuth;
   const publicId = user.publicId ?? summary?.user.publicId ?? null;
-  const level = Math.max(1, user.progression?.level ?? user.level ?? summary?.user.level ?? 1);
-  const xpAbsolute = toSafeInteger(user.progression?.xp ?? user.levelXp ?? user.levelXpAtomic);
-  const xpCurrent = xpAbsolute % PROFILE_XP_TARGET;
+  const xpAtomic = String(user.progression?.xpAtomic ?? user.levelXpAtomic ?? "0");
+  const xpProgress = getLevelProgressFromXpAtomic(xpAtomic);
+  const level = Math.max(1, user.progression?.level ?? user.level ?? summary?.user.level ?? xpProgress.level);
   const avatarUrl = user.avatarUrl ?? user.customAvatarUrl ?? user.providerAvatarUrl ?? null;
 
   return {
@@ -183,8 +220,10 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
     email: user.email,
     level,
     profileVisible: summary?.user.profileVisible ?? true,
-    xpCurrent,
-    xpTarget: PROFILE_XP_TARGET,
+    xpAtomic,
+    xpCurrent: xpProgress.current,
+    xpTarget: xpProgress.target,
+    xpRatio: xpProgress.ratio,
     stats: {
       totalPlayed: toCoinsDisplay(summary?.stats.wageredTotalCoins),
       battles: toCoinsDisplay(summary?.stats.wageredByMode.caseBattlesCoins),
@@ -205,6 +244,7 @@ export default function ProfilePage() {
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
+  const [volumeValue, setVolumeValue] = useState<number>(() => getGameVolume());
   const cacheBustRef = useRef(`${Date.now()}`);
 
   useEffect(() => {
@@ -338,7 +378,58 @@ export default function ProfilePage() {
           xpParagraph.textContent = `${hydratedProfile.xpCurrent.toLocaleString("en-US")}/${hydratedProfile.xpTarget.toLocaleString("en-US")}XP`;
         }
       }
+
+      const xpBar = doc.getElementById("n20731356");
+      if (xpBar) {
+        xpBar.style.width = "1035px";
+        xpBar.style.height = "12px";
+        xpBar.style.maxWidth = "1035px";
+        xpBar.style.borderRadius = "999px";
+        const ratio = Math.max(0, Math.min(1, hydratedProfile.xpRatio));
+        xpBar.style.background =
+          `linear-gradient(90deg, #f75154 0%, #f75154 ${(ratio * 100).toFixed(3)}%, #222222 ${(ratio * 100).toFixed(3)}%, #222222 100%)`;
+      }
+
+      const statsSection = doc.getElementById("n20731359");
+      if (statsSection) {
+        statsSection.style.paddingRight = "0";
+      }
     }
+
+    const updateVolumeVisual = (nextVolume: number) => {
+      const volumeBar = doc.getElementById("n20731447");
+      if (volumeBar) {
+        const pct = Math.max(0, Math.min(100, Math.round(nextVolume * 100)));
+        volumeBar.style.borderRadius = "999px";
+        volumeBar.style.background =
+          `linear-gradient(90deg, #f75154 0%, #f75154 ${pct}%, #232323 ${pct}%, #232323 100%)`;
+      }
+    };
+    updateVolumeVisual(volumeValue);
+
+    const bindVolumeSlider = () => {
+      const volumeTrack = doc.getElementById("n20731447");
+      if (!volumeTrack) return;
+      const setFromClientX = (clientX: number) => {
+        const rect = volumeTrack.getBoundingClientRect();
+        if (!rect.width) return;
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const next = setGameVolume(ratio);
+        setVolumeValue(next);
+        updateVolumeVisual(next);
+      };
+      volumeTrack.style.cursor = "pointer";
+      volumeTrack.onpointerdown = (event: PointerEvent) => {
+        event.preventDefault();
+        setFromClientX(event.clientX);
+      };
+      volumeTrack.onpointermove = (event: PointerEvent) => {
+        if ((event.buttons & 1) === 1) {
+          setFromClientX(event.clientX);
+        }
+      };
+    };
+    bindVolumeSlider();
 
     const bindAction = (containerId: string, handler: () => void) => {
       const container = doc.getElementById(containerId);
@@ -398,7 +489,7 @@ export default function ProfilePage() {
       }
     });
     setContentReady(true);
-  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility]);
+  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility, volumeValue]);
 
   const handleFrameLoad = useCallback(() => {
     setFrameLoaded(true);

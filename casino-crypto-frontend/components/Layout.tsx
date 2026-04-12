@@ -52,6 +52,7 @@ interface Props {
   userEmail?: string;
   userLevel?: number;
   userAvatarUrl?: string | null;
+  hideFooter?: boolean;
 }
 
 const getInitialFromLabel = (label: string | undefined): string => {
@@ -60,7 +61,7 @@ const getInitialFromLabel = (label: string | undefined): string => {
   return normalized.slice(0, 1).toUpperCase();
 };
 
-export default function Layout({ children, onLogout, userEmail, userLevel, userAvatarUrl }: Props) {
+export default function Layout({ children, onLogout, userEmail, userLevel, userAvatarUrl, hideFooter = false }: Props) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
@@ -719,7 +720,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             {/* Page content */}
             <main className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               {children}
-              <Footer />
+              {!hideFooter ? <Footer /> : null}
             </main>
           </div>
 
