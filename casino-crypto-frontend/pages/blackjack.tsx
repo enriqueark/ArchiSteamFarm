@@ -47,19 +47,22 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
       <div
         style={{
           ...base,
-          background:
-            "radial-gradient(circle at 30% 20%, #353535 0%, #191919 55%, #111 100%)",
-          border: "1px solid #5f5f5f",
-          boxShadow: "0 8px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)",
-          overflow: "hidden"
+          background: "linear-gradient(135deg,#1a1a1a,#2a2a2a)",
+          border: "1px solid #444",
+          boxShadow: "2px 2px 0 #111, 4px 4px 0 #0a0a0a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
-            position: "absolute",
-            inset: 6 * scale,
-            borderRadius: 12 * scale,
-            border: "1px solid rgba(255,255,255,0.14)"
+            width: 26 * (w / 40),
+            height: 38 * (h / 58),
+            borderRadius: 3 * (w / 40),
+            border: "1px solid #555",
+            background: "repeating-linear-gradient(45deg,#222,#222 3px,#2a2a2a 3px,#2a2a2a 6px)",
           }}
         />
       </div>
