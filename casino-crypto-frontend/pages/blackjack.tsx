@@ -29,7 +29,7 @@ const SUIT_LARGE: Record<string, string> = {
 function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), suit: s, sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
 function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n = Number(v) / 1e8; return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number }) {
+function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0, dealDelayMs }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number; dealDelayMs?: number }) {
   const { rank, suit, clr } = parseCard(code);
   const left = idx * 40 + (splitOffset || 0);
   const scale = 0.64;
@@ -37,7 +37,7 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
   const h = 210 * scale;
   const base: React.CSSProperties = {
     width: w, height: h, borderRadius: 20 * scale, position: "absolute", left, top: 0,
-    animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${idx * 0.3}s both`,
+    animation: flipping ? "flipCard 0.4s ease-in-out forwards" : `dealCard 0.3s ease-out ${(dealDelayMs ?? idx * 300) / 1000}s both`,
     transform: `rotate(${tiltDeg}deg)`,
     transformOrigin: "50% 85%"
   };
@@ -155,7 +155,7 @@ export default function BlackjackPage() {
       setRevealedDealerCount(1);
       setRevealing(true);
       const t: ReturnType<typeof setTimeout>[] = [];
-      for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound(); }, i * 400));
+      for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound({ delayMs: 30 }); }, i * 400));
       t.push(setTimeout(() => { setShowResult(true); setRevealing(false); refreshBalance(); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
       return () => { t.forEach(clearTimeout); setRevealing(false); };
     } else { setShowResult(false); setRevealedDealerCount(0); setRevealing(false); }
@@ -288,7 +288,7 @@ export default function BlackjackPage() {
           <div style={{ position: "absolute", top: "9%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <div style={{ position: "relative", height: 110, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 40 + 74 }}>
               <Card code={dCards[0]} idx={0} />
-              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
+              {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} dealDelayMs={0} />)}
             </div>
             <div style={{ marginTop: 34, textAlign: "center" }}>
               <span style={{
@@ -371,7 +371,7 @@ export default function BlackjackPage() {
                 { label: "Pairs", val: sidePairs, set: setSidePairs },
               ].map((inp) => (
                 <div key={inp.label} style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, padding: "0 4px 0 0", height: 42 }}>
+                  <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, border: "1px solid #2a2d32", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.55)", padding: "0 4px 0 0", height: 42 }}>
                     <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 6px", flexShrink: 0, boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
                       <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
                     </div>
