@@ -216,7 +216,7 @@ export default function BlackjackPage() {
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
-            <div style={{ marginTop: 6, textAlign: "center" }}>
+            <div style={{ marginTop: 18, textAlign: "center" }}>
               <span style={{
                 display: "inline-flex",
                 minWidth: 22,
@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 14,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 6
+                  marginTop: 16
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
