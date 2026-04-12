@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import {
   getChatProfileByUserId,
   getMe,
+  setMyProfileVisibility,
   type ChatPublicProfileSummary,
   type User
 } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 
 type HydratedProfile = {
   avatarUrl: string | null;
@@ -12,6 +15,7 @@ type HydratedProfile = {
   publicId: number | null;
   email: string;
   level: number;
+  profileVisible: boolean;
   xpCurrent: number;
   xpTarget: number;
   stats: {
@@ -34,6 +38,7 @@ const FALLBACK_PROFILE: HydratedProfile = {
   publicId: null,
   email: "",
   level: 1,
+  profileVisible: true,
   xpCurrent: 0,
   xpTarget: PROFILE_XP_TARGET,
   stats: {
@@ -95,6 +100,12 @@ function withCacheBust(url: string, token: string): string {
   return `${url}${separator}rw_profile=${encodeURIComponent(token)}`;
 }
 
+function buildInitialAvatarDataUrl(seed: string): string {
+  const initials = (seed || "P").trim().slice(0, 2).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="191" height="191" viewBox="0 0 191 191"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1f1f1f"/><stop offset="100%" stop-color="#0d0d0d"/></linearGradient></defs><circle cx="95.5" cy="95.5" r="95.5" fill="url(#g)"/><circle cx="95.5" cy="95.5" r="92" fill="none" stroke="#2a2a2a" stroke-width="3"/><text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" fill="#f2f2f2" font-size="66" font-family="Arial, sans-serif" font-weight="700">${initials || "P"}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -131,6 +142,7 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
     publicId,
     email: user.email,
     level,
+    profileVisible: summary?.user.profileVisible ?? true,
     xpCurrent,
     xpTarget: PROFILE_XP_TARGET,
     stats: {
@@ -145,11 +157,14 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const toast = useToast();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [profile, setProfile] = useState<HydratedProfile | null>(null);
   const [profileResolved, setProfileResolved] = useState(false);
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [contentReady, setContentReady] = useState(false);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
   const cacheBustRef = useRef(`${Date.now()}`);
 
   useEffect(() => {
@@ -178,6 +193,28 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, []);
+
+  const toggleProfileVisibility = useCallback(async () => {
+    if (!profile || privacyBusy) return;
+    setPrivacyBusy(true);
+    const nextVisibility = !profile.profileVisible;
+    try {
+      await setMyProfileVisibility(nextVisibility);
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              profileVisible: nextVisibility
+            }
+          : current
+      );
+      toast.showSuccess(nextVisibility ? "Privacy mode activated" : "Privacy mode deactivated");
+    } catch (error) {
+      toast.showError(error instanceof Error ? error.message : "Failed to update privacy mode");
+    } finally {
+      setPrivacyBusy(false);
+    }
+  }, [privacyBusy, profile, toast]);
 
   const syncFrameContent = useCallback(() => {
     const frame = iframeRef.current;
@@ -209,9 +246,16 @@ export default function ProfilePage() {
     const hydratedProfile = profile ?? FALLBACK_PROFILE;
     if (hydratedProfile) {
       const avatar = doc.getElementById("n20731340") as HTMLImageElement | null;
-      if (avatar && hydratedProfile.avatarUrl) {
-        avatar.src = withCacheBust(hydratedProfile.avatarUrl, cacheBustRef.current);
+      const avatarFallback = buildInitialAvatarDataUrl(hydratedProfile.username || hydratedProfile.email || "P");
+      if (avatar) {
+        avatar.src = hydratedProfile.avatarUrl
+          ? withCacheBust(hydratedProfile.avatarUrl, cacheBustRef.current)
+          : avatarFallback;
         avatar.style.objectFit = "cover";
+        avatar.onerror = () => {
+          avatar.onerror = null;
+          avatar.src = avatarFallback;
+        };
       }
 
       setContainerParagraphText(doc, "n20731347", hydratedProfile.username);
@@ -223,6 +267,11 @@ export default function ProfilePage() {
       setContainerParagraphText(doc, "n20731407", hydratedProfile.stats.blackjack);
       setContainerParagraphText(doc, "n20731416", hydratedProfile.stats.mines);
       setContainerParagraphText(doc, "n20731441", hydratedProfile.email);
+      setContainerParagraphText(
+        doc,
+        "n20731455",
+        privacyBusy ? "Saving..." : hydratedProfile.profileVisible ? "Deactivate privacy" : "Activate privacy"
+      );
 
       const idParagraph = doc.getElementById("n20731349")?.querySelector("p");
       if (idParagraph) {
@@ -250,6 +299,45 @@ export default function ProfilePage() {
       }
     }
 
+    const bindAction = (containerId: string, handler: () => void) => {
+      const container = doc.getElementById(containerId);
+      if (!container) return;
+      container.style.cursor = "pointer";
+      const anchors = container.querySelectorAll("a");
+      anchors.forEach((anchor) => {
+        anchor.setAttribute("href", "#");
+        anchor.style.cursor = "pointer";
+      });
+      const clickHandler = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handler();
+      };
+      container.onclick = clickHandler;
+      anchors.forEach((anchor) => {
+        anchor.onclick = clickHandler;
+      });
+    };
+
+    bindAction("n20731423", () => {
+      void router.push("/support");
+    });
+    bindAction("n20731428", () => {
+      void router.push("/support");
+    });
+    bindAction("n20731433", () => {
+      window.open("https://discord.com", "_blank", "noopener,noreferrer");
+    });
+    bindAction("n20731442", () => {
+      toast.showError("Email verification is not available yet.");
+    });
+    bindAction("n20731455", () => {
+      void toggleProfileVisibility();
+    });
+    bindAction("n20731478", () => {
+      toast.showError("Please contact support for account lock actions.");
+    });
+
     const syncHeight = () => {
       const contentHeight = Math.max(
         html.scrollHeight,
@@ -269,7 +357,7 @@ export default function ProfilePage() {
       }
     });
     setContentReady(true);
-  }, [profile, profileResolved]);
+  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility]);
 
   const handleFrameLoad = useCallback(() => {
     setFrameLoaded(true);
