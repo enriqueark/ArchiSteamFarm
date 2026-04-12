@@ -31,8 +31,8 @@ function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n
 
 function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number }) {
   const { rank, suit, clr } = parseCard(code);
-  const left = idx * 42 + (splitOffset || 0);
-  const scale = 0.68;
+  const left = idx * 40 + (splitOffset || 0);
+  const scale = 0.64;
   const w = 150 * scale;
   const h = 210 * scale;
   const base: React.CSSProperties = {
@@ -212,7 +212,7 @@ export default function BlackjackPage() {
         {/* Dealer cards */}
         {game && dCards.length > 0 && (
           <div style={{ position: "absolute", top: "9%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ position: "relative", height: 116, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 42 + 78 }}>
+            <div style={{ position: "relative", height: 110, width: (game.dealerRevealed ? Math.max(2, revealedDealerCount) : 2) * 40 + 74 }}>
               <Card code={dCards[0]} idx={0} />
               {!game.dealerRevealed ? <Card code="XX" idx={1} faceDown /> : (game.dealerCards || []).slice(1, revealedDealerCount).map((c, i) => <Card key={`d${i+1}`} code={c} idx={i+1} flipping={i === 0} />)}
             </div>
@@ -239,10 +239,10 @@ export default function BlackjackPage() {
 
         {/* Player cards — support split (two hands side by side) */}
         {hands.length > 0 && (
-          <div style={{ position: "absolute", bottom: "24%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
+          <div style={{ position: "absolute", bottom: "21.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: isSplit ? 40 : 0, alignItems: "flex-end" }}>
             {hands.map((h, hi) => (
               <div key={hi} style={{ display: "flex", flexDirection: "column", alignItems: "center", opacity: isSplit && hi !== activeIdx && active ? 0.5 : 1 }}>
-                <div style={{ position: "relative", height: 116, width: h.cards.length * 42 + 78 }}>
+                <div style={{ position: "relative", height: 110, width: h.cards.length * 40 + 74 }}>
                   {h.cards.map((c, ci) => <Card key={`p${hi}-${ci}`} code={c} idx={ci} tiltDeg={ci === 0 ? -6 : 5} />)}
                 </div>
                 <span style={{
@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 18,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 42
+                  marginTop: 46
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
