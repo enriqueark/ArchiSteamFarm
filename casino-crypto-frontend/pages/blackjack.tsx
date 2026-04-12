@@ -105,7 +105,6 @@ function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0 }: { cod
 function Chip({ val, label }: { val: string; label: string }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <p style={{ color: "#6f6f6f", fontSize: 15, margin: "0 0 4px", fontFamily: G, fontWeight: 600 }}>{label}</p>
       <div
         style={{
           height: 44,
@@ -124,6 +123,7 @@ function Chip({ val, label }: { val: string; label: string }) {
         </div>
         <span style={{ color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: G }}>{val}</span>
       </div>
+      <p style={{ color: "#6f6f6f", fontSize: 15, margin: "4px 0 0", fontFamily: G, fontWeight: 600 }}>{label}</p>
     </div>
   );
 }
@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 18,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 40
+                  marginTop: 34
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
