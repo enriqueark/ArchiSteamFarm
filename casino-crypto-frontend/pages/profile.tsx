@@ -202,7 +202,10 @@ function forceStatValue(doc: Document, id: string, text: string) {
 function replaceElementWithDiv(doc: Document, id: string): HTMLDivElement | null {
   const original = doc.getElementById(id);
   if (!original) return null;
-  if (original instanceof HTMLDivElement) return original;
+  if (original instanceof HTMLDivElement) {
+    // Keep existing runtime handlers/styles across re-hydrations.
+    return original;
+  }
   const replacement = doc.createElement("div");
   replacement.id = original.id;
   replacement.className = original.className;
@@ -509,8 +512,9 @@ export default function ProfilePage() {
         cards.forEach((card) => {
           card.style.maxWidth = "none";
           card.style.width = "100%";
-          card.style.gap = "0";
+          card.style.gap = "14px";
           card.style.justifyContent = "space-between";
+          card.style.alignItems = "center";
         });
       }
 
@@ -519,15 +523,18 @@ export default function ProfilePage() {
       statRows.forEach((rowId) => {
         const row = doc.getElementById(rowId);
         if (!row) return;
-        row.style.gap = "0";
+        row.style.gap = "14px";
         row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
       });
       const statValueHolders = ["n20731368", "n20731377", "n20731386", "n20731395", "n20731404", "n20731413"];
       statValueHolders.forEach((holderId) => {
         const holder = doc.getElementById(holderId);
         if (!holder) return;
-        holder.style.marginLeft = "16px";
+        holder.style.marginLeft = "0";
         holder.style.flexShrink = "0";
+        holder.style.minWidth = "88px";
+        holder.style.justifyContent = "flex-end";
       });
     }
 
@@ -551,6 +558,9 @@ export default function ProfilePage() {
       volumeTrack.onpointerdown = (event: PointerEvent) => {
         event.preventDefault();
         isDraggingVolumeRef.current = true;
+        try {
+          volumeTrack.setPointerCapture(event.pointerId);
+        } catch {}
         setFromClientX(event.clientX);
       };
       volumeTrack.onpointermove = (event: PointerEvent) => {
@@ -563,6 +573,11 @@ export default function ProfilePage() {
       };
       volumeTrack.onpointercancel = () => {
         isDraggingVolumeRef.current = false;
+      };
+      volumeTrack.onpointerleave = () => {
+        if (isDraggingVolumeRef.current) {
+          isDraggingVolumeRef.current = false;
+        }
       };
     };
     bindVolumeSlider();
