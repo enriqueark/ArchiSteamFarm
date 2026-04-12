@@ -1,5 +1,5 @@
 let ctx: AudioContext | null = null;
-const DEAL_SOUND_SRC = "/sounds/flipcard-91468.wav";
+const DEAL_SOUND_SRC = "/sounds/flipcard-91468.mp3";
 const DEAL_POOL_SIZE = 8;
 let dealPool: HTMLAudioElement[] | null = null;
 let dealPoolIdx = 0;
@@ -25,7 +25,26 @@ export function playDealSound() {
     const a = dealPool[dealPoolIdx];
     dealPoolIdx = (dealPoolIdx + 1) % DEAL_POOL_SIZE;
     a.currentTime = 0;
-    a.play().catch(() => {});
+    a.play().catch(() => {
+      // Fallback so there is always audible feedback if media play is blocked.
+      try {
+        const c = getCtx();
+        const t = c.currentTime;
+        const dur = 0.08;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(1800, t);
+        osc.frequency.exponentialRampToValueAtTime(900, t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(t);
+        osc.stop(t + dur);
+      } catch {}
+    });
   } catch {}
 }
 
