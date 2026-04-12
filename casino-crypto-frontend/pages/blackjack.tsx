@@ -232,11 +232,8 @@ export default function BlackjackPage() {
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M7 20V12.4c0-.53.43-.96.96-.96s.96.43.96.96V5.3c0-.53.43-.96.96-.96s.96.43.96.96v6.2h.8V4.2c0-.53.43-.96.96-.96s.96.43.96.96v7.32h.8V5.3c0-.53.43-.96.96-.96s.96.43.96.96v6.24h.8V7.2c0-.53.43-.96.96-.96s.96.43.96.96v8.1c0 2.95-2.39 5.34-5.34 5.34h-5.18A4.7 4.7 0 0 1 7 20Z"
-              fill="#0b0c0f"
-            />
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <rect x="4" y="4" width="10" height="10" rx="2.2" fill="#0b0c0f" />
           </svg>
         )}
         {kind === "split" && (
