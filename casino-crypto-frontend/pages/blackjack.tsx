@@ -200,6 +200,70 @@ export default function BlackjackPage() {
     return String(total);
   };
 
+  const renderActionIcon = (kind: "hit" | "stand" | "split" | "double") => {
+    if (kind === "double") {
+      return (
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            clipPath: "polygon(25% 6%, 75% 6%, 94% 50%, 75% 94%, 25% 94%, 6% 50%)",
+            background: "#ffc844",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 11L9 6L14 11" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 15L9 10L14 15" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      );
+    }
+
+    const bg = kind === "hit" ? "#43ff69" : kind === "stand" ? "#d70d33" : "#4cb8ff";
+    const glyph = (
+      <>
+        {kind === "hit" && (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3V13M3 8H13" stroke="#0b0c0f" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+        )}
+        {kind === "stand" && (
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+            <path d="M8.5 2.2a6.3 6.3 0 1 1-5.9 8.5" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M3.2 3.1v4.2h4.2" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        {kind === "split" && (
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <circle cx="9" cy="4" r="2.2" fill="#0b0c0f" />
+            <path d="M9 6.2V14.2M9 8.2L4.2 12.6M9 8.2L13.8 12.6" stroke="#0b0c0f" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        )}
+      </>
+    );
+
+    return (
+      <span
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          background: bg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
+        }}
+      >
+        {glyph}
+      </span>
+    );
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       {/* Table */}
@@ -317,24 +381,25 @@ export default function BlackjackPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 8, width: "100%" }}>
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>
             {([
-              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, iconBg: "#33f266", iconSym: "+" },
-              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, iconBg: "#d90f2d", iconSym: "⤿" },
-              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, iconBg: "#47b6ff", iconSym: "↔" },
-              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, iconBg: "#ffbe2f", iconSym: "⟰" },
-            ]).map(({ a, l, dis, iconBg, iconSym }) => (
+              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "hit" as const },
+              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "stand" as const },
+              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, icon: "split" as const },
+              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, icon: "double" as const },
+            ]).map(({ a, l, dis, icon }) => (
               <button key={a} onClick={() => !dis && act(a)} disabled={dis}
                 style={{
-                  flex: 1, minHeight: 50, padding: "14px 16px", borderRadius: 12, border: "none",
+                  flex: 1, minHeight: 58, padding: "12px 18px", borderRadius: 15, border: "none",
                   cursor: dis ? "default" : "pointer",
-                  background: "#1a1a1a",
-                  boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
-                  opacity: dis ? 0.3 : 1,
+                  background: "linear-gradient(180deg,#1e2023,#131518)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.02)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 11,
+                  color: "#b8bcc2", fontSize: 35, fontWeight: 700, fontFamily: G,
+                  letterSpacing: 0.1,
+                  opacity: dis ? 0.46 : 1,
                 }}>
-                <span style={{ width: 24, height: 24, borderRadius: "50%", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>{iconSym}</span>
+                {renderActionIcon(icon)}
                 {l}
               </button>
             ))}
