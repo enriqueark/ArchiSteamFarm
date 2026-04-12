@@ -286,7 +286,8 @@ function forceXpProgress(doc: Document, ratio: number) {
 function forceVolumeProgress(doc: Document, ratio: number) {
   const bar = replaceElementWithDiv(doc, "n20731447");
   if (!bar) return;
-  const clampedPercent = Math.max(0, Math.min(100, ratio * 100)).toFixed(3);
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const clampedPercent = (clampedRatio * 100).toFixed(3);
   bar.style.width = "251px";
   bar.style.maxWidth = "251px";
   bar.style.height = "22px";
@@ -326,7 +327,11 @@ function forceVolumeProgress(doc: Document, ratio: number) {
     thumb.style.pointerEvents = "none";
     bar.appendChild(thumb);
   }
-  thumb.style.left = `${clampedPercent}%`;
+  const barWidth = bar.getBoundingClientRect().width || 251;
+  const thumbRadiusPx = 7;
+  const thumbTravelPx = Math.max(0, barWidth - thumbRadiusPx * 2);
+  const thumbLeftPx = thumbRadiusPx + clampedRatio * thumbTravelPx;
+  thumb.style.left = `${thumbLeftPx}px`;
 }
 
 function withCacheBust(url: string, token: string): string {
