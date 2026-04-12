@@ -2300,9 +2300,11 @@
   font-style: normal;
   margin-top: 0 !important;
   text-align: center;
+  display: block;
+  width: 100%;
   font-family: "Gotham",sans-serif;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 50px;
   margin-bottom: 0 !important;
   letter-spacing: 0;
   text-transform: none;

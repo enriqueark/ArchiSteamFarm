@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  getChatProfileByPublicId,
   getChatProfileByUserId,
+  getMyGameHistory,
   getMe,
+  getProfileSummary,
+  type ProfileSummary,
   setMyProfileVisibility,
   type ChatPublicProfileSummary,
   type User
@@ -64,6 +68,48 @@ function toCoinsDisplay(input: unknown): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+}
+
+function parseCoins(input: string | null | undefined): number {
+  if (!input) return 0;
+  const parsed = Number(input.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toCoinsFixed(value: number): string {
+  if (!Number.isFinite(value)) return "0.00";
+  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function getHistoryWageredByMode() {
+  const modeTotals = {
+    MINES: 0,
+    BLACKJACK: 0,
+    ROULETTE: 0,
+    CASES: 0,
+    BATTLES: 0
+  } as const;
+  const totals: Record<keyof typeof modeTotals, number> = {
+    MINES: 0,
+    BLACKJACK: 0,
+    ROULETTE: 0,
+    CASES: 0,
+    BATTLES: 0
+  };
+  let offset = 0;
+  const limit = 100;
+  for (let page = 0; page < 20; page += 1) {
+    const response = await getMyGameHistory({ limit, offset, mode: "ALL" });
+    const items = response.items ?? [];
+    items.forEach((item) => {
+      if (item.gameMode in totals) {
+        totals[item.gameMode as keyof typeof modeTotals] += parseCoins(item.wagerCoins);
+      }
+    });
+    if (!response.pagination?.hasMore) break;
+    offset += limit;
+  }
+  return totals;
 }
 
 function setContainerParagraphText(doc: Document, containerId: string, text: string) {
@@ -354,7 +400,6 @@ export default function ProfilePage() {
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
-  const [volumeValue, setVolumeValue] = useState<number>(() => getGameVolume());
   const isDraggingVolumeRef = useRef(false);
   const cacheBustRef = useRef(`${Date.now()}`);
 
@@ -365,13 +410,68 @@ export default function ProfilePage() {
       try {
         const me = await fetchMeWithRetry();
         let summary: ChatPublicProfileSummary | null = null;
+        let profileSummary: ProfileSummary | null = null;
+      let historyTotals:
+        | {
+            MINES: number;
+            BLACKJACK: number;
+            ROULETTE: number;
+            CASES: number;
+            BATTLES: number;
+          }
+        | null = null;
         try {
-          summary = await getChatProfileByUserId(me.id);
+          if (typeof me.publicId === "number" && me.publicId > 0) {
+            summary = await getChatProfileByPublicId(me.publicId);
+          } else {
+            summary = await getChatProfileByUserId(me.id);
+          }
         } catch {
-          summary = null;
+          try {
+            summary = await getChatProfileByUserId(me.id);
+          } catch {
+            summary = null;
+          }
+        }
+        try {
+          profileSummary = await getProfileSummary();
+        } catch {
+          profileSummary = null;
+        }
+        try {
+          historyTotals = await getHistoryWageredByMode();
+        } catch {
+          historyTotals = null;
         }
         if (cancelled) return;
-        setProfile(mapProfileData(me, summary));
+        const mapped = mapProfileData(me, summary);
+        if (profileSummary) {
+          const totalPlayedFromSummary = parseCoins(profileSummary.totals.wageredCoins);
+          const minesFromSummary = parseCoins(profileSummary.perGame.mines.wageredCoins);
+          const blackjackFromSummary = parseCoins(profileSummary.perGame.blackjack.wageredCoins);
+          const rouletteFromSummary = parseCoins(profileSummary.perGame.roulette.wageredCoins);
+          mapped.stats.mines = toCoinsFixed(minesFromSummary);
+          mapped.stats.blackjack = toCoinsFixed(blackjackFromSummary);
+          mapped.stats.roulette = toCoinsFixed(rouletteFromSummary);
+          mapped.stats.totalPlayed = toCoinsFixed(totalPlayedFromSummary);
+        }
+        if (historyTotals) {
+          mapped.stats.cases = toCoinsFixed(historyTotals.CASES);
+          mapped.stats.battles = toCoinsFixed(historyTotals.BATTLES);
+          if (!profileSummary) {
+            mapped.stats.mines = toCoinsFixed(historyTotals.MINES);
+            mapped.stats.blackjack = toCoinsFixed(historyTotals.BLACKJACK);
+            mapped.stats.roulette = toCoinsFixed(historyTotals.ROULETTE);
+            mapped.stats.totalPlayed = toCoinsFixed(
+              historyTotals.MINES +
+                historyTotals.BLACKJACK +
+                historyTotals.ROULETTE +
+                historyTotals.CASES +
+                historyTotals.BATTLES
+            );
+          }
+        }
+        setProfile(mapped);
       } catch {
         if (!cancelled) setProfile(FALLBACK_PROFILE);
       } finally {
@@ -541,20 +641,30 @@ export default function ProfilePage() {
     const updateVolumeVisual = (nextVolume: number) => {
       forceVolumeProgress(doc, nextVolume);
     };
-    updateVolumeVisual(volumeValue);
+    updateVolumeVisual(getGameVolume());
 
     const bindVolumeSlider = () => {
       const volumeTrack = replaceElementWithDiv(doc, "n20731447");
       if (!volumeTrack) return;
+      const frameWindow = frame.contentWindow;
       const setFromClientX = (clientX: number) => {
         const rect = volumeTrack.getBoundingClientRect();
         if (!rect.width) return;
         const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         const next = setGameVolume(ratio);
-        setVolumeValue(next);
         updateVolumeVisual(next);
       };
       volumeTrack.style.cursor = "pointer";
+      const onPointerMove = (event: PointerEvent) => {
+        if (!isDraggingVolumeRef.current) return;
+        setFromClientX(event.clientX);
+      };
+      const stopDragging = () => {
+        isDraggingVolumeRef.current = false;
+        frameWindow?.removeEventListener("pointermove", onPointerMove);
+        frameWindow?.removeEventListener("pointerup", stopDragging);
+        frameWindow?.removeEventListener("pointercancel", stopDragging);
+      };
       volumeTrack.onpointerdown = (event: PointerEvent) => {
         event.preventDefault();
         isDraggingVolumeRef.current = true;
@@ -562,22 +672,9 @@ export default function ProfilePage() {
           volumeTrack.setPointerCapture(event.pointerId);
         } catch {}
         setFromClientX(event.clientX);
-      };
-      volumeTrack.onpointermove = (event: PointerEvent) => {
-        if (isDraggingVolumeRef.current || (event.buttons & 1) === 1) {
-          setFromClientX(event.clientX);
-        }
-      };
-      volumeTrack.onpointerup = () => {
-        isDraggingVolumeRef.current = false;
-      };
-      volumeTrack.onpointercancel = () => {
-        isDraggingVolumeRef.current = false;
-      };
-      volumeTrack.onpointerleave = () => {
-        if (isDraggingVolumeRef.current) {
-          isDraggingVolumeRef.current = false;
-        }
+        frameWindow?.addEventListener("pointermove", onPointerMove);
+        frameWindow?.addEventListener("pointerup", stopDragging);
+        frameWindow?.addEventListener("pointercancel", stopDragging);
       };
     };
     bindVolumeSlider();
@@ -640,7 +737,7 @@ export default function ProfilePage() {
       }
     });
     setContentReady(true);
-  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility, volumeValue]);
+  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility]);
 
   const handleFrameLoad = useCallback(() => {
     setFrameLoaded(true);
