@@ -258,7 +258,7 @@ export default function BlackjackPage() {
                   fontSize: 18,
                   fontWeight: 700,
                   fontFamily: G,
-                  marginTop: 46
+                  marginTop: 40
                 }}>
                   {calcDisplay(h.cards)}
                 </span>
@@ -297,7 +297,6 @@ export default function BlackjackPage() {
                 { label: "Pairs", val: sidePairs, set: setSidePairs },
               ].map((inp) => (
                 <div key={inp.label} style={{ flex: 1, textAlign: "center" }}>
-                  <p style={{ color: "#828282", fontSize: 11, margin: "0 0 4px", fontFamily: G }}>{inp.label}</p>
                   <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, padding: "0 4px 0 0", height: 42 }}>
                     <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 6px", flexShrink: 0, boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
                       <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
@@ -305,6 +304,7 @@ export default function BlackjackPage() {
                     <input value={inp.val} onChange={(e) => inp.set(e.target.value)}
                       style={{ flex: 1, height: "100%", border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, padding: 0, minWidth: 0 }} />
                   </div>
+                  <p style={{ color: "#828282", fontSize: 11, margin: "5px 0 0", fontFamily: G }}>{inp.label}</p>
                 </div>
               ))}
             </div>
