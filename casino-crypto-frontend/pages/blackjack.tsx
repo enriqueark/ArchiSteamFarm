@@ -205,42 +205,44 @@ export default function BlackjackPage() {
       return (
         <span
           style={{
-            width: 24,
-            height: 24,
+            width: 28,
+            height: 28,
             clipPath: "polygon(25% 6%, 75% 6%, 94% 50%, 75% 94%, 25% 94%, 6% 50%)",
-            background: "#ffbe2f",
+            background: "#ffc844",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M2.5 6.2L6 2.8L9.5 6.2" stroke="#0b0c0f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2.5 9.5L6 6.1L9.5 9.5" stroke="#0b0c0f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 7L7 3.2L11 7" stroke="#0b0c0f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 10.8L7 7L11 10.8" stroke="#0b0c0f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       );
     }
 
-    const bg = kind === "hit" ? "#33f266" : kind === "stand" ? "#d90f2d" : "#47b6ff";
+    const bg = kind === "hit" ? "#43ff69" : kind === "stand" ? "#d70d33" : "#58bcff";
     const glyph = (
       <>
         {kind === "hit" && (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M6 2.3V9.7M2.3 6H9.7" stroke="#0b0c0f" strokeWidth="2" strokeLinecap="round" />
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 2.4V11.6M2.4 7H11.6" stroke="#0b0c0f" strokeWidth="2.3" strokeLinecap="round" />
           </svg>
         )}
         {kind === "stand" && (
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-            <path d="M6.5 2a4.7 4.7 0 1 1-4.3 6.4" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M2.7 2.7v3.1h3.1" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M11.8 6.6a5.1 5.1 0 1 1-4.7-5.1" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" />
+            <path d="M8.2 1.6H12v3.8" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
         {kind === "split" && (
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <circle cx="7" cy="3.1" r="1.4" fill="#0b0c0f" />
-            <path d="M7 4.9V11.1M7 6.2L3.8 9.2M7 6.2L10.2 9.2" stroke="#0b0c0f" strokeWidth="1.9" strokeLinecap="round" />
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M7.5 12.4V7.4" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" />
+            <path d="M7.5 7.4L4.4 4.1M7.5 7.4L10.6 4.1" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" />
+            <path d="M4.4 4.1H6.4M4.4 4.1V6.1" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10.6 4.1H8.6M10.6 4.1V6.1" stroke="#0b0c0f" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </>
@@ -249,8 +251,8 @@ export default function BlackjackPage() {
     return (
       <span
         style={{
-          width: 24,
-          height: 24,
+          width: 28,
+          height: 28,
           borderRadius: "50%",
           background: bg,
           display: "flex",
