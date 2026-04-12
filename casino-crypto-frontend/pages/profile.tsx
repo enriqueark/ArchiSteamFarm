@@ -12,7 +12,7 @@ import {
   type User
 } from "@/lib/api";
 import { useToast } from "@/lib/toast";
-import { getLevelAccentColor, getLevelProgressFromXpAtomic } from "@/lib/levelProgress";
+import { getLevelProgressFromXpAtomic } from "@/lib/levelProgress";
 import { getGameVolume, setGameVolume } from "@/lib/gameAudio";
 
 type HydratedProfile = {
@@ -59,6 +59,18 @@ const FALLBACK_PROFILE: HydratedProfile = {
     mines: "0.00"
   }
 };
+
+const LEVEL_BADGE_TIERS = [
+  { max: 19, color: "#53ff87", bg: "linear-gradient(180deg, #53ff8738, #53ff87)" },
+  { max: 39, color: "#53a3ff", bg: "linear-gradient(180deg, #53a3ff38, #53a3ff)" },
+  { max: 59, color: "#ffc353", bg: "linear-gradient(180deg, #ffc35338, #ffc353)" },
+  { max: 79, color: "#c053ff", bg: "linear-gradient(180deg, #c053ff38, #c053ff)" },
+  { max: 99, color: "#ff5353", bg: "linear-gradient(180deg, #ff535338, #ff5353)" }
+] as const;
+
+function getLevelBadgeTier(level: number) {
+  return LEVEL_BADGE_TIERS.find((tier) => level <= tier.max) ?? LEVEL_BADGE_TIERS[LEVEL_BADGE_TIERS.length - 1];
+}
 
 function toCoinsDisplay(input: unknown): string {
   const raw = typeof input === "string" ? input.replace(/,/g, "") : String(input ?? "0");
@@ -146,6 +158,14 @@ function injectRuntimeProfileStyles(doc: Document) {
   const style = doc.createElement("style");
   style.id = styleId;
   style.textContent = `
+    @keyframes rw-level-pulse {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.03); filter: brightness(1.08); }
+    }
+    @keyframes rw-rainbow-border {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
     #n20731350 {
       display: flex !important;
       flex-direction: column !important;
@@ -582,6 +602,8 @@ export default function ProfilePage() {
         avatar.style.width = "120px";
         avatar.style.height = "120px";
         avatar.style.borderRadius = "120px";
+        avatar.style.marginTop = "12px";
+        avatar.style.marginLeft = "10px";
         avatar.onerror = () => {
           avatar.onerror = null;
           avatar.src = avatarFallback;
@@ -633,11 +655,46 @@ export default function ProfilePage() {
       forceXpProgress(doc, hydratedProfile.xpRatio);
 
       const levelPill = doc.getElementById("n20731353");
+      const levelTextParagraph = doc.getElementById("n20731354")?.querySelector("p");
       if (levelPill) {
-        const tierColor = getLevelAccentColor(hydratedProfile.level);
-        levelPill.style.borderColor = tierColor;
-        levelPill.style.color = tierColor;
-        levelPill.style.boxShadow = `0 0 8px ${tierColor}40, inset 0 0 4px ${tierColor}20`;
+        if (hydratedProfile.level >= 100) {
+          levelPill.style.border = "none";
+          levelPill.style.padding = "1px";
+          levelPill.style.borderRadius = "9px";
+          levelPill.style.background =
+            "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)";
+          levelPill.style.backgroundSize = "300% 100%";
+          levelPill.style.animation = "rw-rainbow-border 4s linear infinite";
+          levelPill.style.boxShadow = "0 0 10px rgba(255, 183, 83, 0.35)";
+          const levelInner = doc.getElementById("n20731354");
+          if (levelInner) {
+            levelInner.style.borderRadius = "8px";
+            levelInner.style.padding = "4px 8px";
+            levelInner.style.background =
+              "linear-gradient(90deg, #ff535325, #ffb75325, #53ff8725, #53a3ff25, #c053ff25, #ff53a325, #ff535325)";
+            levelInner.style.backgroundSize = "300% 100%";
+            levelInner.style.animation = "rw-rainbow-border 4s linear infinite";
+          }
+          if (levelTextParagraph) {
+            levelTextParagraph.setAttribute(
+              "style",
+              "margin:0;font-size:18.666667938232422px;font-style:normal;font-family:'Gotham',sans-serif;font-weight:700;line-height:19px;letter-spacing:0;text-transform:none;text-decoration:none;background:linear-gradient(90deg,#ff5353,#ffb753,#53ff87,#53a3ff,#c053ff,#ff53a3,#ff5353);background-size:300% 100%;animation:rw-rainbow-border 4s linear infinite;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 4px rgba(255,255,255,0.3));"
+            );
+          }
+        } else {
+          const tier = getLevelBadgeTier(hydratedProfile.level);
+          levelPill.style.border = `1px solid ${tier.color}`;
+          levelPill.style.background = tier.bg;
+          levelPill.style.color = tier.color;
+          levelPill.style.boxShadow = `0 0 8px ${tier.color}40, inset 0 0 4px ${tier.color}20`;
+          levelPill.style.animation = "rw-level-pulse 2s ease-in-out infinite";
+          if (levelTextParagraph) {
+            levelTextParagraph.setAttribute(
+              "style",
+              `margin:0;color:${tier.color};font-size:18.666667938232422px;font-style:normal;font-family:'Gotham',sans-serif;font-weight:700;line-height:19px;letter-spacing:0;text-transform:none;text-decoration:none;text-shadow:0 0 6px ${tier.color}80;`
+            );
+          }
+        }
       }
 
       const statsSection = doc.getElementById("n20731359");
