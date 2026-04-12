@@ -26,6 +26,25 @@ type HydratedProfile = {
 
 const PROFILE_CANVAS_WIDTH = 1286;
 const PROFILE_XP_TARGET = 1000;
+const PROFILE_FETCH_RETRIES = 3;
+const PROFILE_FETCH_RETRY_DELAY_MS = 350;
+const FALLBACK_PROFILE: HydratedProfile = {
+  avatarUrl: null,
+  username: "Player",
+  publicId: null,
+  email: "",
+  level: 1,
+  xpCurrent: 0,
+  xpTarget: PROFILE_XP_TARGET,
+  stats: {
+    totalPlayed: "0.00",
+    battles: "0.00",
+    roulette: "0.00",
+    cases: "0.00",
+    blackjack: "0.00",
+    mines: "0.00"
+  }
+};
 
 function toSafeInteger(input: unknown): number {
   const raw = typeof input === "string" ? input.replace(/,/g, "") : String(input ?? "0");
@@ -71,6 +90,32 @@ function normalizeEmbeddedAssetPaths(doc: Document) {
   });
 }
 
+function withCacheBust(url: string, token: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}rw_profile=${encodeURIComponent(token)}`;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function fetchMeWithRetry(): Promise<User> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < PROFILE_FETCH_RETRIES; attempt += 1) {
+    try {
+      return await getMe();
+    } catch (error) {
+      lastError = error;
+      if (attempt < PROFILE_FETCH_RETRIES - 1) {
+        await sleep(PROFILE_FETCH_RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Unable to load profile");
+}
+
 function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): HydratedProfile {
   const usernameFromAuth = user.username?.trim() || user.email.split("@")[0] || "Player";
   const username = summary?.user.username?.trim() || usernameFromAuth;
@@ -102,13 +147,17 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
 export default function ProfilePage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [profile, setProfile] = useState<HydratedProfile | null>(null);
+  const [profileResolved, setProfileResolved] = useState(false);
+  const [frameLoaded, setFrameLoaded] = useState(false);
+  const [contentReady, setContentReady] = useState(false);
+  const cacheBustRef = useRef(`${Date.now()}`);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadProfile = async () => {
       try {
-        const me = await getMe();
+        const me = await fetchMeWithRetry();
         let summary: ChatPublicProfileSummary | null = null;
         try {
           summary = await getChatProfileByUserId(me.id);
@@ -118,7 +167,9 @@ export default function ProfilePage() {
         if (cancelled) return;
         setProfile(mapProfileData(me, summary));
       } catch {
-        if (!cancelled) setProfile(null);
+        if (!cancelled) setProfile(FALLBACK_PROFILE);
+      } finally {
+        if (!cancelled) setProfileResolved(true);
       }
     };
 
@@ -152,31 +203,38 @@ export default function ProfilePage() {
       root.appendChild(footer);
     }
 
-    if (profile) {
+    // Hold the imported frame hidden until data hydration is resolved.
+    if (!profileResolved) return;
+
+    const hydratedProfile = profile ?? FALLBACK_PROFILE;
+    if (hydratedProfile) {
       const avatar = doc.getElementById("n20731340") as HTMLImageElement | null;
-      if (avatar && profile.avatarUrl) {
-        avatar.src = profile.avatarUrl;
+      if (avatar && hydratedProfile.avatarUrl) {
+        avatar.src = withCacheBust(hydratedProfile.avatarUrl, cacheBustRef.current);
         avatar.style.objectFit = "cover";
       }
 
-      setContainerParagraphText(doc, "n20731347", profile.username);
-      setContainerParagraphText(doc, "n20731354", String(profile.level));
-      setContainerParagraphText(doc, "n20731371", profile.stats.totalPlayed);
-      setContainerParagraphText(doc, "n20731380", profile.stats.battles);
-      setContainerParagraphText(doc, "n20731389", profile.stats.roulette);
-      setContainerParagraphText(doc, "n20731398", profile.stats.cases);
-      setContainerParagraphText(doc, "n20731407", profile.stats.blackjack);
-      setContainerParagraphText(doc, "n20731416", profile.stats.mines);
-      setContainerParagraphText(doc, "n20731441", profile.email);
+      setContainerParagraphText(doc, "n20731347", hydratedProfile.username);
+      setContainerParagraphText(doc, "n20731354", String(hydratedProfile.level));
+      setContainerParagraphText(doc, "n20731371", hydratedProfile.stats.totalPlayed);
+      setContainerParagraphText(doc, "n20731380", hydratedProfile.stats.battles);
+      setContainerParagraphText(doc, "n20731389", hydratedProfile.stats.roulette);
+      setContainerParagraphText(doc, "n20731398", hydratedProfile.stats.cases);
+      setContainerParagraphText(doc, "n20731407", hydratedProfile.stats.blackjack);
+      setContainerParagraphText(doc, "n20731416", hydratedProfile.stats.mines);
+      setContainerParagraphText(doc, "n20731441", hydratedProfile.email);
 
       const idParagraph = doc.getElementById("n20731349")?.querySelector("p");
       if (idParagraph) {
         const spans = idParagraph.querySelectorAll("span");
         if (spans.length >= 2) {
           spans[0].textContent = "Your ID:";
-          spans[1].textContent = profile.publicId !== null ? String(profile.publicId) : "N/A";
+          spans[1].textContent =
+            hydratedProfile.publicId !== null ? String(hydratedProfile.publicId) : "N/A";
         } else {
-          idParagraph.textContent = `Your ID:${profile.publicId !== null ? profile.publicId : "N/A"}`;
+          idParagraph.textContent = `Your ID:${
+            hydratedProfile.publicId !== null ? hydratedProfile.publicId : "N/A"
+          }`;
         }
       }
 
@@ -184,10 +242,10 @@ export default function ProfilePage() {
       if (xpParagraph) {
         const spans = xpParagraph.querySelectorAll("span");
         if (spans.length >= 2) {
-          spans[0].textContent = profile.xpCurrent.toLocaleString("en-US");
-          spans[1].textContent = `/${profile.xpTarget.toLocaleString("en-US")}XP`;
+          spans[0].textContent = hydratedProfile.xpCurrent.toLocaleString("en-US");
+          spans[1].textContent = `/${hydratedProfile.xpTarget.toLocaleString("en-US")}XP`;
         } else {
-          xpParagraph.textContent = `${profile.xpCurrent.toLocaleString("en-US")}/${profile.xpTarget.toLocaleString("en-US")}XP`;
+          xpParagraph.textContent = `${hydratedProfile.xpCurrent.toLocaleString("en-US")}/${hydratedProfile.xpTarget.toLocaleString("en-US")}XP`;
         }
       }
     }
@@ -210,15 +268,20 @@ export default function ProfilePage() {
         image.addEventListener("load", syncHeight, { once: true });
       }
     });
-  }, [profile]);
+    setContentReady(true);
+  }, [profile, profileResolved]);
 
   const handleFrameLoad = useCallback(() => {
+    setFrameLoaded(true);
     syncFrameContent();
   }, [syncFrameContent]);
 
   useEffect(() => {
+    if (!frameLoaded) return;
     syncFrameContent();
-  }, [syncFrameContent]);
+  }, [frameLoaded, syncFrameContent]);
+
+  const showIframe = frameLoaded && profileResolved && contentReady;
 
   return (
     <div className="-mx-5 -my-4 bg-[#070707]">
@@ -235,7 +298,8 @@ export default function ProfilePage() {
               minHeight: 1889,
               border: 0,
               display: "block",
-              background: "#070707"
+              background: "#070707",
+              visibility: showIframe ? "visible" : "hidden"
             }}
           />
         </div>

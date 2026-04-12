@@ -1144,7 +1144,7 @@
   border-bottom: 2px solid #ff5353;
   border-radius: 9px 9px 9px 9px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#ff535338 0%,#ff5353 100%);
+  background-image: linear-gradient(180deg,#ff535338 0%,#ff5353 100%);
 }
 .content-qr-text80-ts1 {
   width: 100%;
@@ -1225,7 +1225,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame-pg {
   gap: 14px;
@@ -1326,7 +1326,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame8b {
   gap: 14px;
@@ -1427,7 +1427,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame-xv2 {
   gap: 14px;
@@ -1528,7 +1528,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame-jn {
   gap: 14px;
@@ -1629,7 +1629,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame-zg {
   gap: 14px;
@@ -1730,7 +1730,7 @@
   flex-shrink: 1;
   border-radius: 18px 18px 18px 18px;
   justify-content: space-between;
-  background-image: linear-gradient(NaNdeg,#161616 0%,#0d0d0d 100%);
+  background-image: linear-gradient(180deg,#161616 0%,#0d0d0d 100%);
 }
 .content-qr-frame87 {
   gap: 14px;
@@ -1917,7 +1917,7 @@
   align-items: center;
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#2e9f35 0%,#55ff60 100%);
+  background-image: linear-gradient(180deg,#2e9f35 0%,#55ff60 100%);
 }
 .content-qr-text-button-o01 {
   width: 100%;
@@ -2020,7 +2020,7 @@
   align-items: center;
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#2e9f35 0%,#55ff60 100%);
+  background-image: linear-gradient(180deg,#2e9f35 0%,#55ff60 100%);
 }
 .content-qr-text-button-fh1 {
   width: 100%;
@@ -2124,7 +2124,7 @@
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
   background-color: #1a1a1a;
-  background-image: linear-gradient(NaNdeg,#2e9f35 0%,#55ff60 100%);
+  background-image: linear-gradient(180deg,#2e9f35 0%,#55ff60 100%);
 }
 .content-qr-text-button791 {
   width: 100%;
@@ -2280,7 +2280,7 @@
   align-items: center;
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#ac2e30 0%,#f75154 100%);
+  background-image: linear-gradient(180deg,#ac2e30 0%,#f75154 100%);
 }
 .content-qr-text-button-jj1 {
   width: 100%;
@@ -2435,7 +2435,7 @@
   align-items: center;
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#ac2e30 0%,#f75154 100%);
+  background-image: linear-gradient(180deg,#ac2e30 0%,#f75154 100%);
 }
 .content-qr-text-button4x1 {
   width: 100%;
@@ -2824,7 +2824,7 @@
   align-items: center;
   border-radius: 12px 12px 12px 12px;
   justify-content: center;
-  background-image: linear-gradient(NaNdeg,#81061a 0%,#bd0926 100%);
+  background-image: linear-gradient(180deg,#81061a 0%,#bd0926 100%);
 }
 .content-qr-text-button1e1 {
   width: 100%;
