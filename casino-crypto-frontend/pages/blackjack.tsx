@@ -155,7 +155,7 @@ export default function BlackjackPage() {
       setRevealedDealerCount(1);
       setRevealing(true);
       const t: ReturnType<typeof setTimeout>[] = [];
-      for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); setTimeout(playDealSound, 90); }, i * 400));
+      for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound(); }, i * 400));
       t.push(setTimeout(() => { setShowResult(true); setRevealing(false); refreshBalance(); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
       return () => { t.forEach(clearTimeout); setRevealing(false); };
     } else { setShowResult(false); setRevealedDealerCount(0); setRevealing(false); }
@@ -175,13 +175,13 @@ export default function BlackjackPage() {
       const pv = parseFloat(sidePairs); const tv = parseFloat(side21);
       const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) }); refreshBalance();
       setGame(g);
-      for (let i = 0; i < 4; i++) setTimeout(() => setTimeout(playDealSound, 90), i * 300);
+      for (let i = 0; i < 4; i++) setTimeout(playDealSound, i * 300);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
 
   const act = async (a: BlackjackAction) => {
     if (!game) return; setErr(null); setLd(true);
-    try { const g = await actBlackjack(game.gameId, a); setGame(g); setTimeout(playDealSound, 90); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try { const g = await actBlackjack(game.gameId, a); setGame(g); playDealSound(); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
 
   const hands = game?.playerHands || [];

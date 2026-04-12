@@ -1,14 +1,10 @@
 let ctx: AudioContext | null = null;
-const DEAL_SOUND_SRC = "/sounds/flipcard-91468.mp3";
-const DEAL_POOL_SIZE = 8;
 const DEAL_VARIANTS = [
-  { rate: 0.97, offset: 0.0, volume: 0.58 },
-  { rate: 1.0, offset: 0.012, volume: 0.62 },
-  { rate: 1.035, offset: 0.022, volume: 0.56 },
+  { baseHz: 1500, noiseGain: 0.075, clickGain: 0.06 },
+  { baseHz: 1700, noiseGain: 0.085, clickGain: 0.055 },
+  { baseHz: 1850, noiseGain: 0.07, clickGain: 0.065 },
 ] as const;
 let lastDealVariant = -1;
-let dealPool: HTMLAudioElement[] | null = null;
-let dealPoolIdx = 0;
 
 function getCtx(): AudioContext {
   if (!ctx) ctx = new AudioContext();
@@ -25,45 +21,48 @@ function pickDealVariant() {
 
 function playDealSoundNow() {
   try {
-    if (typeof Audio === "undefined") return;
-    if (!dealPool) {
-      dealPool = [];
-      for (let i = 0; i < DEAL_POOL_SIZE; i++) {
-        const a = new Audio(DEAL_SOUND_SRC);
-        a.preload = "auto";
-        a.volume = 0.6;
-        dealPool.push(a);
-      }
-    }
-
+    const c = getCtx();
+    const t = c.currentTime;
     const variant = pickDealVariant();
-    const a = dealPool[dealPoolIdx];
-    dealPoolIdx = (dealPoolIdx + 1) % DEAL_POOL_SIZE;
-    a.pause();
-    a.playbackRate = variant.rate;
-    a.volume = Math.max(0.35, Math.min(0.8, variant.volume + (Math.random() - 0.5) * 0.05));
-    a.currentTime = Math.min(0.035, variant.offset + Math.random() * 0.006);
-    a.play().catch(() => {
-      // Fallback so there is always audible feedback if media play is blocked.
-      try {
-        const c = getCtx();
-        const t = c.currentTime;
-        const dur = 0.08;
-        const osc = c.createOscillator();
-        const gain = c.createGain();
-        osc.type = "square";
-        const f = 1700 * variant.rate;
-        osc.frequency.setValueAtTime(f, t);
-        osc.frequency.exponentialRampToValueAtTime(850 * variant.rate, t + dur);
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        osc.connect(gain);
-        gain.connect(c.destination);
-        osc.start(t);
-        osc.stop(t + dur);
-      } catch {}
-    });
+    const dur = 0.075;
+
+    // Short filtered noise burst to mimic a card sliding on felt.
+    const buf = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      const p = i / d.length;
+      const env = p < 0.08 ? p / 0.08 : Math.exp(-(p - 0.08) * 10);
+      d[i] = (Math.random() * 2 - 1) * env;
+    }
+    const noise = c.createBufferSource();
+    noise.buffer = buf;
+    const noiseFilter = c.createBiquadFilter();
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.setValueAtTime(variant.baseHz + Math.random() * 180, t);
+    noiseFilter.Q.value = 0.8;
+    const noiseGain = c.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, t);
+    noiseGain.gain.exponentialRampToValueAtTime(variant.noiseGain, t + 0.008);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(c.destination);
+    noise.start(t);
+    noise.stop(t + dur);
+
+    // Tiny click/transient for card impact at the end.
+    const click = c.createOscillator();
+    click.type = "triangle";
+    click.frequency.setValueAtTime(variant.baseHz * 0.9, t + 0.015);
+    click.frequency.exponentialRampToValueAtTime(variant.baseHz * 0.45, t + 0.05);
+    const clickGain = c.createGain();
+    clickGain.gain.setValueAtTime(0.0001, t + 0.015);
+    clickGain.gain.exponentialRampToValueAtTime(variant.clickGain, t + 0.022);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+    click.connect(clickGain);
+    clickGain.connect(c.destination);
+    click.start(t + 0.015);
+    click.stop(t + 0.06);
   } catch {}
 }
 
