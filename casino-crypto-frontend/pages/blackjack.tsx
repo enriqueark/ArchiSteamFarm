@@ -123,7 +123,7 @@ function Chip({ val, label }: { val: string; label: string }) {
         </div>
         <span style={{ color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: G }}>{val}</span>
       </div>
-      <p style={{ color: "#6f6f6f", fontSize: 15, margin: "4px 0 0", fontFamily: G, fontWeight: 600 }}>{label}</p>
+      <p style={{ color: "#ffffff", fontSize: 15, margin: "8px 0 0", fontFamily: G, fontWeight: 600 }}>{label}</p>
     </div>
   );
 }
@@ -278,7 +278,7 @@ export default function BlackjackPage() {
         )}
 
         {/* Chips on table */}
-        <div style={{ position: "absolute", bottom: "6.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
+        <div style={{ position: "absolute", bottom: "4.5%", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 22 }}>
           <Chip val={game ? fmtCoins(game.sideBet21Plus3Atomic) : side21} label="21+3" />
           <Chip val={game ? fmtCoins(game.mainBetAtomic) : bet} label="Bet" />
           <Chip val={game ? fmtCoins(game.sideBetPairsAtomic) : sidePairs} label="Pairs" />
