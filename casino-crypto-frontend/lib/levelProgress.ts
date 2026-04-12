@@ -58,7 +58,8 @@ export function getLevelProgressFromXpAtomic(xpAtomic?: string) {
   const xpScaled = toBigIntSafe(xpAtomic);
   const level = getLevelFromScaledXp(xpScaled);
   if (level >= MAX_LEVEL) {
-    const totalDisplay = Math.max(1, scaledToDisplay(xpScaled));
+    const lastThreshold = LEVEL_TOTAL_XP_SCALED[MAX_LEVEL - 1] ?? BigInt(0);
+    const totalDisplay = Math.max(1, scaledToDisplay(lastThreshold));
     return {
       level,
       current: totalDisplay,

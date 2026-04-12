@@ -199,8 +199,20 @@ function forceStatValue(doc: Document, id: string, text: string) {
   );
 }
 
+function replaceElementWithDiv(doc: Document, id: string): HTMLDivElement | null {
+  const original = doc.getElementById(id);
+  if (!original) return null;
+  if (original instanceof HTMLDivElement) return original;
+  const replacement = doc.createElement("div");
+  replacement.id = original.id;
+  replacement.className = original.className;
+  replacement.setAttribute("style", (original.getAttribute("style") ?? ""));
+  original.parentNode?.replaceChild(replacement, original);
+  return replacement;
+}
+
 function forceXpProgress(doc: Document, ratio: number) {
-  const bar = doc.getElementById("n20731356");
+  const bar = replaceElementWithDiv(doc, "n20731356");
   if (!bar) return;
   bar.innerHTML = "";
   bar.style.width = "1035px";
@@ -222,7 +234,7 @@ function forceXpProgress(doc: Document, ratio: number) {
 }
 
 function forceVolumeProgress(doc: Document, ratio: number) {
-  const bar = doc.getElementById("n20731447");
+  const bar = replaceElementWithDiv(doc, "n20731447");
   if (!bar) return;
   bar.innerHTML = "";
   bar.style.width = "251px";
@@ -297,6 +309,15 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
   const xpAtomic = String(user.progression?.xpAtomic ?? user.levelXpAtomic ?? "0");
   const xpProgress = getLevelProgressFromXpAtomic(xpAtomic);
   const level = Math.max(1, user.progression?.level ?? user.level ?? summary?.user.level ?? xpProgress.level);
+  let xpCurrent = xpProgress.current;
+  let xpTarget = xpProgress.target;
+  let xpRatio = xpProgress.ratio;
+  if (level >= 100) {
+    const total = Math.max(1, xpProgress.current, xpProgress.target);
+    xpCurrent = total;
+    xpTarget = total;
+    xpRatio = 1;
+  }
   const avatarUrl = user.avatarUrl ?? user.customAvatarUrl ?? user.providerAvatarUrl ?? null;
 
   return {
@@ -307,9 +328,9 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
     level,
     profileVisible: summary?.user.profileVisible ?? true,
     xpAtomic,
-    xpCurrent: xpProgress.current,
-    xpTarget: xpProgress.target,
-    xpRatio: xpProgress.ratio,
+    xpCurrent,
+    xpTarget,
+    xpRatio,
     stats: {
       totalPlayed: toCoinsDisplay(summary?.stats.wageredTotalCoins),
       battles: toCoinsDisplay(summary?.stats.wageredByMode.caseBattlesCoins),
@@ -420,6 +441,9 @@ export default function ProfilePage() {
           ? withCacheBust(hydratedProfile.avatarUrl, cacheBustRef.current)
           : avatarFallback;
         avatar.style.objectFit = "cover";
+        avatar.style.width = "120px";
+        avatar.style.height = "120px";
+        avatar.style.borderRadius = "120px";
         avatar.onerror = () => {
           avatar.onerror = null;
           avatar.src = avatarFallback;
@@ -485,57 +509,35 @@ export default function ProfilePage() {
         cards.forEach((card) => {
           card.style.maxWidth = "none";
           card.style.width = "100%";
+          card.style.gap = "0";
+          card.style.justifyContent = "space-between";
         });
       }
+
+      // Keep wager values visible inside each stats card.
+      const statRows = ["n20731360", "n20731372", "n20731381", "n20731390", "n20731399", "n20731408"];
+      statRows.forEach((rowId) => {
+        const row = doc.getElementById(rowId);
+        if (!row) return;
+        row.style.gap = "0";
+        row.style.justifyContent = "space-between";
+      });
+      const statValueHolders = ["n20731368", "n20731377", "n20731386", "n20731395", "n20731404", "n20731413"];
+      statValueHolders.forEach((holderId) => {
+        const holder = doc.getElementById(holderId);
+        if (!holder) return;
+        holder.style.marginLeft = "16px";
+        holder.style.flexShrink = "0";
+      });
     }
 
     const updateVolumeVisual = (nextVolume: number) => {
-      const volumeBar = doc.getElementById("n20731447");
-      if (volumeBar) {
-        const pct = Math.max(0, Math.min(100, Math.round(nextVolume * 100)));
-        volumeBar.style.borderRadius = "999px";
-        volumeBar.style.background = "#232323";
-        volumeBar.style.position = "relative";
-        volumeBar.style.overflow = "hidden";
-        volumeBar.innerHTML = "";
-
-        let fill = doc.getElementById("rw-volume-fill") as HTMLDivElement | null;
-        if (!fill) {
-          fill = doc.createElement("div");
-          fill.id = "rw-volume-fill";
-          fill.style.position = "absolute";
-          fill.style.left = "0";
-          fill.style.top = "0";
-          fill.style.bottom = "0";
-          fill.style.background = "linear-gradient(90deg, #f75154 0%, #ff6666 100%)";
-          fill.style.borderRadius = "999px";
-          fill.style.pointerEvents = "none";
-          volumeBar.appendChild(fill);
-        }
-        fill.style.width = `${pct}%`;
-
-        let thumb = doc.getElementById("rw-volume-thumb") as HTMLDivElement | null;
-        if (!thumb) {
-          thumb = doc.createElement("div");
-          thumb.id = "rw-volume-thumb";
-          thumb.style.position = "absolute";
-          thumb.style.top = "50%";
-          thumb.style.width = "14px";
-          thumb.style.height = "14px";
-          thumb.style.borderRadius = "999px";
-          thumb.style.background = "#ffffff";
-          thumb.style.transform = "translate(-50%, -50%)";
-          thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
-          thumb.style.pointerEvents = "none";
-          volumeBar.appendChild(thumb);
-        }
-        thumb.style.left = `${pct}%`;
-      }
+      forceVolumeProgress(doc, nextVolume);
     };
     updateVolumeVisual(volumeValue);
 
     const bindVolumeSlider = () => {
-      const volumeTrack = doc.getElementById("n20731447");
+      const volumeTrack = replaceElementWithDiv(doc, "n20731447");
       if (!volumeTrack) return;
       const setFromClientX = (clientX: number) => {
         const rect = volumeTrack.getBoundingClientRect();
