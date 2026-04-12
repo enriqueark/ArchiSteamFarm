@@ -1,4 +1,8 @@
 let ctx: AudioContext | null = null;
+const DEAL_SOUND_SRC = "/sounds/flipcard-91468.wav";
+const DEAL_POOL_SIZE = 8;
+let dealPool: HTMLAudioElement[] | null = null;
+let dealPoolIdx = 0;
 
 function getCtx(): AudioContext {
   if (!ctx) ctx = new AudioContext();
@@ -8,29 +12,20 @@ function getCtx(): AudioContext {
 
 export function playDealSound() {
   try {
-    const c = getCtx();
-    const t = c.currentTime;
-    const dur = 0.15;
-    const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) {
-      const p = i / d.length;
-      const env = p < 0.1 ? p / 0.1 : Math.exp(-(p - 0.1) * 8);
-      d[i] = (Math.random() * 2 - 1) * env * 0.2;
+    if (typeof Audio === "undefined") return;
+    if (!dealPool) {
+      dealPool = [];
+      for (let i = 0; i < DEAL_POOL_SIZE; i++) {
+        const a = new Audio(DEAL_SOUND_SRC);
+        a.preload = "auto";
+        a.volume = 0.6;
+        dealPool.push(a);
+      }
     }
-    const src = c.createBufferSource();
-    src.buffer = buf;
-    const lp = c.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.setValueAtTime(6000, t);
-    lp.frequency.exponentialRampToValueAtTime(800, t + dur);
-    const gain = c.createGain();
-    gain.gain.setValueAtTime(0.3, t);
-    gain.gain.linearRampToValueAtTime(0.0, t + dur);
-    src.connect(lp);
-    lp.connect(gain);
-    gain.connect(c.destination);
-    src.start(t);
+    const a = dealPool[dealPoolIdx];
+    dealPoolIdx = (dealPoolIdx + 1) % DEAL_POOL_SIZE;
+    a.currentTime = 0;
+    a.play().catch(() => {});
   } catch {}
 }
 
