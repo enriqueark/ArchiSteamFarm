@@ -285,7 +285,7 @@ function forceXpProgress(doc: Document, ratio: number) {
 function forceVolumeProgress(doc: Document, ratio: number) {
   const bar = replaceElementWithDiv(doc, "n20731447");
   if (!bar) return;
-  bar.innerHTML = "";
+  const clampedPercent = Math.max(0, Math.min(100, ratio * 100)).toFixed(3);
   bar.style.width = "251px";
   bar.style.maxWidth = "251px";
   bar.style.height = "22px";
@@ -293,30 +293,39 @@ function forceVolumeProgress(doc: Document, ratio: number) {
   bar.style.background = "#232323";
   bar.style.position = "relative";
   bar.style.overflow = "hidden";
+  bar.style.touchAction = "none";
 
-  const fill = doc.createElement("div");
-  fill.style.position = "absolute";
-  fill.style.left = "0";
-  fill.style.top = "0";
-  fill.style.bottom = "0";
-  fill.style.width = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(3)}%`;
-  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
-  fill.style.borderRadius = "999px";
-  fill.style.pointerEvents = "none";
-  bar.appendChild(fill);
+  let fill = bar.querySelector<HTMLDivElement>('[data-rw-volume="fill"]');
+  if (!fill) {
+    fill = doc.createElement("div");
+    fill.setAttribute("data-rw-volume", "fill");
+    fill.style.position = "absolute";
+    fill.style.left = "0";
+    fill.style.top = "0";
+    fill.style.bottom = "0";
+    fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
+    fill.style.borderRadius = "999px";
+    fill.style.pointerEvents = "none";
+    bar.appendChild(fill);
+  }
+  fill.style.width = `${clampedPercent}%`;
 
-  const thumb = doc.createElement("div");
-  thumb.style.position = "absolute";
-  thumb.style.top = "50%";
-  thumb.style.left = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(3)}%`;
-  thumb.style.width = "14px";
-  thumb.style.height = "14px";
-  thumb.style.borderRadius = "999px";
-  thumb.style.background = "#ffffff";
-  thumb.style.transform = "translate(-50%, -50%)";
-  thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
-  thumb.style.pointerEvents = "none";
-  bar.appendChild(thumb);
+  let thumb = bar.querySelector<HTMLDivElement>('[data-rw-volume="thumb"]');
+  if (!thumb) {
+    thumb = doc.createElement("div");
+    thumb.setAttribute("data-rw-volume", "thumb");
+    thumb.style.position = "absolute";
+    thumb.style.top = "50%";
+    thumb.style.width = "14px";
+    thumb.style.height = "14px";
+    thumb.style.borderRadius = "999px";
+    thumb.style.background = "#ffffff";
+    thumb.style.transform = "translate(-50%, -50%)";
+    thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
+    thumb.style.pointerEvents = "none";
+    bar.appendChild(thumb);
+  }
+  thumb.style.left = `${clampedPercent}%`;
 }
 
 function withCacheBust(url: string, token: string): string {
@@ -401,6 +410,7 @@ export default function ProfilePage() {
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
   const isDraggingVolumeRef = useRef(false);
+  const hasHydratedStatsFallbackRef = useRef(false);
   const cacheBustRef = useRef(`${Date.now()}`);
 
   useEffect(() => {
@@ -409,40 +419,23 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       try {
         const me = await fetchMeWithRetry();
-        let summary: ChatPublicProfileSummary | null = null;
-        let profileSummary: ProfileSummary | null = null;
-      let historyTotals:
-        | {
-            MINES: number;
-            BLACKJACK: number;
-            ROULETTE: number;
-            CASES: number;
-            BATTLES: number;
-          }
-        | null = null;
-        try {
-          if (typeof me.publicId === "number" && me.publicId > 0) {
-            summary = await getChatProfileByPublicId(me.publicId);
-          } else {
-            summary = await getChatProfileByUserId(me.id);
-          }
-        } catch {
+        const summaryPromise = (async () => {
           try {
-            summary = await getChatProfileByUserId(me.id);
+            if (typeof me.publicId === "number" && me.publicId > 0) {
+              return await getChatProfileByPublicId(me.publicId);
+            }
+            return await getChatProfileByUserId(me.id);
           } catch {
-            summary = null;
+            try {
+              return await getChatProfileByUserId(me.id);
+            } catch {
+              return null;
+            }
           }
-        }
-        try {
-          profileSummary = await getProfileSummary();
-        } catch {
-          profileSummary = null;
-        }
-        try {
-          historyTotals = await getHistoryWageredByMode();
-        } catch {
-          historyTotals = null;
-        }
+        })();
+        const profileSummaryPromise = getProfileSummary().catch(() => null);
+
+        const [summary, profileSummary] = await Promise.all([summaryPromise, profileSummaryPromise]);
         if (cancelled) return;
         const mapped = mapProfileData(me, summary);
         if (profileSummary) {
@@ -455,23 +448,59 @@ export default function ProfilePage() {
           mapped.stats.roulette = toCoinsFixed(rouletteFromSummary);
           mapped.stats.totalPlayed = toCoinsFixed(totalPlayedFromSummary);
         }
-        if (historyTotals) {
-          mapped.stats.cases = toCoinsFixed(historyTotals.CASES);
-          mapped.stats.battles = toCoinsFixed(historyTotals.BATTLES);
-          if (!profileSummary) {
-            mapped.stats.mines = toCoinsFixed(historyTotals.MINES);
-            mapped.stats.blackjack = toCoinsFixed(historyTotals.BLACKJACK);
-            mapped.stats.roulette = toCoinsFixed(historyTotals.ROULETTE);
-            mapped.stats.totalPlayed = toCoinsFixed(
-              historyTotals.MINES +
-                historyTotals.BLACKJACK +
-                historyTotals.ROULETTE +
-                historyTotals.CASES +
-                historyTotals.BATTLES
-            );
-          }
-        }
         setProfile(mapped);
+        setProfileResolved(true);
+
+        // Heavy paginated history fallback runs in background so first paint is fast.
+        if (!hasHydratedStatsFallbackRef.current) {
+          hasHydratedStatsFallbackRef.current = true;
+          void (async () => {
+            let historyTotals:
+              | {
+                  MINES: number;
+                  BLACKJACK: number;
+                  ROULETTE: number;
+                  CASES: number;
+                  BATTLES: number;
+                }
+              | null = null;
+            try {
+              historyTotals = await getHistoryWageredByMode();
+            } catch {
+              historyTotals = null;
+            }
+            if (!historyTotals || cancelled) return;
+            setProfile((current) => {
+              if (!current) return current;
+              const next = { ...current, stats: { ...current.stats } };
+              const currentCases = parseCoins(current.stats.cases);
+              const currentBattles = parseCoins(current.stats.battles);
+              if (currentCases <= 0) next.stats.cases = toCoinsFixed(historyTotals.CASES);
+              if (currentBattles <= 0) next.stats.battles = toCoinsFixed(historyTotals.BATTLES);
+              const shouldBackfillPrimaryModes =
+                !profileSummary ||
+                (parseCoins(current.stats.mines) <= 0 &&
+                  parseCoins(current.stats.blackjack) <= 0 &&
+                  parseCoins(current.stats.roulette) <= 0);
+              if (shouldBackfillPrimaryModes) {
+                next.stats.mines = toCoinsFixed(historyTotals.MINES);
+                next.stats.blackjack = toCoinsFixed(historyTotals.BLACKJACK);
+                next.stats.roulette = toCoinsFixed(historyTotals.ROULETTE);
+              }
+              const totalPlayedCurrent = parseCoins(current.stats.totalPlayed);
+              if (totalPlayedCurrent <= 0 || !profileSummary) {
+                next.stats.totalPlayed = toCoinsFixed(
+                  historyTotals.MINES +
+                    historyTotals.BLACKJACK +
+                    historyTotals.ROULETTE +
+                    historyTotals.CASES +
+                    historyTotals.BATTLES
+                );
+              }
+              return next;
+            });
+          })();
+        }
       } catch {
         if (!cancelled) setProfile(FALLBACK_PROFILE);
       } finally {
@@ -646,7 +675,6 @@ export default function ProfilePage() {
     const bindVolumeSlider = () => {
       const volumeTrack = replaceElementWithDiv(doc, "n20731447");
       if (!volumeTrack) return;
-      const frameWindow = frame.contentWindow;
       const setFromClientX = (clientX: number) => {
         const rect = volumeTrack.getBoundingClientRect();
         if (!rect.width) return;
@@ -655,26 +683,31 @@ export default function ProfilePage() {
         updateVolumeVisual(next);
       };
       volumeTrack.style.cursor = "pointer";
-      const onPointerMove = (event: PointerEvent) => {
-        if (!isDraggingVolumeRef.current) return;
-        setFromClientX(event.clientX);
-      };
-      const stopDragging = () => {
+      volumeTrack.style.touchAction = "none";
+      const stopDragging = (event?: PointerEvent) => {
+        if (event) {
+          try {
+            volumeTrack.releasePointerCapture(event.pointerId);
+          } catch {}
+        }
         isDraggingVolumeRef.current = false;
-        frameWindow?.removeEventListener("pointermove", onPointerMove);
-        frameWindow?.removeEventListener("pointerup", stopDragging);
-        frameWindow?.removeEventListener("pointercancel", stopDragging);
       };
       volumeTrack.onpointerdown = (event: PointerEvent) => {
         event.preventDefault();
-        isDraggingVolumeRef.current = true;
         try {
           volumeTrack.setPointerCapture(event.pointerId);
         } catch {}
+        isDraggingVolumeRef.current = true;
         setFromClientX(event.clientX);
-        frameWindow?.addEventListener("pointermove", onPointerMove);
-        frameWindow?.addEventListener("pointerup", stopDragging);
-        frameWindow?.addEventListener("pointercancel", stopDragging);
+      };
+      volumeTrack.onpointermove = (event: PointerEvent) => {
+        if (!isDraggingVolumeRef.current) return;
+        setFromClientX(event.clientX);
+      };
+      volumeTrack.onpointerup = (event: PointerEvent) => stopDragging(event);
+      volumeTrack.onpointercancel = (event: PointerEvent) => stopDragging(event);
+      volumeTrack.onlostpointercapture = () => {
+        isDraggingVolumeRef.current = false;
       };
     };
     bindVolumeSlider();
