@@ -399,7 +399,7 @@ function injectRuntimeProfileStyles(doc: Document) {
       width: 100% !important;
     }
     #n20731447, #n20731455 {
-      margin-top: -26px !important;
+      margin-top: -32px !important;
       justify-self: start !important;
       align-self: flex-start !important;
     }
