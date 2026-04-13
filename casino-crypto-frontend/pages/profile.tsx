@@ -211,9 +211,10 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
     ? "0 0 0 2px rgba(247,81,84,0.45), 0 1px 3px rgba(0,0,0,0.35)"
     : "0 1px 3px rgba(0,0,0,0.35)";
   thumb.style.pointerEvents = "none";
-  const barWidth = 64;
+  const barWidth = toggle.getBoundingClientRect().width || 56;
   const thumbRadiusPx = 7;
-  const thumbLeftPx = enabled ? barWidth - thumbRadiusPx : thumbRadiusPx;
+  const thumbTravelPx = Math.max(0, barWidth - thumbRadiusPx * 2);
+  const thumbLeftPx = thumbRadiusPx + (enabled ? thumbTravelPx : 0);
   thumb.style.left = `${thumbLeftPx}px`;
   toggle.appendChild(thumb);
 }
