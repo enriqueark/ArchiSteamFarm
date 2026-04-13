@@ -72,6 +72,92 @@ function getLevelBadgeTier(level: number) {
   return LEVEL_BADGE_TIERS.find((tier) => level <= tier.max) ?? LEVEL_BADGE_TIERS[LEVEL_BADGE_TIERS.length - 1];
 }
 
+function renderLevelBadge(doc: Document, level: number) {
+  const levelPill = replaceElementWithDiv(doc, "n20731353");
+  if (!levelPill) return;
+
+  levelPill.innerHTML = "";
+  levelPill.style.marginTop = "0";
+  levelPill.style.transform = "translateY(0)";
+
+  if (level >= 100) {
+    levelPill.style.position = "relative";
+    levelPill.style.display = "inline-flex";
+    levelPill.style.alignItems = "center";
+    levelPill.style.justifyContent = "center";
+    levelPill.style.minWidth = "26px";
+    levelPill.style.height = "20px";
+    levelPill.style.padding = "0 7px";
+    levelPill.style.borderRadius = "6px";
+    levelPill.style.border = "none";
+    levelPill.style.background = "transparent";
+    levelPill.style.boxShadow = "none";
+
+    const border = doc.createElement("span");
+    border.style.position = "absolute";
+    border.style.inset = "0";
+    border.style.borderRadius = "6px";
+    border.style.padding = "1px";
+    border.style.background =
+      "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)";
+    border.style.backgroundSize = "300% 100%";
+    border.style.animation = "rainbowBorder 4s linear infinite";
+    border.style.webkitMask = "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)";
+    border.style.webkitMaskComposite = "xor";
+    border.style.maskComposite = "exclude";
+    levelPill.appendChild(border);
+
+    const fill = doc.createElement("span");
+    fill.style.position = "absolute";
+    fill.style.inset = "1px";
+    fill.style.borderRadius = "5px";
+    fill.style.background =
+      "linear-gradient(90deg, #ff535325, #ffb75325, #53ff8725, #53a3ff25, #c053ff25, #ff53a325, #ff535325)";
+    fill.style.backgroundSize = "300% 100%";
+    fill.style.animation = "rainbowBorder 4s linear infinite";
+    levelPill.appendChild(fill);
+
+    const text = doc.createElement("span");
+    text.textContent = String(level);
+    text.style.position = "relative";
+    text.style.zIndex = "1";
+    text.style.fontSize = "10px";
+    text.style.fontWeight = "700";
+    text.style.fontFamily = "\"DM Sans\",\"Gotham\",sans-serif";
+    text.style.lineHeight = "1";
+    text.style.background =
+      "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)";
+    text.style.backgroundSize = "300% 100%";
+    text.style.animation = "rainbowBorder 4s linear infinite";
+    text.style.webkitBackgroundClip = "text";
+    text.style.webkitTextFillColor = "transparent";
+    text.style.backgroundClip = "text";
+    text.style.filter = "drop-shadow(0 0 4px rgba(255,255,255,0.3))";
+    levelPill.appendChild(text);
+    return;
+  }
+
+  const tier = getLevelBadgeTier(level);
+  levelPill.textContent = String(level);
+  levelPill.style.display = "inline-flex";
+  levelPill.style.alignItems = "center";
+  levelPill.style.justifyContent = "center";
+  levelPill.style.minWidth = "24px";
+  levelPill.style.height = "18px";
+  levelPill.style.padding = "0 6px";
+  levelPill.style.borderRadius = "5px";
+  levelPill.style.border = `1px solid ${tier.color}`;
+  levelPill.style.background = tier.bg;
+  levelPill.style.fontSize = "10px";
+  levelPill.style.fontWeight = "700";
+  levelPill.style.fontFamily = "\"DM Sans\",\"Gotham\",sans-serif";
+  levelPill.style.color = tier.color;
+  levelPill.style.lineHeight = "1";
+  levelPill.style.boxShadow = `0 0 8px ${tier.color}40, inset 0 0 4px ${tier.color}20`;
+  levelPill.style.animation = "levelPulse 2s ease-in-out infinite";
+  levelPill.style.textShadow = `0 0 6px ${tier.color}80`;
+}
+
 function toCoinsDisplay(input: unknown): string {
   const raw = typeof input === "string" ? input.replace(/,/g, "") : String(input ?? "0");
   const parsed = Number(raw);
@@ -158,11 +244,11 @@ function injectRuntimeProfileStyles(doc: Document) {
   const style = doc.createElement("style");
   style.id = styleId;
   style.textContent = `
-    @keyframes rw-level-pulse {
-      0%, 100% { transform: scale(1); filter: brightness(1); }
-      50% { transform: scale(1.03); filter: brightness(1.08); }
+    @keyframes levelPulse {
+      0%, 100% { filter: brightness(1); box-shadow: 0 0 6px currentColor; }
+      50% { filter: brightness(1.3); box-shadow: 0 0 14px currentColor; }
     }
-    @keyframes rw-rainbow-border {
+    @keyframes rainbowBorder {
       0% { background-position: 0% 50%; }
       100% { background-position: 300% 50%; }
     }
@@ -611,7 +697,6 @@ export default function ProfilePage() {
       }
 
       setContainerParagraphText(doc, "n20731347", hydratedProfile.username);
-      setContainerParagraphText(doc, "n20731354", String(hydratedProfile.level));
       forceStatValue(doc, "n20731371", hydratedProfile.stats.totalPlayed);
       forceStatValue(doc, "n20731380", hydratedProfile.stats.battles);
       forceStatValue(doc, "n20731389", hydratedProfile.stats.roulette);
@@ -653,49 +738,7 @@ export default function ProfilePage() {
       }
 
       forceXpProgress(doc, hydratedProfile.xpRatio);
-
-      const levelPill = doc.getElementById("n20731353");
-      const levelTextParagraph = doc.getElementById("n20731354")?.querySelector("p");
-      if (levelPill) {
-        if (hydratedProfile.level >= 100) {
-          levelPill.style.border = "none";
-          levelPill.style.padding = "1px";
-          levelPill.style.borderRadius = "9px";
-          levelPill.style.background =
-            "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)";
-          levelPill.style.backgroundSize = "300% 100%";
-          levelPill.style.animation = "rw-rainbow-border 4s linear infinite";
-          levelPill.style.boxShadow = "0 0 10px rgba(255, 183, 83, 0.35)";
-          const levelInner = doc.getElementById("n20731354");
-          if (levelInner) {
-            levelInner.style.borderRadius = "8px";
-            levelInner.style.padding = "4px 8px";
-            levelInner.style.background =
-              "linear-gradient(90deg, #ff535325, #ffb75325, #53ff8725, #53a3ff25, #c053ff25, #ff53a325, #ff535325)";
-            levelInner.style.backgroundSize = "300% 100%";
-            levelInner.style.animation = "rw-rainbow-border 4s linear infinite";
-          }
-          if (levelTextParagraph) {
-            levelTextParagraph.setAttribute(
-              "style",
-              "margin:0;font-size:18.666667938232422px;font-style:normal;font-family:'Gotham',sans-serif;font-weight:700;line-height:19px;letter-spacing:0;text-transform:none;text-decoration:none;background:linear-gradient(90deg,#ff5353,#ffb753,#53ff87,#53a3ff,#c053ff,#ff53a3,#ff5353);background-size:300% 100%;animation:rw-rainbow-border 4s linear infinite;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 4px rgba(255,255,255,0.3));"
-            );
-          }
-        } else {
-          const tier = getLevelBadgeTier(hydratedProfile.level);
-          levelPill.style.border = `1px solid ${tier.color}`;
-          levelPill.style.background = tier.bg;
-          levelPill.style.color = tier.color;
-          levelPill.style.boxShadow = `0 0 8px ${tier.color}40, inset 0 0 4px ${tier.color}20`;
-          levelPill.style.animation = "rw-level-pulse 2s ease-in-out infinite";
-          if (levelTextParagraph) {
-            levelTextParagraph.setAttribute(
-              "style",
-              `margin:0;color:${tier.color};font-size:18.666667938232422px;font-style:normal;font-family:'Gotham',sans-serif;font-weight:700;line-height:19px;letter-spacing:0;text-transform:none;text-decoration:none;text-shadow:0 0 6px ${tier.color}80;`
-            );
-          }
-        }
-      }
+      renderLevelBadge(doc, hydratedProfile.level);
 
       const statsSection = doc.getElementById("n20731359");
       if (statsSection) {
