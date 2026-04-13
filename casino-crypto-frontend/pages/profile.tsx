@@ -167,11 +167,11 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.style.width = "50px";
   toggle.style.minWidth = "50px";
   toggle.style.maxWidth = "50px";
-  toggle.style.height = "18px";
+  toggle.style.height = "14px";
   toggle.style.display = "inline-flex";
   toggle.style.alignItems = "center";
   toggle.style.justifyContent = enabled ? "flex-end" : "flex-start";
-  toggle.style.padding = "1px";
+  toggle.style.padding = "0";
   toggle.style.boxSizing = "border-box";
   toggle.style.borderRadius = "999px";
   toggle.style.border = enabled ? "1px solid #ff7476" : "1px solid #3a3a3a";
@@ -179,7 +179,7 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
     ? "linear-gradient(180deg, #f75154 0%, #ac2e30 100%)"
     : "linear-gradient(180deg, #2c2c2c 0%, #1e1e1e 100%)";
   toggle.style.boxShadow = enabled
-    ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 0 8px rgba(247,81,84,0.35)"
+    ? "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 0 6px rgba(247,81,84,0.26)"
     : "inset 0 1px 0 #3a3a3a, inset 0 -1px 0 #1a1a1a";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
@@ -188,8 +188,8 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
   const thumb = doc.createElement("span");
-  thumb.style.width = "14px";
-  thumb.style.height = "14px";
+  thumb.style.width = "10px";
+  thumb.style.height = "10px";
   thumb.style.borderRadius = "50%";
   thumb.style.background = "#ffffff";
   thumb.style.boxShadow = "0 1px 4px rgba(0,0,0,0.4)";
