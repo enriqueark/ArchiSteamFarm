@@ -85,9 +85,9 @@ function renderLevelBadge(doc: Document, level: number) {
     levelPill.style.display = "inline-flex";
     levelPill.style.alignItems = "center";
     levelPill.style.justifyContent = "center";
-    levelPill.style.minWidth = "26px";
-    levelPill.style.height = "20px";
-    levelPill.style.padding = "0 7px";
+    levelPill.style.minWidth = "30px";
+    levelPill.style.height = "22px";
+    levelPill.style.padding = "0 8px";
     levelPill.style.borderRadius = "6px";
     levelPill.style.border = "none";
     levelPill.style.background = "transparent";
@@ -121,7 +121,7 @@ function renderLevelBadge(doc: Document, level: number) {
     text.textContent = String(level);
     text.style.position = "relative";
     text.style.zIndex = "1";
-    text.style.fontSize = "10px";
+    text.style.fontSize = "11px";
     text.style.fontWeight = "700";
     text.style.fontFamily = "\"DM Sans\",\"Gotham\",sans-serif";
     text.style.lineHeight = "1";
