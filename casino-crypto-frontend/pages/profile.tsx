@@ -162,7 +162,9 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   const toggle = replaceElementWithDiv(doc, "n20731455");
   if (!toggle) return;
 
-  toggle.innerHTML = "";
+  if (!toggle.querySelector('[data-rw-privacy="fill"]')) {
+    toggle.innerHTML = "";
+  }
   toggle.className = "";
   toggle.style.marginLeft = "auto";
   toggle.style.width = "56px";
@@ -182,41 +184,51 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.style.overflow = "hidden";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
-  toggle.style.transition = "opacity 160ms ease";
+  toggle.style.transition = "opacity 160ms ease, box-shadow 180ms ease";
   toggle.style.boxShadow = "none";
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
-  const fill = doc.createElement("span");
-  fill.style.position = "absolute";
-  fill.style.left = "0";
-  fill.style.top = "0";
-  fill.style.bottom = "0";
+  let fill = toggle.querySelector<HTMLSpanElement>('[data-rw-privacy="fill"]');
+  if (!fill) {
+    fill = doc.createElement("span");
+    fill.setAttribute("data-rw-privacy", "fill");
+    fill.style.position = "absolute";
+    fill.style.left = "0";
+    fill.style.top = "0";
+    fill.style.bottom = "0";
+    fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
+    fill.style.borderRadius = "999px";
+    fill.style.pointerEvents = "none";
+    fill.style.transition = "width 220ms ease, box-shadow 220ms ease";
+    toggle.appendChild(fill);
+  }
   fill.style.width = enabled ? "100%" : "0%";
-  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
-  fill.style.borderRadius = "999px";
   fill.style.boxShadow = enabled ? "0 0 10px rgba(247,81,84,0.5), inset 0 0 8px rgba(247,81,84,0.35)" : "none";
-  fill.style.pointerEvents = "none";
-  toggle.appendChild(fill);
 
-  const thumb = doc.createElement("span");
-  thumb.style.position = "absolute";
-  thumb.style.top = "50%";
-  thumb.style.width = "14px";
-  thumb.style.height = "14px";
-  thumb.style.borderRadius = "50%";
-  thumb.style.background = "#ffffff";
-  thumb.style.transform = "translate(-50%, -50%)";
+  let thumb = toggle.querySelector<HTMLSpanElement>('[data-rw-privacy="thumb"]');
+  if (!thumb) {
+    thumb = doc.createElement("span");
+    thumb.setAttribute("data-rw-privacy", "thumb");
+    thumb.style.position = "absolute";
+    thumb.style.top = "50%";
+    thumb.style.width = "14px";
+    thumb.style.height = "14px";
+    thumb.style.borderRadius = "50%";
+    thumb.style.background = "#ffffff";
+    thumb.style.transform = "translate(-50%, -50%)";
+    thumb.style.pointerEvents = "none";
+    thumb.style.transition = "left 220ms ease, box-shadow 220ms ease";
+    toggle.appendChild(thumb);
+  }
   thumb.style.boxShadow = enabled
     ? "0 0 0 2px rgba(247,81,84,0.45), 0 1px 3px rgba(0,0,0,0.35)"
     : "0 1px 3px rgba(0,0,0,0.35)";
-  thumb.style.pointerEvents = "none";
   const barWidth = toggle.getBoundingClientRect().width || 56;
   const thumbRadiusPx = 7;
   const thumbTravelPx = Math.max(0, barWidth - thumbRadiusPx * 2);
   const thumbLeftPx = thumbRadiusPx + (enabled ? thumbTravelPx : 0);
   thumb.style.left = `${thumbLeftPx}px`;
-  toggle.appendChild(thumb);
 }
 
 function toCoinsDisplay(input: unknown): string {
