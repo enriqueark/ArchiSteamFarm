@@ -165,9 +165,9 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.innerHTML = "";
   toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "88px";
-  toggle.style.minWidth = "88px";
-  toggle.style.maxWidth = "88px";
+  toggle.style.width = "64px";
+  toggle.style.minWidth = "64px";
+  toggle.style.maxWidth = "64px";
   toggle.style.height = "22px";
   toggle.style.minHeight = "0";
   toggle.style.maxHeight = "22px";
@@ -202,7 +202,6 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   const thumb = doc.createElement("span");
   thumb.style.position = "absolute";
   thumb.style.top = "50%";
-  thumb.style.left = enabled ? "100%" : "0%";
   thumb.style.width = "14px";
   thumb.style.height = "14px";
   thumb.style.borderRadius = "50%";
@@ -212,6 +211,10 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
     ? "0 0 0 2px rgba(247,81,84,0.45), 0 1px 3px rgba(0,0,0,0.35)"
     : "0 1px 3px rgba(0,0,0,0.35)";
   thumb.style.pointerEvents = "none";
+  const barWidth = 64;
+  const thumbRadiusPx = 7;
+  const thumbLeftPx = enabled ? barWidth - thumbRadiusPx : thumbRadiusPx;
+  thumb.style.left = `${thumbLeftPx}px`;
   toggle.appendChild(thumb);
 }
 
