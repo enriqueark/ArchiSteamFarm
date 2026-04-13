@@ -165,36 +165,52 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.innerHTML = "";
   toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "48px";
-  toggle.style.minWidth = "48px";
-  toggle.style.maxWidth = "48px";
+  toggle.style.width = "251px";
+  toggle.style.minWidth = "251px";
+  toggle.style.maxWidth = "251px";
   toggle.style.height = "22px";
   toggle.style.minHeight = "0";
   toggle.style.maxHeight = "22px";
   toggle.style.position = "relative";
-  toggle.style.display = "flex";
-  toggle.style.alignItems = "center";
-  toggle.style.justifyContent = enabled ? "flex-end" : "flex-start";
-  toggle.style.padding = "1px";
+  toggle.style.display = "block";
+  toggle.style.padding = "0";
   toggle.style.gap = "0";
   toggle.style.boxSizing = "border-box";
   toggle.style.borderRadius = "999px";
-  toggle.style.border = enabled ? "1px solid #f75154" : "1px solid #4a4a4a";
+  toggle.style.border = "none";
   toggle.style.background = "#232323";
   toggle.style.overflow = "hidden";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
-  toggle.style.transition = "border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease";
-  toggle.style.boxShadow = enabled ? "0 0 8px rgba(247,81,84,0.45)" : "none";
+  toggle.style.transition = "opacity 160ms ease";
+  toggle.style.boxShadow = "none";
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
+  const fill = doc.createElement("span");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.top = "0";
+  fill.style.bottom = "0";
+  fill.style.width = enabled ? "100%" : "0%";
+  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
+  fill.style.borderRadius = "999px";
+  fill.style.boxShadow = enabled ? "0 0 10px rgba(247,81,84,0.5), inset 0 0 8px rgba(247,81,84,0.35)" : "none";
+  fill.style.pointerEvents = "none";
+  toggle.appendChild(fill);
+
   const thumb = doc.createElement("span");
-  thumb.style.width = "16px";
-  thumb.style.height = "16px";
+  thumb.style.position = "absolute";
+  thumb.style.top = "50%";
+  thumb.style.left = enabled ? "100%" : "0%";
+  thumb.style.width = "14px";
+  thumb.style.height = "14px";
   thumb.style.borderRadius = "50%";
   thumb.style.background = "#ffffff";
-  thumb.style.boxShadow = "0 1px 3px rgba(0,0,0,0.35)";
+  thumb.style.transform = "translate(-50%, -50%)";
+  thumb.style.boxShadow = enabled
+    ? "0 0 0 2px rgba(247,81,84,0.45), 0 1px 3px rgba(0,0,0,0.35)"
+    : "0 1px 3px rgba(0,0,0,0.35)";
   thumb.style.pointerEvents = "none";
   toggle.appendChild(thumb);
 }
@@ -370,24 +386,22 @@ function injectRuntimeProfileStyles(doc: Document) {
     #n20731445, #n20731451 {
       width: 100% !important;
       max-width: none !important;
-      display: grid !important;
-      grid-template-columns: 1fr auto !important;
-      align-items: start !important;
-      column-gap: 20px !important;
-    }
-    #n20731445 {
-      justify-content: stretch !important;
-    }
-    #n20731451 {
-      justify-content: stretch !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 8px !important;
     }
     #n20731446, #n20731452 {
       margin-top: 0 !important;
+      width: 100% !important;
     }
     #n20731447, #n20731455 {
-      margin-top: 2px !important;
-      justify-self: end !important;
-      align-self: start !important;
+      margin-top: 0 !important;
+      justify-self: start !important;
+      align-self: flex-start !important;
+    }
+    #n20731451 {
+      align-items: flex-start !important;
     }
     #n20731359 {
       display: grid !important;
