@@ -165,9 +165,9 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.innerHTML = "";
   toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "251px";
-  toggle.style.minWidth = "251px";
-  toggle.style.maxWidth = "251px";
+  toggle.style.width = "128px";
+  toggle.style.minWidth = "128px";
+  toggle.style.maxWidth = "128px";
   toggle.style.height = "22px";
   toggle.style.minHeight = "0";
   toggle.style.maxHeight = "22px";
