@@ -888,6 +888,42 @@ export async function getMe(): Promise<User> {
   return request<User>("/users/me");
 }
 
+export interface ChangeMyPasswordInput {
+  currentPassword: string;
+  newPassword: string;
+  twoFactorCode?: string;
+}
+
+export interface ChangeMyPasswordResponse {
+  success?: boolean;
+  changed?: boolean;
+  requiresTwoFactor?: boolean;
+}
+
+export async function changeMyPassword(input: ChangeMyPasswordInput): Promise<ChangeMyPasswordResponse> {
+  return request<ChangeMyPasswordResponse>(
+    "/users/me/password",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+        ...(input.twoFactorCode ? { twoFactorCode: input.twoFactorCode } : {})
+      })
+    },
+    true
+  );
+}
+
+export interface TwoFactorState {
+  enabled: boolean;
+  setupPending: boolean;
+}
+
+export async function getTwoFactorState(): Promise<TwoFactorState> {
+  return request<TwoFactorState>("/security/2fa");
+}
+
 export async function updateUsername(username: string): Promise<{ id: string; username: string }> {
   return request<{ id: string; username: string }>("/users/me/username", { method: "PUT", body: JSON.stringify({ username }) });
 }

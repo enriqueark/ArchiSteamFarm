@@ -1,11 +1,15 @@
+import argon2 from "argon2";
+import bcrypt from "bcryptjs";
 import { DepositStatus, Prisma, WithdrawalStatus } from "@prisma/client";
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import { requireAuth } from "../../core/auth";
+import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
+import { verifyTwoFactorCode } from "../security-2fa/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
 const COIN_DECIMALS = 100000000n;
@@ -69,6 +73,17 @@ const avatarUpdateSchema = z.object({
 const notificationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10)
 });
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(128),
+    newPassword: z.string().min(8).max(128),
+    twoFactorCode: z.string().trim().regex(/^\d{6}$/).optional()
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    path: ["newPassword"],
+    message: "New password must be different from current password"
+  });
 
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
@@ -220,6 +235,26 @@ const resolveAvatarSource = (
     return "PROVIDER";
   }
   return "INITIAL";
+};
+
+const isBcryptHash = (hash: string): boolean => /^\$2[aby]\$/.test(hash);
+
+const verifyPasswordWithLegacySupport = async (
+  storedHash: string,
+  inputPassword: string
+): Promise<boolean> => {
+  try {
+    return await argon2.verify(storedHash, inputPassword);
+  } catch {
+    // continue fallback checks
+  }
+
+  if (isBcryptHash(storedHash)) {
+    return bcrypt.compare(inputPassword, storedHash).catch(() => false);
+  }
+
+  // Legacy fallback for historical plain-text rows.
+  return storedHash === inputPassword;
 };
 
 const ensureUserAvatarColumnsBestEffort = async (): Promise<void> => {
@@ -647,6 +682,65 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       customAvatarUrl: avatarSources.avatarUrl,
       providerAvatarUrl: avatarSources.providerAvatarUrl,
       avatarSource
+    });
+  });
+
+  fastify.post("/me/password", { preHandler: requireAuth }, async (request, reply) => {
+    const body = changePasswordSchema.parse(request.body);
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        passwordHash: string;
+        status: "ACTIVE" | "SUSPENDED";
+        twoFactorEnabled: boolean;
+      }>
+    >`
+      SELECT
+        id,
+        "passwordHash",
+        status,
+        COALESCE("twoFactorEnabled", false) AS "twoFactorEnabled"
+      FROM "users"
+      WHERE id = ${request.user.sub}
+      LIMIT 1
+    `;
+    const user = rows[0] ?? null;
+
+    if (!user) {
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    }
+
+    if (user.status !== "ACTIVE") {
+      throw new AppError("User is not active", 403, "USER_NOT_ACTIVE");
+    }
+
+    const currentPasswordValid = await verifyPasswordWithLegacySupport(user.passwordHash, body.currentPassword);
+    if (!currentPasswordValid) {
+      throw new AppError("Current password is invalid", 401, "INVALID_CURRENT_PASSWORD");
+    }
+
+    if (user.twoFactorEnabled) {
+      const code = typeof body.twoFactorCode === "string" ? body.twoFactorCode.trim() : "";
+      if (!code) {
+        throw new AppError("Two-factor code is required", 401, "TWO_FACTOR_REQUIRED");
+      }
+      const valid2fa = await verifyTwoFactorCode(user.id, code);
+      if (!valid2fa) {
+        throw new AppError("Invalid two-factor code", 401, "INVALID_TWO_FACTOR_CODE");
+      }
+    }
+
+    const nextHash = await argon2.hash(body.newPassword);
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET "passwordHash" = ${nextHash},
+          "updatedAt" = NOW()
+      WHERE id = ${user.id}
+    `;
+
+    return reply.send({
+      success: true,
+      requiresTwoFactor: user.twoFactorEnabled
     });
   });
 

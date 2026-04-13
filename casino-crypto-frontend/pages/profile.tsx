@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  changeMyPassword,
   getChatProfileByPublicId,
   getChatProfileByUserId,
   getMyGameHistory,
   getMe,
   getProfileSummary,
+  getTwoFactorState,
   type ProfileSummary,
   setMyProfileVisibility,
   type ChatPublicProfileSummary,
@@ -36,6 +38,16 @@ type HydratedProfile = {
   };
 };
 
+type PasswordModalState = {
+  open: boolean;
+  currentPassword: string;
+  newPassword: string;
+  twoFactorCode: string;
+  twoFactorEnabled: boolean;
+  loading: boolean;
+  error: string | null;
+};
+
 const PROFILE_CANVAS_WIDTH = 1286;
 const PROFILE_FETCH_RETRIES = 3;
 const PROFILE_FETCH_RETRY_DELAY_MS = 350;
@@ -58,6 +70,16 @@ const FALLBACK_PROFILE: HydratedProfile = {
     blackjack: "0.00",
     mines: "0.00"
   }
+};
+
+const PASSWORD_MODAL_INITIAL_STATE: PasswordModalState = {
+  open: false,
+  currentPassword: "",
+  newPassword: "",
+  twoFactorCode: "",
+  twoFactorEnabled: false,
+  loading: false,
+  error: null
 };
 
 const LEVEL_BADGE_TIERS = [
@@ -620,6 +642,7 @@ export default function ProfilePage() {
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
+  const [passwordModal, setPasswordModal] = useState<PasswordModalState>(PASSWORD_MODAL_INITIAL_STATE);
   const isDraggingVolumeRef = useRef(false);
   const hasHydratedStatsFallbackRef = useRef(false);
   const cacheBustRef = useRef(`${Date.now()}`);
@@ -746,6 +769,120 @@ export default function ProfilePage() {
       setPrivacyBusy(false);
     }
   }, [privacyBusy, profile, toast]);
+
+  const closeChangePasswordModal = useCallback(() => {
+    setPasswordModal(PASSWORD_MODAL_INITIAL_STATE);
+  }, []);
+
+  const openChangePasswordModal = useCallback(async () => {
+    setPasswordModal({
+      ...PASSWORD_MODAL_INITIAL_STATE,
+      open: true,
+      loading: true
+    });
+    try {
+      const twoFactorState = await getTwoFactorState();
+      setPasswordModal((current) => ({
+        ...current,
+        open: true,
+        loading: false,
+        error: null,
+        twoFactorEnabled: Boolean(twoFactorState?.enabled)
+      }));
+    } catch {
+      setPasswordModal((current) => ({
+        ...current,
+        open: true,
+        loading: false,
+        twoFactorEnabled: false,
+        error: "Could not verify 2FA status. You can still try to change your password."
+      }));
+    }
+  }, []);
+
+  const submitPasswordChange = useCallback(async () => {
+    if (passwordModal.loading) return;
+
+    const currentPassword = passwordModal.currentPassword;
+    const newPassword = passwordModal.newPassword;
+    const twoFactorCode = passwordModal.twoFactorCode.trim();
+
+    if (!currentPassword || !newPassword) {
+      setPasswordModal((current) => ({
+        ...current,
+        error: "Current password and new password are required."
+      }));
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordModal((current) => ({
+        ...current,
+        error: "New password must be at least 8 characters."
+      }));
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordModal((current) => ({
+        ...current,
+        error: "New password must be different from current password."
+      }));
+      return;
+    }
+    if (passwordModal.twoFactorEnabled && !/^\d{6}$/.test(twoFactorCode)) {
+      setPasswordModal((current) => ({
+        ...current,
+        error: "A valid 6-digit 2FA code is required."
+      }));
+      return;
+    }
+
+    setPasswordModal((current) => ({
+      ...current,
+      loading: true,
+      error: null
+    }));
+
+    try {
+      const response = await changeMyPassword({
+        currentPassword,
+        newPassword,
+        ...(passwordModal.twoFactorEnabled ? { twoFactorCode } : {})
+      });
+      const changed = Boolean(response?.success ?? response?.changed ?? true);
+      if (!changed) {
+        throw new Error("Password could not be changed.");
+      }
+      toast.showSuccess("Password updated successfully.");
+      setPasswordModal(PASSWORD_MODAL_INITIAL_STATE);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update password.";
+      setPasswordModal((current) => ({
+        ...current,
+        loading: false,
+        error: message
+      }));
+    }
+  }, [passwordModal, toast]);
+
+  useEffect(() => {
+    if (!passwordModal.open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [passwordModal.open]);
+
+  useEffect(() => {
+    if (!passwordModal.open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !passwordModal.loading) {
+        closeChangePasswordModal();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeChangePasswordModal, passwordModal.loading, passwordModal.open]);
 
   const syncFrameContent = useCallback(() => {
     const frame = iframeRef.current;
@@ -934,7 +1071,7 @@ export default function ProfilePage() {
     };
 
     bindAction("n20731423", () => {
-      void router.push("/support");
+      void openChangePasswordModal();
     });
     bindAction("n20731428", () => {
       void router.push("/support");
@@ -979,7 +1116,15 @@ export default function ProfilePage() {
       }
     });
     setContentReady(true);
-  }, [privacyBusy, profile, profileResolved, router, toast, toggleProfileVisibility]);
+  }, [
+    openChangePasswordModal,
+    privacyBusy,
+    profile,
+    profileResolved,
+    router,
+    toast,
+    toggleProfileVisibility
+  ]);
 
   const handleFrameLoad = useCallback(() => {
     setFrameLoaded(true);
@@ -1014,6 +1159,159 @@ export default function ProfilePage() {
           />
         </div>
       </div>
+      {passwordModal.open ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 px-4"
+          onMouseDown={() => {
+            if (!passwordModal.loading) {
+              closeChangePasswordModal();
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[460px] rounded-[18px] border border-[#2d2d2d] bg-[#101010] shadow-[0_20px_80px_rgba(0,0,0,0.65),0_0_28px_rgba(247,81,84,0.12)]"
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="border-b border-[#282828] px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="m-0 text-[22px] font-semibold leading-[22px] text-white">
+                  Change Password
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close modal"
+                  disabled={passwordModal.loading}
+                  className="h-8 w-8 rounded-full border border-[#353535] bg-[#1a1a1a] text-[16px] leading-none text-[#b8b8b8] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeChangePasswordModal}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="mt-3 text-[13px] leading-[18px] text-[#8f8f8f]">
+                Keep your account secure by setting a strong password. If your account has 2FA
+                enabled, confirmation code is required.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  Current password
+                </span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordModal.currentPassword}
+                  disabled={passwordModal.loading}
+                  onChange={(event) =>
+                    setPasswordModal((current) => ({
+                      ...current,
+                      currentPassword: event.target.value,
+                      error: null
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitPasswordChange();
+                    }
+                  }}
+                  className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                  placeholder="Enter your current password"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  New password
+                </span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordModal.newPassword}
+                  disabled={passwordModal.loading}
+                  onChange={(event) =>
+                    setPasswordModal((current) => ({
+                      ...current,
+                      newPassword: event.target.value,
+                      error: null
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitPasswordChange();
+                    }
+                  }}
+                  className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                  placeholder="At least 8 characters"
+                />
+              </label>
+
+              {passwordModal.twoFactorEnabled ? (
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                    2FA code
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={passwordModal.twoFactorCode}
+                    disabled={passwordModal.loading}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/\D/g, "").slice(0, 6);
+                      setPasswordModal((current) => ({
+                        ...current,
+                        twoFactorCode: value,
+                        error: null
+                      }));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void submitPasswordChange();
+                      }
+                    }}
+                    className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                    placeholder="6-digit code"
+                  />
+                </label>
+              ) : null}
+
+              {passwordModal.error ? (
+                <p className="m-0 rounded-[10px] border border-[#f75154]/30 bg-[#2a1213] px-3 py-2 text-[12px] leading-[16px] text-[#ffa7a8]">
+                  {passwordModal.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#282828] px-6 py-4">
+              <button
+                type="button"
+                disabled={passwordModal.loading}
+                onClick={closeChangePasswordModal}
+                className="h-10 rounded-[10px] border border-[#3a3a3a] bg-[#191919] px-4 text-[13px] font-semibold text-[#c7c7c7] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={passwordModal.loading}
+                onClick={() => {
+                  void submitPasswordChange();
+                }}
+                className="h-10 rounded-[10px] border border-[#f75154]/60 bg-[linear-gradient(180deg,#f75154_0%,#ac2e30_100%)] px-5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_16px_rgba(247,81,84,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {passwordModal.loading ? "Updating..." : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
