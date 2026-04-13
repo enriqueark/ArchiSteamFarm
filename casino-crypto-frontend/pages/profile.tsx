@@ -164,44 +164,34 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
 
   toggle.innerHTML = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "190px";
-  toggle.style.minWidth = "190px";
-  toggle.style.maxWidth = "190px";
-  toggle.style.height = "14px";
+  toggle.style.width = "40px";
+  toggle.style.minWidth = "40px";
+  toggle.style.maxWidth = "40px";
+  toggle.style.height = "24px";
   toggle.style.position = "relative";
-  toggle.style.display = "block";
+  toggle.style.display = "flex";
+  toggle.style.alignItems = "center";
+  toggle.style.justifyContent = enabled ? "flex-end" : "flex-start";
+  toggle.style.padding = "2px";
   toggle.style.boxSizing = "border-box";
   toggle.style.borderRadius = "999px";
   toggle.style.border = "none";
-  toggle.style.background = "#232323";
+  toggle.style.background = enabled
+    ? "linear-gradient(180deg, #2f4e71 0%, #1f3550 100%)"
+    : "linear-gradient(180deg, #2a2a2a 0%, #1f1f1f 100%)";
   toggle.style.overflow = "hidden";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
-  toggle.style.transition = "opacity 160ms ease";
+  toggle.style.transition = "background 160ms ease, opacity 160ms ease";
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
-  const fill = doc.createElement("span");
-  fill.style.position = "absolute";
-  fill.style.left = "0";
-  fill.style.top = "0";
-  fill.style.bottom = "0";
-  fill.style.width = enabled ? "100%" : "0%";
-  fill.style.background = "linear-gradient(90deg, #ac2e30 0%, #f75154 100%)";
-  fill.style.borderRadius = "999px";
-  fill.style.pointerEvents = "none";
-  toggle.appendChild(fill);
-
   const thumb = doc.createElement("span");
-  thumb.style.position = "absolute";
-  thumb.style.top = "50%";
-  thumb.style.left = enabled ? "100%" : "0%";
-  thumb.style.width = "10px";
-  thumb.style.height = "10px";
+  thumb.style.width = "16px";
+  thumb.style.height = "16px";
   thumb.style.borderRadius = "50%";
   thumb.style.background = "#ffffff";
-  thumb.style.transform = "translate(-50%, -50%)";
-  thumb.style.boxShadow = "0 0 0 1px rgba(247,81,84,0.45)";
+  thumb.style.boxShadow = "0 1px 3px rgba(0,0,0,0.35)";
   thumb.style.pointerEvents = "none";
   toggle.appendChild(thumb);
 }
