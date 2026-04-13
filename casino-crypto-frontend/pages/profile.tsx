@@ -163,26 +163,28 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   if (!toggle) return;
 
   toggle.innerHTML = "";
+  toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "34px";
-  toggle.style.minWidth = "34px";
-  toggle.style.maxWidth = "34px";
+  toggle.style.width = "36px";
+  toggle.style.minWidth = "36px";
+  toggle.style.maxWidth = "36px";
   toggle.style.height = "12px";
+  toggle.style.minHeight = "0";
+  toggle.style.maxHeight = "12px";
   toggle.style.position = "relative";
   toggle.style.display = "flex";
   toggle.style.alignItems = "center";
   toggle.style.justifyContent = enabled ? "flex-end" : "flex-start";
-  toggle.style.padding = "1px";
+  toggle.style.padding = "0 1px";
+  toggle.style.gap = "0";
   toggle.style.boxSizing = "border-box";
   toggle.style.borderRadius = "999px";
-  toggle.style.border = "none";
-  toggle.style.background = enabled
-    ? "linear-gradient(180deg, #2f4e71 0%, #1f3550 100%)"
-    : "linear-gradient(180deg, #2a2a2a 0%, #1f1f1f 100%)";
+  toggle.style.border = enabled ? "1px solid #f75154" : "1px solid #4a4a4a";
+  toggle.style.background = "#232323";
   toggle.style.overflow = "hidden";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
-  toggle.style.transition = "background 160ms ease, opacity 160ms ease";
+  toggle.style.transition = "border-color 160ms ease, opacity 160ms ease";
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
