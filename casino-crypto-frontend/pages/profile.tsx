@@ -165,9 +165,9 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.innerHTML = "";
   toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "64px";
-  toggle.style.minWidth = "64px";
-  toggle.style.maxWidth = "64px";
+  toggle.style.width = "56px";
+  toggle.style.minWidth = "56px";
+  toggle.style.maxWidth = "56px";
   toggle.style.height = "22px";
   toggle.style.minHeight = "0";
   toggle.style.maxHeight = "22px";
@@ -399,7 +399,7 @@ function injectRuntimeProfileStyles(doc: Document) {
       width: 100% !important;
     }
     #n20731447, #n20731455 {
-      margin-top: -22px !important;
+      margin-top: -26px !important;
       justify-self: start !important;
       align-self: flex-start !important;
     }
