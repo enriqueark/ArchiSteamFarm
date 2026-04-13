@@ -165,12 +165,12 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.innerHTML = "";
   toggle.className = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "44px";
-  toggle.style.minWidth = "44px";
-  toggle.style.maxWidth = "44px";
-  toggle.style.height = "20px";
+  toggle.style.width = "48px";
+  toggle.style.minWidth = "48px";
+  toggle.style.maxWidth = "48px";
+  toggle.style.height = "22px";
   toggle.style.minHeight = "0";
-  toggle.style.maxHeight = "20px";
+  toggle.style.maxHeight = "22px";
   toggle.style.position = "relative";
   toggle.style.display = "flex";
   toggle.style.alignItems = "center";
@@ -184,13 +184,14 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   toggle.style.overflow = "hidden";
   toggle.style.cursor = busy ? "default" : "pointer";
   toggle.style.opacity = busy ? "0.65" : "1";
-  toggle.style.transition = "border-color 160ms ease, opacity 160ms ease";
+  toggle.style.transition = "border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease";
+  toggle.style.boxShadow = enabled ? "0 0 8px rgba(247,81,84,0.45)" : "none";
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", enabled ? "true" : "false");
 
   const thumb = doc.createElement("span");
-  thumb.style.width = "14px";
-  thumb.style.height = "14px";
+  thumb.style.width = "16px";
+  thumb.style.height = "16px";
   thumb.style.borderRadius = "50%";
   thumb.style.background = "#ffffff";
   thumb.style.boxShadow = "0 1px 3px rgba(0,0,0,0.35)";
@@ -359,6 +360,34 @@ function injectRuntimeProfileStyles(doc: Document) {
     #n20731447::before, #n20731447::after {
       content: none !important;
       display: none !important;
+    }
+    #n20731444 {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      align-items: start !important;
+      column-gap: 28px !important;
+    }
+    #n20731445, #n20731451 {
+      width: 100% !important;
+      max-width: none !important;
+      display: grid !important;
+      grid-template-columns: 1fr auto !important;
+      align-items: start !important;
+      column-gap: 20px !important;
+    }
+    #n20731445 {
+      justify-content: stretch !important;
+    }
+    #n20731451 {
+      justify-content: stretch !important;
+    }
+    #n20731446, #n20731452 {
+      margin-top: 0 !important;
+    }
+    #n20731447, #n20731455 {
+      margin-top: 2px !important;
+      justify-self: end !important;
+      align-self: start !important;
     }
     #n20731359 {
       display: grid !important;
