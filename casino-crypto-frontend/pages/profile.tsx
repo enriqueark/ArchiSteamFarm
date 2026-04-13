@@ -164,10 +164,10 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
 
   toggle.innerHTML = "";
   toggle.style.marginLeft = "auto";
-  toggle.style.width = "251px";
-  toggle.style.minWidth = "251px";
-  toggle.style.maxWidth = "251px";
-  toggle.style.height = "22px";
+  toggle.style.width = "190px";
+  toggle.style.minWidth = "190px";
+  toggle.style.maxWidth = "190px";
+  toggle.style.height = "14px";
   toggle.style.position = "relative";
   toggle.style.display = "block";
   toggle.style.boxSizing = "border-box";
@@ -196,12 +196,12 @@ function renderPrivacyToggle(doc: Document, enabled: boolean, busy: boolean) {
   thumb.style.position = "absolute";
   thumb.style.top = "50%";
   thumb.style.left = enabled ? "100%" : "0%";
-  thumb.style.width = "14px";
-  thumb.style.height = "14px";
+  thumb.style.width = "10px";
+  thumb.style.height = "10px";
   thumb.style.borderRadius = "50%";
   thumb.style.background = "#ffffff";
   thumb.style.transform = "translate(-50%, -50%)";
-  thumb.style.boxShadow = "0 0 0 2px rgba(247,81,84,0.45)";
+  thumb.style.boxShadow = "0 0 0 1px rgba(247,81,84,0.45)";
   thumb.style.pointerEvents = "none";
   toggle.appendChild(thumb);
 }
