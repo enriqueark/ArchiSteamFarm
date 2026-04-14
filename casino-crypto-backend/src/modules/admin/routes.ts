@@ -92,6 +92,26 @@ const isMissingLevelXpColumnError = (error: unknown): boolean => {
   return false;
 };
 
+const clearSelfExclusionBestEffort = async (userId: string): Promise<void> => {
+  const updates: Array<() => Promise<unknown>> = [
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExcludedUntil" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExcludeUntil" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionReason" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNote" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoWager" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoWithdraw" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoTip" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "updatedAt" = NOW() WHERE id = ${userId}`
+  ];
+  for (const update of updates) {
+    try {
+      await update();
+    } catch {
+      // Ignore schema drift per-column and keep best-effort clearing.
+    }
+  }
+};
+
 const COIN_ATOMIC_FACTOR = 100000000n;
 const toCoinsString = (atomic: bigint, decimals = 2): string => {
   const sign = atomic < 0n ? "-" : "";
@@ -1470,22 +1490,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       // Keep admin unlock compatible with drifted schemas by clearing self-exclusion
       // columns best-effort via raw SQL first, then performing the Prisma update.
       if (body.clearSelfExclusion) {
-        try {
-          await prisma.$executeRaw`
-            UPDATE "users"
-            SET "selfExcludedUntil" = NULL,
-                "selfExcludeUntil" = NULL,
-                "selfExclusionReason" = NULL,
-                "selfExclusionNote" = NULL,
-                "selfExclusionNoWager" = true,
-                "selfExclusionNoWithdraw" = true,
-                "selfExclusionNoTip" = true,
-                "updatedAt" = NOW()
-            WHERE id = ${params.userId}
-          `;
-        } catch {
-          // Ignore schema drift issues here; base account access update still proceeds.
-        }
+        await clearSelfExclusionBestEffort(params.userId);
       }
 
       const updated = await prisma.user.update({
