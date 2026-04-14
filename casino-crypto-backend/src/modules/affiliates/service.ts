@@ -593,7 +593,18 @@ export const getProfileSummary = async (userId: string) => {
   const profileVisible = "profileVisible" in user ? user.profileVisible : true;
   const publicId = "publicId" in user ? user.publicId : null;
 
-  const [wallet, depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, referralAsReferred, referralAsReferrerAgg] =
+  const [
+    wallet,
+    depositsAgg,
+    withdrawalsAgg,
+    minesAgg,
+    blackjackAgg,
+    rouletteAgg,
+    caseOpeningsAgg,
+    battleSlotsAgg,
+    referralAsReferred,
+    referralAsReferrerAgg
+  ] =
     await Promise.all([
       prisma.wallet.findUnique({
         where: {
@@ -637,6 +648,14 @@ export const getProfileSummary = async (userId: string) => {
         where: { userId, currency: PLATFORM_INTERNAL_CURRENCY },
         _sum: { stakeAtomic: true, payoutAtomic: true }
       }),
+      prisma.caseOpening.aggregate({
+        where: { userId, currency: PLATFORM_INTERNAL_CURRENCY },
+        _sum: { priceAtomic: true, payoutAtomic: true }
+      }),
+      prisma.battleSlot.aggregate({
+        where: { userId, paidAmountAtomic: { gt: 0n } },
+        _sum: { paidAmountAtomic: true, payoutAtomic: true }
+      }),
       prisma.referral
         .findUnique({
           where: { referredUserId: userId },
@@ -671,8 +690,12 @@ export const getProfileSummary = async (userId: string) => {
   const blackjackPayout = blackjackAgg._sum.payoutAtomic ?? 0n;
   const rouletteWagered = rouletteAgg._sum.stakeAtomic ?? 0n;
   const roulettePayout = rouletteAgg._sum.payoutAtomic ?? 0n;
-  const totalWageredAtomic = minesWagered + blackjackWagered + rouletteWagered;
-  const totalPayoutAtomic = minesPayout + blackjackPayout + roulettePayout;
+  const casesWagered = caseOpeningsAgg._sum.priceAtomic ?? 0n;
+  const casesPayout = caseOpeningsAgg._sum.payoutAtomic ?? 0n;
+  const battlesWagered = battleSlotsAgg._sum.paidAmountAtomic ?? 0n;
+  const battlesPayout = battleSlotsAgg._sum.payoutAtomic ?? 0n;
+  const totalWageredAtomic = minesWagered + blackjackWagered + rouletteWagered + casesWagered + battlesWagered;
+  const totalPayoutAtomic = minesPayout + blackjackPayout + roulettePayout + casesPayout + battlesPayout;
 
   const balanceAtomic = wallet?.balanceAtomic ?? 0n;
   const lockedAtomic = wallet?.lockedAtomic ?? 0n;
@@ -746,6 +769,18 @@ export const getProfileSummary = async (userId: string) => {
         wageredCoins: toCoinsString(rouletteWagered),
         payoutAtomic: roulettePayout.toString(),
         payoutCoins: toCoinsString(roulettePayout)
+      },
+      cases: {
+        wageredAtomic: casesWagered.toString(),
+        wageredCoins: toCoinsString(casesWagered),
+        payoutAtomic: casesPayout.toString(),
+        payoutCoins: toCoinsString(casesPayout)
+      },
+      battles: {
+        wageredAtomic: battlesWagered.toString(),
+        wageredCoins: toCoinsString(battlesWagered),
+        payoutAtomic: battlesPayout.toString(),
+        payoutCoins: toCoinsString(battlesPayout)
       }
     }
   };
