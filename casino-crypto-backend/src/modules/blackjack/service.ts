@@ -10,6 +10,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
 import {
@@ -683,6 +684,7 @@ const finalizeGameInTx = async (
 };
 
 export const startBlackjackGame = async (input: StartBlackjackInput): Promise<StartResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
   if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {
     throw new AppError(`Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`, 400, "UNSUPPORTED_CURRENCY");
   }

@@ -8,6 +8,7 @@ import { adjustWalletBalance } from "../ledger/service";
 import { quoteDepositToCoins, quoteWithdrawFromCoins } from "../pricing/service";
 import { applyReferralDepositBonusBestEffort } from "../affiliates/service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import {
   CASHIER_PROVIDER,
   createOxaPayPayout,
@@ -249,6 +250,8 @@ export const createCashierWithdrawal = async (input: {
   if (!isCashierEnabled()) {
     throw new AppError("Cashier service is disabled", 503, "CASHIER_DISABLED");
   }
+
+  await ensureUserAllowedFor(input.userId, "WITHDRAW");
 
   const userFlags = await prisma.user
     .findUnique({

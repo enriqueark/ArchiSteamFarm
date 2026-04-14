@@ -4,6 +4,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getRouletteBroadcaster } from "../roulette/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_DECIMALS } from "../wallets/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 
 const COIN_ATOMIC = 10n ** BigInt(PLATFORM_VIRTUAL_COIN_DECIMALS);
 const MIN_TIP_ATOMIC = COIN_ATOMIC;
@@ -23,7 +24,11 @@ const addMinutes = (date: Date, minutes: number): Date => {
 
 const RAIN_JOIN_WINDOW_MS = 60_000;
 
-const userLabel = (email: string): string => {
+const userLabel = (email: string, username?: string | null): string => {
+  const preferred = typeof username === "string" ? username.trim() : "";
+  if (preferred.length > 0) {
+    return preferred.slice(0, 24);
+  }
   const local = email.split("@")[0]?.trim();
   if (!local) {
     return "Player";
@@ -86,7 +91,7 @@ const settlePreviousRoundIfNeeded = async (tx: Prisma.TransactionClient, now: Da
       joins: {
         include: {
           user: {
-            select: { id: true, email: true }
+            select: { id: true, email: true, username: true }
           }
         }
       }
@@ -194,6 +199,7 @@ const emitRainSummaryMessage = async (roundId: string): Promise<void> => {
           user: {
             select: {
               publicId: true,
+              username: true,
               email: true
             }
           }
@@ -227,7 +233,7 @@ const emitRainSummaryMessage = async (roundId: string): Promise<void> => {
     .map((join) => ({
       userId: join.userId,
       userPublicId: join.user.publicId ?? null,
-      userLabel: userLabel(join.user.email)
+      userLabel: userLabel(join.user.email, join.user.username)
     }));
 
   getRouletteBroadcaster()?.broadcast({
@@ -360,6 +366,7 @@ export const tipRain = async (input: { fromUserId: string; amountCoins: number }
   }
 
   const now = new Date();
+  await ensureUserAllowedFor(input.fromUserId, "TIP");
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id: input.fromUserId },
@@ -469,10 +476,11 @@ export const tipUser = async (input: {
   }
 
   const now = Date.now();
+  await ensureUserAllowedFor(input.fromUserId, "TIP", input.actorRole);
   const tip = await prisma.$transaction(async (tx) => {
     const sender = await tx.user.findUnique({
       where: { id: input.fromUserId },
-      select: { id: true, email: true, canTip: true, publicId: true }
+      select: { id: true, email: true, username: true, canTip: true, publicId: true }
     });
     if (!sender) {
       throw new AppError("Sender not found", 404, "USER_NOT_FOUND");
@@ -483,7 +491,7 @@ export const tipUser = async (input: {
 
     const recipient = await tx.user.findUnique({
       where: { publicId: input.toUserPublicId },
-      select: { id: true, email: true, publicId: true }
+      select: { id: true, email: true, username: true, publicId: true }
     });
     if (!recipient) {
       throw new AppError("Recipient not found", 404, "USER_NOT_FOUND");
@@ -560,10 +568,10 @@ export const tipUser = async (input: {
       id: created.id,
       fromUserId: sender.id,
       fromUserPublicId: sender.publicId ?? null,
-      fromUserLabel: userLabel(sender.email),
+      fromUserLabel: userLabel(sender.email, sender.username),
       toUserId: recipient.id,
       toUserPublicId: recipient.publicId ?? null,
-      toUserLabel: userLabel(recipient.email),
+      toUserLabel: userLabel(recipient.email, recipient.username),
       amountAtomic: created.amountAtomic,
       message: created.message,
       createdAt: created.createdAt,

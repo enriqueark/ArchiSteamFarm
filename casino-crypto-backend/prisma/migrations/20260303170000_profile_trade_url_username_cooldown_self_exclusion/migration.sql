@@ -1,0 +1,7 @@
+ALTER TABLE "users"
+  ADD COLUMN IF NOT EXISTS "steamTradeUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "usernameChangedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "selfExcludedUntil" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "selfExclusionReason" TEXT,
+  ADD COLUMN IF NOT EXISTS "selfExclusionCreatedAt" TIMESTAMP(3);
+

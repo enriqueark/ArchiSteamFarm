@@ -25,7 +25,11 @@ export const MAX_CHAT_MESSAGE_LENGTH = 300;
 const CHAT_MESSAGE_COOLDOWN_MS = 3_000;
 const CHAT_COOLDOWN_KEY_PREFIX = "chat:cooldown";
 
-const formatUsername = (email: string, userId: string): string => {
+const formatUsername = (username: string | null | undefined, email: string, userId: string): string => {
+  const preferred = typeof username === "string" ? username.trim() : "";
+  if (preferred) {
+    return preferred.slice(0, 24);
+  }
   const local = email.split("@")[0]?.trim();
   if (local && local.length > 0) {
     return local.slice(0, 24);
@@ -55,6 +59,7 @@ const toState = (row: {
   message: string;
   createdAt: Date;
   user: {
+    username: string | null;
     email: string;
     levelXpAtomic: bigint;
     publicId: number | null;
@@ -63,7 +68,7 @@ const toState = (row: {
   id: row.id,
   userId: row.userId,
   userPublicId: row.user.publicId ?? null,
-  username: formatUsername(row.user.email, row.userId),
+  username: formatUsername(row.user.username, row.user.email, row.userId),
   userLevel: getLevelFromXp(row.user.levelXpAtomic),
   avatarUrl: null,
   message: row.message,
@@ -81,6 +86,7 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
       include: {
         user: {
           select: {
+            username: true,
             email: true,
             levelXpAtomic: true,
             publicId: true
@@ -100,6 +106,7 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         include: {
           user: {
             select: {
+              username: true,
               email: true
             }
           }
@@ -109,6 +116,7 @@ export const listRecentChatMessages = async (limit: number): Promise<ChatMessage
         ...row,
         user: {
           ...row.user,
+          username: row.user.username ?? null,
           levelXpAtomic: 0n,
           publicId: null
         }
@@ -159,6 +167,7 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
         include: {
           user: {
             select: {
+              username: true,
               email: true,
               levelXpAtomic: true,
               publicId: true
@@ -178,6 +187,7 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           include: {
             user: {
               select: {
+                username: true,
                 email: true
               }
             }
@@ -187,6 +197,7 @@ export const postChatMessage = async (input: PostChatMessageInput): Promise<Chat
           ...legacyRow,
           user: {
             ...legacyRow.user,
+            username: legacyRow.user.username ?? null,
             levelXpAtomic: 0n,
             publicId: null
           }

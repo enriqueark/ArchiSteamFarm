@@ -2,6 +2,7 @@ import { Currency, Prisma } from "@prisma/client";
 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
+import { ensureUserAllowedFor } from "../users/access-guard";
 
 export const PLATFORM_INTERNAL_CURRENCY: Currency = Currency.USDT;
 export const PLATFORM_VIRTUAL_COIN_SYMBOL = "COINS";
@@ -106,6 +107,18 @@ export const debitBalanceInTx = async (
   tx: Prisma.TransactionClient,
   input: DebitBalanceInput
 ): Promise<DebitBalanceResult> => debitBalanceWithRowLock(tx, input);
+
+export const ensureUserCanBet = async (userId: string): Promise<void> => {
+  await ensureUserAllowedFor(userId, "WAGER");
+};
+
+export const ensureUserCanWithdraw = async (userId: string): Promise<void> => {
+  await ensureUserAllowedFor(userId, "WITHDRAW");
+};
+
+export const ensureUserCanTip = async (userId: string): Promise<void> => {
+  await ensureUserAllowedFor(userId, "TIP");
+};
 
 export const debitBalance = async (input: DebitBalanceInput): Promise<DebitBalanceResult> =>
   prisma.$transaction(async (tx) => debitBalanceWithRowLock(tx, input));

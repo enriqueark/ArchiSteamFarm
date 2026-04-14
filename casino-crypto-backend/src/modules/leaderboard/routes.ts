@@ -34,6 +34,7 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         id: true,
         publicId: true,
         email: true,
+        username: true,
         levelXpAtomic: true,
         createdAt: true,
         wallets: {
@@ -51,7 +52,7 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         rank: idx + 1,
         userId: row.id,
         publicId: row.publicId ?? null,
-        userLabel: toLabel(row.email, row.publicId ?? null),
+        userLabel: toLabel(row.username?.trim() || row.email, row.publicId ?? null),
         level: getLevelFromXp(row.levelXpAtomic),
         levelXpAtomic: row.levelXpAtomic.toString(),
         balanceAtomic: (row.wallets[0]?.balanceAtomic ?? 0n).toString(),
