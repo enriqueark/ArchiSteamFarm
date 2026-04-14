@@ -298,10 +298,8 @@ export const ensureUserAllowedFor = async (
   roleOverride?: UserRole
 ): Promise<void> => {
   const state = await getSelfExclusionState(userId);
-  const effectiveRole = roleOverride ?? state.role;
-  if (effectiveRole === UserRole.ADMIN || effectiveRole === UserRole.SUPPORT) {
-    return;
-  }
+  void roleOverride;
+  void state.role;
   if (!state.active) {
     return;
   }
