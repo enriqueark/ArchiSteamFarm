@@ -18,6 +18,7 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import {
   MAX_GAME_BET_COINS,
   PLATFORM_INTERNAL_CURRENCY,
@@ -1196,6 +1197,8 @@ export const listUserRouletteBets = async (userId: string, limit: number): Promi
 };
 
 export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<RouletteBetPlacementResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
+
   if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {
     throw new AppError(
       `Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`,

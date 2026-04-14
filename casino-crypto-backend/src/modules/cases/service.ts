@@ -11,6 +11,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import {
   MAX_GAME_BET_ATOMIC,
   PLATFORM_INTERNAL_CURRENCY,
@@ -1189,6 +1190,7 @@ export const getCaseById = async (
 };
 
 export const openCase = async (input: OpenCaseInput): Promise<CaseOpenResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
   const selectedCase = await getCaseForOpen(input.caseId);
   const topTierItems = getTopTierItems(selectedCase.items);
   if (selectedCase.priceAtomic <= 0n) {

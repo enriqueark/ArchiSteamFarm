@@ -14,6 +14,7 @@ import { AppError } from "../../core/errors";
 import { GAME_ENGINE_SERVICE_ROLE } from "../../core/service-auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { ensureUserAllowedFor } from "../users/access-guard";
 
 type PlaceBetInput = {
   userId: string;
@@ -307,6 +308,8 @@ const mapGameResultOutcome = (result: SignedGameResult["gameResult"]): GameResul
   result === "WON" ? GameResultOutcome.WON : GameResultOutcome.LOST;
 
 export const placeBet = async (input: PlaceBetInput): Promise<PlaceBetResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
+
   if (input.amountAtomic <= 0n) {
     throw new AppError("amountAtomic must be greater than 0", 400, "INVALID_AMOUNT");
   }

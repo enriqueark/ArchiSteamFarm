@@ -16,6 +16,7 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import { MAX_GAME_BET_ATOMIC, PLATFORM_INTERNAL_CURRENCY, debitBalanceInTx } from "../wallets/service";
 import {
   BOARD_SIZE,
@@ -676,6 +677,7 @@ export const rotateProvablyFairServerSeed = async (userId: string) => {
 };
 
 export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesGameState> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
   ensureMineCount(input.mineCount);
 
   if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {

@@ -10,6 +10,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
 import { addUserXpBestEffort } from "../progression/service";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import { captureHeldFunds, holdFundsForBet, releaseHeldFunds } from "../wallets/bet-reservation.service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 
@@ -874,6 +875,7 @@ const maybeSettleBattle = async (battleId: string): Promise<void> => {
 
 export const createBattle = async (input: BattleCreateInput): Promise<BattleState> => {
   try {
+    await ensureUserAllowedFor(input.userId, "WAGER");
     await ensureBattlesSchemaReady();
 
     const templateDef = battleTemplateSeats(input.template);
@@ -1057,6 +1059,7 @@ export const joinBattle = async (input: {
   borrowPercent?: number;
 }): Promise<BattleState> => {
   try {
+    await ensureUserAllowedFor(input.userId, "WAGER");
     await ensureBattlesSchemaReady();
 
     const battle = await getBattleForAction(input.battleId);
