@@ -364,13 +364,13 @@ export default function BlackjackPage() {
         {!active ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
             {/* 3 bet inputs in a row */}
-            <div style={{ display: "flex", gap: 8, width: "100%" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, width: "100%" }}>
               {[
                 { label: "21+3", val: side21, set: setSide21 },
                 { label: "Bet", val: bet, set: setBet },
                 { label: "Pairs", val: sidePairs, set: setSidePairs },
               ].map((inp) => (
-                <div key={inp.label} style={{ flex: 1, textAlign: "center" }}>
+                <div key={inp.label} style={{ minWidth: 0, textAlign: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, border: "1px solid #2a2d32", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.55)", padding: "0 4px 0 0", height: 42 }}>
                     <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 6px", flexShrink: 0, boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
                       <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
