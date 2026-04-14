@@ -1600,6 +1600,7 @@ export default function ProfilePage() {
               border: 0,
               display: "block",
               background: "#070707",
+              marginBottom: 24,
               visibility: showIframe ? "visible" : "hidden"
             }}
           />
