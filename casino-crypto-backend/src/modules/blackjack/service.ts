@@ -922,6 +922,7 @@ export const getBlackjackGameById = async (userId: string, gameId: string): Prom
 export const getOrCreateActiveBlackjackGame = async (
   input: StartBlackjackInput
 ): Promise<StartResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
   if (input.currency !== PLATFORM_INTERNAL_CURRENCY) {
     throw new AppError(`Only ${PLATFORM_INTERNAL_CURRENCY} is supported as internal virtual currency`, 400, "UNSUPPORTED_CURRENCY");
   }
@@ -965,6 +966,9 @@ const findNextUnresolvedHand = (state: StoredGameState, startIndex: number): num
 };
 
 export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<BlackjackGameState> => {
+  if (input.action === "DOUBLE" || input.action === "SPLIT" || input.action === "INSURANCE") {
+    await ensureUserAllowedFor(input.userId, "WAGER");
+  }
   const result = await prisma.$transaction(async (tx) => {
     const game = await lockGameForUser(tx, input.gameId, input.userId);
     if (game.status !== "ACTIVE") {

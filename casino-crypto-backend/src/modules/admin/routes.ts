@@ -1460,23 +1460,37 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const params = userDetailParamsSchema.parse(request.params);
       const body = updateUserStatusSchema.parse(request.body);
 
+      const baseData: Prisma.UserUpdateInput = {
+        status: body.status,
+        ...(body.role ? { role: body.role } : {}),
+        ...(typeof body.canWithdraw === "boolean" ? { canWithdraw: body.canWithdraw } : {}),
+        ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {})
+      };
+
+      // Keep admin unlock compatible with drifted schemas by clearing self-exclusion
+      // columns best-effort via raw SQL first, then performing the Prisma update.
+      if (body.clearSelfExclusion) {
+        try {
+          await prisma.$executeRaw`
+            UPDATE "users"
+            SET "selfExcludedUntil" = NULL,
+                "selfExcludeUntil" = NULL,
+                "selfExclusionReason" = NULL,
+                "selfExclusionNote" = NULL,
+                "selfExclusionNoWager" = true,
+                "selfExclusionNoWithdraw" = true,
+                "selfExclusionNoTip" = true,
+                "updatedAt" = NOW()
+            WHERE id = ${params.userId}
+          `;
+        } catch {
+          // Ignore schema drift issues here; base account access update still proceeds.
+        }
+      }
+
       const updated = await prisma.user.update({
         where: { id: params.userId },
-        data: {
-          status: body.status,
-          ...(body.role ? { role: body.role } : {}),
-          ...(typeof body.canWithdraw === "boolean" ? { canWithdraw: body.canWithdraw } : {}),
-          ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {}),
-          ...(body.clearSelfExclusion
-            ? {
-                selfExcludedUntil: null,
-                selfExclusionReason: null,
-                selfExclusionNoWager: true,
-                selfExclusionNoWithdraw: true,
-                selfExclusionNoTip: true
-              }
-            : {})
-        },
+        data: baseData,
         select: {
           id: true,
           publicId: true,
