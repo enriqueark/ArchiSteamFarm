@@ -17,7 +17,8 @@ const P3 = `${A}48299ac45bc8c79776e03a90ed321ed3.svg`;
 
 type Cell = "hidden" | "safe" | "mine";
 const G = '"DM Sans","Gotham",sans-serif';
-const f = (v: string | null | undefined, d = 6) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
+const COIN_DECIMALS = 1e8;
+const f = (v: string | null | undefined, d = 8) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
 const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
 const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
 const SR = "inset 0 1px 0 0 #f24f51, inset 0 -1px 0 0 #ff7476";
@@ -42,7 +43,7 @@ export default function MinesPage() {
   useEffect(() => {
     getWallets().then((w) => {
       const wallet = w.find((x) => x.currency === "USDT");
-      if (wallet) setMaxBal(Math.min(Number(wallet.balanceAtomic) / 1e6, 5000));
+      if (wallet) setMaxBal(Math.min(Number(wallet.balanceAtomic) / COIN_DECIMALS, 5000));
     }).catch(() => {});
   }, []);
 
@@ -50,7 +51,7 @@ export default function MinesPage() {
   const lost = game?.status === "LOST";
   const parsedBet = Number.parseFloat(bet || "0");
   const betNum = Number.isFinite(parsedBet) ? parsedBet : 0;
-  const ba = String(Math.round(betNum * 1e6));
+  const ba = String(Math.round(betNum * COIN_DECIMALS));
   const betPct = maxBal > 0 ? Math.max(0, Math.min(1, betNum / maxBal)) : 0;
 
   const setBetFromClientX = useCallback((clientX: number, sliderEl: HTMLDivElement) => {
@@ -198,7 +199,7 @@ export default function MinesPage() {
           return;
         }
         setGame(activeGame);
-        setBet((Number(activeGame.betAtomic) / 1e6).toFixed(2));
+        setBet((Number(activeGame.betAtomic) / COIN_DECIMALS).toFixed(2));
         setMc(activeGame.mineCount);
         const next = Array(BOARD).fill("hidden") as Cell[];
         activeGame.revealedCells?.forEach((i) => {
@@ -264,7 +265,7 @@ export default function MinesPage() {
       const deltaAtomic = Number.isFinite(previousPotentialAtomic) && Number.isFinite(nextPotentialAtomic)
         ? Math.max(0, nextPotentialAtomic - previousPotentialAtomic)
         : 0;
-      const deltaLabel = `+$${(deltaAtomic / 1e6).toFixed(2)}`;
+      const deltaLabel = `+$${(deltaAtomic / COIN_DECIMALS).toFixed(2)}`;
       if (newlySafe.length > 0) {
         setSafeCellGainByIndex((prev) => {
           const copy = { ...prev };
