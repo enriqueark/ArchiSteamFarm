@@ -11,7 +11,6 @@ import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
 import { verifyTwoFactorCode } from "../security-2fa/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
-import { getSelfExclusionState } from "./access-guard";
 
 const COIN_DECIMALS = 100000000n;
 const toCoinsString = (atomic: bigint, decimals = 2): string => {
@@ -150,14 +149,6 @@ const isMissingAvatarColumnsError = (error: unknown): boolean => {
   }
   const message = error.message.toLowerCase();
   return message.includes("avatarurl") || message.includes("provideravatarurl");
-};
-
-const isMissingTradeUrlColumnError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const message = error.message.toLowerCase();
-  return message.includes("steamtradeurl");
 };
 
 const isMissingUsernameColumnError = (error: unknown): boolean => {
@@ -457,56 +448,7 @@ const updateUserAvatarBestEffort = async (
   }
 };
 
-const getTradeUrlBestEffort = async (userId: string): Promise<string | null> => {
-  try {
-    const rows = await prisma.$queryRaw<Array<{ steamTradeUrl: unknown }>>`
-      SELECT "steamTradeUrl"
-      FROM "users"
-      WHERE id = ${userId}
-      LIMIT 1
-    `;
-    return toOptionalString(rows[0]?.steamTradeUrl ?? null);
-  } catch (error) {
-    if (isMissingTradeUrlColumnError(error)) {
-      return null;
-    }
-    throw error;
-  }
-};
-
-const updateTradeUrlBestEffort = async (
-  userId: string,
-  tradeUrl: string
-): Promise<{ steamTradeUrl: string | null; updatedAt: Date }> => {
-  try {
-    const rows = await prisma.$queryRaw<Array<{ steamTradeUrl: unknown; updatedAt: Date }>>`
-      UPDATE "users"
-      SET "steamTradeUrl" = ${tradeUrl},
-          "updatedAt" = NOW()
-      WHERE id = ${userId}
-      RETURNING "steamTradeUrl", "updatedAt"
-    `;
-    const row = rows[0];
-    if (!row) {
-      throw new Error("USER_NOT_FOUND");
-    }
-    return {
-      steamTradeUrl: toOptionalString(row.steamTradeUrl ?? null),
-      updatedAt: row.updatedAt
-    };
-  } catch (error) {
-    if (isMissingTradeUrlColumnError(error)) {
-      return {
-        steamTradeUrl: tradeUrl,
-        updatedAt: new Date()
-      };
-    }
-    throw error;
-  }
-};
-
 const tradeUrlSchema = updateTradeUrlSchema;
-const selfExclusionCreateSchema = setSelfExclusionSchema;
 
 type PublicChatProfileSummary = {
   user: {
@@ -1032,71 +974,6 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({
       profileVisible: updated.profileVisible,
       updatedAt: updated.updatedAt
-    });
-  });
-
-  fastify.get("/me/security-settings", { preHandler: requireAuth }, async (request, reply) => {
-    const [tradeUrl, selfExclusion] = await Promise.all([
-      getTradeUrlBestEffort(request.user.sub),
-      getSelfExclusionState(request.user.sub)
-    ]);
-    return reply.send({
-      steamTradeUrl: tradeUrl,
-      selfExclusion: {
-        active: selfExclusion.active,
-        until: selfExclusion.until ? selfExclusion.until.toISOString() : null,
-        noWager: selfExclusion.noWager,
-        noWithdraw: selfExclusion.noWithdraw,
-        noTip: selfExclusion.noTip
-      }
-    });
-  });
-
-  fastify.put("/me/trade-url", { preHandler: requireAuth }, async (request, reply) => {
-    const body = updateTradeUrlSchema.parse(request.body);
-    const normalized = normalizeSteamTradeUrl(body.tradeUrl);
-    const updated = await updateTradeUrlBestEffort(request.user.sub, normalized);
-    return reply.send({
-      steamTradeUrl: updated.steamTradeUrl,
-      updatedAt: updated.updatedAt.toISOString()
-    });
-  });
-
-  fastify.post("/me/self-exclusion", { preHandler: requireAuth }, async (request, reply) => {
-    const body = selfExclusionCreateSchema.parse(request.body);
-    const confirmation = body.confirmationText.trim().toLowerCase();
-    if (confirmation !== "confirm") {
-      throw new AppError("You must type CONFIRM to continue", 400, "SELF_EXCLUSION_CONFIRMATION_INVALID");
-    }
-
-    const now = new Date();
-    const until = new Date(now.getTime() + body.durationDays * 24 * 60 * 60 * 1000);
-    const reason = `Self-excluded for ${body.durationDays} day(s)`;
-
-    try {
-      await prisma.$executeRaw`
-        UPDATE "users"
-        SET "selfExcludeUntil" = ${until},
-            "selfExclusionReason" = ${reason},
-            "selfExclusionNoWager" = true,
-            "selfExclusionNoWithdraw" = true,
-            "selfExclusionNoTip" = true,
-            "updatedAt" = NOW()
-        WHERE id = ${request.user.sub}
-      `;
-    } catch (error) {
-      if (!isMissingSelfExclusionColumnError(error)) {
-        throw error;
-      }
-      throw new AppError("Self-exclusion is not available yet in this environment", 503, "SELF_EXCLUSION_UNAVAILABLE");
-    }
-
-    return reply.send({
-      active: true,
-      until: until.toISOString(),
-      noWager: true,
-      noWithdraw: true,
-      noTip: true
     });
   });
 
@@ -1736,19 +1613,30 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/me/self-exclusion", { preHandler: requireAuth }, async (request, reply) => {
     const body = setSelfExclusionSchema.parse(request.body);
+    const confirmation = body.confirmationText.trim().toLowerCase();
+    if (confirmation !== "confirm") {
+      throw new AppError("You must type CONFIRM to continue", 400, "SELF_EXCLUSION_CONFIRMATION_INVALID");
+    }
     await ensureProfileControlColumnsBestEffort();
     const now = new Date();
     const until = new Date(now.getTime() + body.durationDays * 24 * 60 * 60 * 1000);
-    await prisma.$executeRaw`
-      UPDATE "users"
-      SET "selfExcludedUntil" = ${until},
-          "selfExclusionReason" = ${body.confirmationText},
-          "selfExclusionNoWager" = ${body.noWager},
-          "selfExclusionNoWithdraw" = ${body.noWithdraw},
-          "selfExclusionNoTip" = ${body.noTip},
-          "updatedAt" = NOW()
-      WHERE id = ${request.user.sub}
-    `;
+    try {
+      await prisma.$executeRaw`
+        UPDATE "users"
+        SET "selfExcludedUntil" = ${until},
+            "selfExclusionReason" = ${body.confirmationText},
+            "selfExclusionNoWager" = ${body.noWager},
+            "selfExclusionNoWithdraw" = ${body.noWithdraw},
+            "selfExclusionNoTip" = ${body.noTip},
+            "updatedAt" = NOW()
+        WHERE id = ${request.user.sub}
+      `;
+    } catch (error) {
+      if (!isMissingSelfExclusionColumnError(error)) {
+        throw error;
+      }
+      throw new AppError("Self-exclusion is not available yet in this environment", 503, "SELF_EXCLUSION_UNAVAILABLE");
+    }
     return reply.send({
       success: true,
       until: until.toISOString(),
