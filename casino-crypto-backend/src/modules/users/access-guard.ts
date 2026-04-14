@@ -133,22 +133,16 @@ const queryFlagsRaw = async (userId: string) =>
     LIMIT 1
   `;
 
-const queryFlagsRawCurrent = async (userId: string) =>
+const queryFlagsRawCurrentNoFlags = async (userId: string) =>
   prisma.$queryRaw<
     Array<{
       role: unknown;
       selfExcludeUntil: unknown;
-      selfExclusionNoWager: unknown;
-      selfExclusionNoWithdraw: unknown;
-      selfExclusionNoTip: unknown;
     }>
   >`
     SELECT
       role,
-      "selfExcludedUntil" AS "selfExcludeUntil",
-      "selfExclusionNoWager" AS "selfExclusionNoWager",
-      "selfExclusionNoWithdraw" AS "selfExclusionNoWithdraw",
-      "selfExclusionNoTip" AS "selfExclusionNoTip"
+      "selfExcludedUntil" AS "selfExcludeUntil"
     FROM "users"
     WHERE id = ${userId}
     LIMIT 1
@@ -220,7 +214,7 @@ export const getSelfExclusionState = async (userId: string): Promise<{
       throw error;
     }
     try {
-      const rows = await queryFlagsRawCurrent(userId);
+      const rows = await queryFlagsRawCurrentNoFlags(userId);
       const row = rows[0];
       if (!row) {
         throw new AppError("User not found", 404, "USER_NOT_FOUND");
