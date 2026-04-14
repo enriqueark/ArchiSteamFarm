@@ -8,6 +8,7 @@ import { requireIdempotencyKey } from "../../core/idempotency";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 import {
   getCaseById,
+  deleteCs2SkinCatalogByPriceRangeByAdmin,
   findClosestCatalogSkinByValueAtomic,
   importRainCasesIntoSkinCatalogByAdmin,
   listCs2SkinCatalogByAdmin,
@@ -76,8 +77,57 @@ const adminImportSkinsSchema = z.object({
 const adminCatalogQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(5000).default(2000),
-  sourceCaseSlug: z.string().trim().max(120).optional()
+  sourceCaseSlug: z.string().trim().max(120).optional(),
+  minValueAtomic: z
+    .string()
+    .regex(/^\d+$/, "minValueAtomic must be an integer string")
+    .transform((value) => BigInt(value))
+    .optional(),
+  maxValueAtomic: z
+    .string()
+    .regex(/^\d+$/, "maxValueAtomic must be an integer string")
+    .transform((value) => BigInt(value))
+    .optional()
 });
+
+const adminDeleteCatalogByPriceSchema = z
+  .object({
+    minPriceCoins: z.coerce.number().min(0).optional(),
+    maxPriceCoins: z.coerce.number().min(0).optional(),
+    minValueAtomic: z
+      .string()
+      .regex(/^\d+$/, "minValueAtomic must be an integer string")
+      .transform((value) => BigInt(value))
+      .optional(),
+    maxValueAtomic: z
+      .string()
+      .regex(/^\d+$/, "maxValueAtomic must be an integer string")
+      .transform((value) => BigInt(value))
+      .optional(),
+    sourceCaseSlug: z.string().trim().max(120).optional(),
+    q: z.string().trim().max(120).optional(),
+    onlyUnused: z.boolean().default(true),
+    dryRun: z.boolean().default(false)
+  })
+  .refine(
+    (value) =>
+      value.minValueAtomic !== undefined ||
+      value.maxValueAtomic !== undefined ||
+      value.minPriceCoins !== undefined ||
+      value.maxPriceCoins !== undefined,
+    {
+    message: "At least one price bound is required"
+    }
+  )
+  .refine(
+    (value) =>
+      value.minPriceCoins === undefined ||
+      value.maxPriceCoins === undefined ||
+      value.minPriceCoins <= value.maxPriceCoins,
+    {
+      message: "minPriceCoins cannot be greater than maxPriceCoins"
+    }
+  );
 
 const skinPreviewQuoteQuerySchema = z.object({
   amountAtomic: z
@@ -212,6 +262,46 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
       }))
     );
   });
+
+  fastify.post(
+    "/admin/catalog/skins/delete-by-price",
+    { preHandler: [requireRoles(["ADMIN"])] },
+    async (request, reply) => {
+      const body = adminDeleteCatalogByPriceSchema.parse(request.body ?? {});
+      const minValueAtomic =
+        body.minValueAtomic !== undefined
+          ? body.minValueAtomic
+          : body.minPriceCoins !== undefined
+            ? BigInt(Math.round(body.minPriceCoins * 1e8))
+            : undefined;
+      const maxValueAtomic =
+        body.maxValueAtomic !== undefined
+          ? body.maxValueAtomic
+          : body.maxPriceCoins !== undefined
+            ? BigInt(Math.round(body.maxPriceCoins * 1e8))
+            : undefined;
+
+      const result = await deleteCs2SkinCatalogByPriceRangeByAdmin({
+        minValueAtomic,
+        maxValueAtomic,
+        sourceCaseSlug: body.sourceCaseSlug,
+        q: body.q,
+        onlyUnused: body.onlyUnused,
+        dryRun: body.dryRun,
+        actorUserId: request.user.sub
+      });
+
+      return reply.send({
+        matchedCount: result.matchedCount,
+        deletedCount: result.deletedCount,
+        skippedLinkedCount: result.skippedLinkedCount,
+        remainingCatalogCount: result.remainingCatalogCount,
+        dryRun: body.dryRun,
+        minValueAtomic: minValueAtomic?.toString() ?? null,
+        maxValueAtomic: maxValueAtomic?.toString() ?? null
+      });
+    }
+  );
 
   fastify.get("/catalog/skin-preview", async (request, reply) => {
     const query = skinPreviewQuoteQuerySchema.parse(request.query);

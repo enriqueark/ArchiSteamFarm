@@ -231,6 +231,16 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         <input id="casesSkinSearch" placeholder="Search skin name..." style="min-width:220px" />
         <button id="casesSearchSkinsBtn">Search skins</button>
       </div>
+      <div class="row" style="margin-top:8px; align-items:center; flex-wrap:wrap;">
+        <label>Delete by price ($)</label>
+        <input id="casesDeleteMinPrice" type="number" min="0" step="0.01" placeholder="Min" style="width:110px" />
+        <input id="casesDeleteMaxPrice" type="number" min="0" step="0.01" placeholder="Max" style="width:110px" />
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input id="casesDeleteOnlyUnused" type="checkbox" checked />
+          Only unused skins
+        </label>
+        <button id="casesDeleteByPriceBtn" class="danger">Delete range</button>
+      </div>
       <div id="casesStatus" class="mono" style="margin-top:8px;"></div>
       <div class="mono muted" style="margin-top:4px;">
         1) Preload once -> 2) Search skins -> 3) Add skins -> 4) Set drop % (must total 100) -> 5) Save case
@@ -425,6 +435,10 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const casesImportBtn = document.getElementById("casesImportBtn");
       const casesSkinSearch = document.getElementById("casesSkinSearch");
       const casesSearchSkinsBtn = document.getElementById("casesSearchSkinsBtn");
+      const casesDeleteMinPrice = document.getElementById("casesDeleteMinPrice");
+      const casesDeleteMaxPrice = document.getElementById("casesDeleteMaxPrice");
+      const casesDeleteOnlyUnused = document.getElementById("casesDeleteOnlyUnused");
+      const casesDeleteByPriceBtn = document.getElementById("casesDeleteByPriceBtn");
       const caseSlug = document.getElementById("caseSlug");
       const caseTitle = document.getElementById("caseTitle");
       const casePriceCoins = document.getElementById("casePriceCoins");
@@ -711,6 +725,61 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         } catch (error) {
           casesStatus.className = "mono err";
           casesStatus.textContent = error && error.message ? error.message : "Failed to load catalog.";
+        }
+      });
+      casesDeleteByPriceBtn.addEventListener("click", async () => {
+        try {
+          const minRaw = String(casesDeleteMinPrice.value || "").trim();
+          const maxRaw = String(casesDeleteMaxPrice.value || "").trim();
+          if (!minRaw && !maxRaw) {
+            throw new Error("Set min, max, or both before deleting.");
+          }
+          const minNum = minRaw ? Number(minRaw) : null;
+          const maxNum = maxRaw ? Number(maxRaw) : null;
+          if ((minNum !== null && (!Number.isFinite(minNum) || minNum < 0)) || (maxNum !== null && (!Number.isFinite(maxNum) || maxNum < 0))) {
+            throw new Error("Price range must be valid positive numbers.");
+          }
+          if (minNum !== null && maxNum !== null && minNum > maxNum) {
+            throw new Error("Min price cannot be greater than max price.");
+          }
+          const onlyUnused = !!casesDeleteOnlyUnused.checked;
+          const minLabel = minNum === null ? "-inf" : minNum.toFixed(2);
+          const maxLabel = maxNum === null ? "+inf" : maxNum.toFixed(2);
+          const confirmed = window.confirm(
+            "Delete catalog skins in range $" + minLabel + " to $" + maxLabel +
+              (onlyUnused ? " (only unused)." : " (including skins linked to cases).") +
+              "\\n\\nThis action cannot be undone."
+          );
+          if (!confirmed) return;
+
+          casesDeleteByPriceBtn.disabled = true;
+          casesStatus.className = "mono";
+          casesStatus.textContent = "Deleting skins by price range...";
+
+          const toAtomicString = (coins) => String(Math.round(Number(coins) * 1e8));
+          const payload = {
+            ...(minNum !== null ? { minValueAtomic: toAtomicString(minNum) } : {}),
+            ...(maxNum !== null ? { maxValueAtomic: toAtomicString(maxNum) } : {}),
+            onlyUnused
+          };
+          const res = await req("/api/v1/cases/admin/catalog/skins/delete-by-price", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete skins by price"));
+          const data = await res.json();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent =
+            "Deleted " + Number(data.deletedCount || 0) + " skins." +
+            (data.skippedInUseCount > 0 ? " Skipped linked: " + data.skippedInUseCount + "." : "") +
+            " Matched: " + Number(data.matchedCount || 0) + ".";
+          await loadCatalog();
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Delete by price failed.";
+        } finally {
+          casesDeleteByPriceBtn.disabled = false;
         }
       });
       casesImportBtn.addEventListener("click", async () => {

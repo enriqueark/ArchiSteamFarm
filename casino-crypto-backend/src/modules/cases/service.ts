@@ -623,6 +623,142 @@ export const listCs2SkinCatalogByAdmin = async (input: {
   }));
 };
 
+export const deleteCs2SkinCatalogByPriceRangeByAdmin = async (input: {
+  minValueAtomic?: bigint;
+  maxValueAtomic?: bigint;
+  q?: string;
+  sourceCaseSlug?: string;
+  onlyUnused?: boolean;
+  dryRun?: boolean;
+  actorUserId?: string;
+}): Promise<{
+  minValueAtomic: bigint | null;
+  maxValueAtomic: bigint | null;
+  matchedCount: number;
+  deletedCount: number;
+  skippedLinkedCount: number;
+  remainingCatalogCount: number;
+}> => {
+  await ensureCs2SkinCatalogPreloaded(input.actorUserId ?? null);
+  const q = input.q?.trim();
+  const where: Prisma.Cs2SkinCatalogWhereInput = {
+    ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+    ...(input.sourceCaseSlug ? { sourceCaseSlug: input.sourceCaseSlug } : {}),
+    ...(input.minValueAtomic !== undefined || input.maxValueAtomic !== undefined
+      ? {
+          valueAtomic: {
+            ...(input.minValueAtomic !== undefined ? { gte: input.minValueAtomic } : {}),
+            ...(input.maxValueAtomic !== undefined ? { lte: input.maxValueAtomic } : {})
+          }
+        }
+      : {})
+  };
+
+  const matchedCount = await prisma.cs2SkinCatalog.count({ where });
+  const currentCatalogCount = await prisma.cs2SkinCatalog.count();
+  if (matchedCount <= 0) {
+    return {
+      minValueAtomic: input.minValueAtomic ?? null,
+      maxValueAtomic: input.maxValueAtomic ?? null,
+      matchedCount: 0,
+      deletedCount: 0,
+      skippedLinkedCount: 0,
+      remainingCatalogCount: currentCatalogCount
+    };
+  }
+
+  const onlyUnused = input.onlyUnused !== false;
+  const dryRun = input.dryRun === true;
+  if (!onlyUnused) {
+    if (dryRun) {
+      return {
+        minValueAtomic: input.minValueAtomic ?? null,
+        maxValueAtomic: input.maxValueAtomic ?? null,
+        matchedCount,
+        deletedCount: matchedCount,
+        skippedLinkedCount: 0,
+        remainingCatalogCount: Math.max(0, currentCatalogCount - matchedCount)
+      };
+    }
+    const deleted = await prisma.cs2SkinCatalog.deleteMany({ where });
+    return {
+      minValueAtomic: input.minValueAtomic ?? null,
+      maxValueAtomic: input.maxValueAtomic ?? null,
+      matchedCount,
+      deletedCount: deleted.count,
+      skippedLinkedCount: 0,
+      remainingCatalogCount: await prisma.cs2SkinCatalog.count()
+    };
+  }
+
+  const matchedRows = await prisma.cs2SkinCatalog.findMany({
+    where,
+    select: { id: true }
+  });
+  const matchedIds = matchedRows.map((row) => row.id);
+  if (!matchedIds.length) {
+    return {
+      minValueAtomic: input.minValueAtomic ?? null,
+      maxValueAtomic: input.maxValueAtomic ?? null,
+      matchedCount: 0,
+      deletedCount: 0,
+      skippedLinkedCount: 0,
+      remainingCatalogCount: currentCatalogCount
+    };
+  }
+
+  const usedInCases = await prisma.caseItem.findMany({
+    where: {
+      cs2SkinId: { in: matchedIds }
+    },
+    select: {
+      cs2SkinId: true
+    },
+    distinct: ["cs2SkinId"]
+  });
+  const usedIds = new Set(
+    usedInCases.map((row) => row.cs2SkinId).filter((value): value is string => typeof value === "string")
+  );
+  const deletableIds = matchedIds.filter((id) => !usedIds.has(id));
+
+  if (!deletableIds.length) {
+    return {
+      minValueAtomic: input.minValueAtomic ?? null,
+      maxValueAtomic: input.maxValueAtomic ?? null,
+      matchedCount,
+      deletedCount: 0,
+      skippedLinkedCount: matchedIds.length,
+      remainingCatalogCount: currentCatalogCount
+    };
+  }
+
+  if (dryRun) {
+    return {
+      minValueAtomic: input.minValueAtomic ?? null,
+      maxValueAtomic: input.maxValueAtomic ?? null,
+      matchedCount,
+      deletedCount: deletableIds.length,
+      skippedLinkedCount: matchedIds.length - deletableIds.length,
+      remainingCatalogCount: Math.max(0, currentCatalogCount - deletableIds.length)
+    };
+  }
+
+  const deleted = await prisma.cs2SkinCatalog.deleteMany({
+    where: {
+      id: { in: deletableIds }
+    }
+  });
+
+  return {
+    minValueAtomic: input.minValueAtomic ?? null,
+    maxValueAtomic: input.maxValueAtomic ?? null,
+    matchedCount,
+    deletedCount: deleted.count,
+    skippedLinkedCount: matchedIds.length - deletableIds.length,
+    remainingCatalogCount: await prisma.cs2SkinCatalog.count()
+  };
+};
+
 export const findClosestCatalogSkinByValueAtomic = async (input: {
   valueAtomic: bigint;
   actorUserId?: string | null;
