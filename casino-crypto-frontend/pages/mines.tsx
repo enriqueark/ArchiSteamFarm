@@ -49,6 +49,7 @@ export default function MinesPage() {
 
   const act = game?.status === "ACTIVE";
   const lost = game?.status === "LOST";
+  const cashedOut = game?.status === "CASHED_OUT";
   const parsedBet = Number.parseFloat(bet || "0");
   const betNum = Number.isFinite(parsedBet) ? parsedBet : 0;
   const ba = String(Math.round(betNum * COIN_DECIMALS));
@@ -290,7 +291,16 @@ export default function MinesPage() {
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); setSkinUrl(null); refreshBalance(); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try {
+      const finished = await cashoutMines(game.gameId);
+      setGame(finished);
+      if (finished.status === "CASHED_OUT") {
+        await fetchSkin(finished.payoutAtomic ?? finished.potentialPayoutAtomic ?? game.potentialPayoutAtomic);
+      } else {
+        setSkinUrl(null);
+      }
+      refreshBalance();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const pickR = () => {
     if (!act) return;
@@ -424,7 +434,11 @@ export default function MinesPage() {
           <div style={{
             flex: 1,
             overflow: "hidden", borderRadius: 12,
-            background: "#090909",
+            background: cashedOut
+              ? "radial-gradient(120% 85% at 50% 0%, rgba(74, 222, 96, 0.24) 0%, rgba(28, 78, 34, 0.22) 42%, #090909 100%)"
+              : "#090909",
+            border: cashedOut ? "1px solid rgba(74, 222, 96, 0.35)" : "1px solid transparent",
+            boxShadow: cashedOut ? "inset 0 0 24px rgba(74, 222, 96, 0.16)" : "none",
             position: "relative",
             display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
@@ -440,7 +454,7 @@ export default function MinesPage() {
                   key={`${skinUrl}-${skinAnimTick}`}
                   src={skinUrl}
                   alt=""
-                  className={`mines-skin-preview ${lost ? "is-lost" : ""}`}
+                  className={`mines-skin-preview ${lost ? "is-lost" : ""} ${cashedOut ? "is-cashed-out" : ""}`}
                   style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1 }}
                 />
               )}
@@ -512,6 +526,10 @@ export default function MinesPage() {
 
         .mines-skin-preview.is-lost {
           animation: minesSkinLost 220ms ease-out forwards;
+        }
+
+        .mines-skin-preview.is-cashed-out {
+          filter: brightness(1.06) saturate(1.1) drop-shadow(0 0 16px rgba(74, 222, 96, 0.32));
         }
 
         @keyframes minesSkinAppear {
