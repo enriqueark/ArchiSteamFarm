@@ -1586,7 +1586,7 @@ export default function ProfilePage() {
   const showIframe = frameLoaded && profileResolved && contentReady;
 
   return (
-    <div className="-mx-5 -my-4 bg-[#070707]">
+    <div className="-mx-5 -my-4 bg-[#070707] pb-8">
       <div className="overflow-x-auto">
         <div className="flex justify-center" style={{ minWidth: PROFILE_CANVAS_WIDTH }}>
           <iframe
