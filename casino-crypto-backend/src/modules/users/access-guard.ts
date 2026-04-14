@@ -142,6 +142,21 @@ const queryFlagsRawCurrentNoFlags = async (userId: string) =>
   >`
     SELECT
       role,
+      COALESCE("selfExcludedUntil", "selfExcludeUntil") AS "selfExcludeUntil"
+    FROM "users"
+    WHERE id = ${userId}
+    LIMIT 1
+  `;
+
+const queryFlagsRawCurrentOnly = async (userId: string) =>
+  prisma.$queryRaw<
+    Array<{
+      role: unknown;
+      selfExcludeUntil: unknown;
+    }>
+  >`
+    SELECT
+      role,
       "selfExcludedUntil" AS "selfExcludeUntil"
     FROM "users"
     WHERE id = ${userId}
@@ -244,7 +259,7 @@ export const getSelfExclusionState = async (userId: string): Promise<{
         throw legacyError;
       }
       try {
-        const rows = await queryFlagsLegacyOld(userId);
+        const rows = await queryFlagsRawCurrentOnly(userId);
         const row = rows[0];
         if (!row) {
           throw new AppError("User not found", 404, "USER_NOT_FOUND");
@@ -269,23 +284,54 @@ export const getSelfExclusionState = async (userId: string): Promise<{
           noTip: flags.noTip,
           role: flags.role
         };
-      } catch (legacyOldError) {
-        if (!isMissingSelfExclusionColumnError(legacyOldError)) {
-          throw legacyOldError;
+      } catch (currentOnlyError) {
+        if (!isMissingSelfExclusionColumnError(currentOnlyError)) {
+          throw currentOnlyError;
         }
-        const rows = await queryFlagsRoleOnly(userId);
-        const row = rows[0];
-        if (!row) {
-          throw new AppError("User not found", 404, "USER_NOT_FOUND");
+        try {
+          const rows = await queryFlagsLegacyOld(userId);
+          const row = rows[0];
+          if (!row) {
+            throw new AppError("User not found", 404, "USER_NOT_FOUND");
+          }
+          const flags = resolveFlags(row);
+          if (!flags.isActive && flags.selfExcludeUntil) {
+            await clearExpiredSelfExclusion(userId);
+            return {
+              active: false,
+              until: null,
+              noWager: true,
+              noWithdraw: true,
+              noTip: true,
+              role: flags.role
+            };
+          }
+          return {
+            active: flags.isActive,
+            until: flags.selfExcludeUntil,
+            noWager: flags.noWager,
+            noWithdraw: flags.noWithdraw,
+            noTip: flags.noTip,
+            role: flags.role
+          };
+        } catch (legacyOldError) {
+          if (!isMissingSelfExclusionColumnError(legacyOldError)) {
+            throw legacyOldError;
+          }
+          const rows = await queryFlagsRoleOnly(userId);
+          const row = rows[0];
+          if (!row) {
+            throw new AppError("User not found", 404, "USER_NOT_FOUND");
+          }
+          return {
+            active: false,
+            until: null,
+            noWager: true,
+            noWithdraw: true,
+            noTip: true,
+            role: parseUserRole(row.role)
+          };
         }
-        return {
-          active: false,
-          until: null,
-          noWager: true,
-          noWithdraw: true,
-          noTip: true,
-          role: parseUserRole(row.role)
-        };
       }
     }
   }
