@@ -1248,6 +1248,11 @@ export default function ProfilePage() {
     // Remove embedded footer from iframe so page uses shared app footer only.
     const embeddedFooter = doc.getElementById("n20731273");
     embeddedFooter?.remove();
+    const frameRoot = doc.getElementById("n20731272");
+    if (frameRoot) {
+      frameRoot.style.minHeight = "0";
+      frameRoot.style.height = "auto";
+    }
 
     // Hold the imported frame hidden until data hydration is resolved.
     if (!profileResolved) return;
@@ -1592,7 +1597,6 @@ export default function ProfilePage() {
             style={{
               width: PROFILE_CANVAS_WIDTH,
               minWidth: PROFILE_CANVAS_WIDTH,
-              minHeight: 1889,
               border: 0,
               display: "block",
               background: "#070707",
