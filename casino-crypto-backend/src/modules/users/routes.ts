@@ -11,6 +11,7 @@ import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
 import { verifyTwoFactorCode } from "../security-2fa/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
+import { getSelfExclusionState } from "./access-guard";
 
 const COIN_DECIMALS = 100000000n;
 const toCoinsString = (atomic: bigint, decimals = 2): string => {
@@ -85,6 +86,46 @@ const changePasswordSchema = z
     message: "New password must be different from current password"
   });
 
+const updateTradeUrlSchema = z.object({
+  tradeUrl: z
+    .string()
+    .trim()
+    .max(1024)
+    .refine((value) => value.length > 0, "Steam trade URL is required")
+    .refine((value) => {
+      try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== "https:") return false;
+        if (!/steamcommunity\.com$/i.test(parsed.hostname)) return false;
+        if (!/\/tradeoffer\/new\/?/i.test(parsed.pathname)) return false;
+        const partner = parsed.searchParams.get("partner")?.trim() ?? "";
+        const token = parsed.searchParams.get("token")?.trim() ?? "";
+        return /^\d+$/.test(partner) && token.length >= 5;
+      } catch {
+        return false;
+      }
+    }, "Please enter a valid Steam trade URL")
+});
+
+const setSelfExclusionSchema = z.object({
+  durationDays: z.union([z.literal(1), z.literal(3), z.literal(7), z.literal(14), z.literal(30)]),
+  confirmationText: z.string().trim().min(6).max(300),
+  noWager: z.boolean().default(true),
+  noWithdraw: z.boolean().default(true),
+  noTip: z.boolean().default(true)
+});
+
+const updateUsernameSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters")
+    .max(20, "Username must be at most 20 characters")
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Username can only contain letters, numbers, dots, hyphens and underscores")
+});
+
+const USERNAME_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
@@ -110,6 +151,38 @@ const isMissingAvatarColumnsError = (error: unknown): boolean => {
   const message = error.message.toLowerCase();
   return message.includes("avatarurl") || message.includes("provideravatarurl");
 };
+
+const isMissingTradeUrlColumnError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return message.includes("steamtradeurl");
+};
+
+const isMissingUsernameColumnError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("username");
+};
+
+const isMissingSelfExclusionColumnError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("selfexcludeduntil") ||
+    message.includes("selfexcludeuntil") ||
+    message.includes("selfexclusionnote") ||
+    message.includes("selfexclusionreason")
+  );
+};
+
+const normalizeUsername = (value: string): string => value.trim();
+
+const normalizeSteamTradeUrl = (value: string): string => value.trim();
 
 const toPublicIdSafe = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) {
@@ -270,6 +343,60 @@ const ensureUserAvatarColumnsBestEffort = async (): Promise<void> => {
   }
 };
 
+const ensureProfileControlColumnsBestEffort = async (): Promise<void> => {
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "steamTradeUrl" TEXT');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "usernameChangedAt" TIMESTAMP(3)');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "usernameUpdatedAt" TIMESTAMP(3)');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExcludeUntil" TIMESTAMP(3)');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExcludedUntil" TIMESTAMP(3)');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExclusionReason" TEXT');
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExclusionNoWager" BOOLEAN NOT NULL DEFAULT true'
+    );
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExclusionNoWithdraw" BOOLEAN NOT NULL DEFAULT true'
+    );
+  } catch {
+    // ignored
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "selfExclusionNoTip" BOOLEAN NOT NULL DEFAULT true'
+    );
+  } catch {
+    // ignored
+  }
+};
+
 const getUserAvatarSourcesBestEffort = async (
   userId: string
 ): Promise<{ avatarUrl: string | null; providerAvatarUrl: string | null }> => {
@@ -329,6 +456,57 @@ const updateUserAvatarBestEffort = async (
     throw error;
   }
 };
+
+const getTradeUrlBestEffort = async (userId: string): Promise<string | null> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ steamTradeUrl: unknown }>>`
+      SELECT "steamTradeUrl"
+      FROM "users"
+      WHERE id = ${userId}
+      LIMIT 1
+    `;
+    return toOptionalString(rows[0]?.steamTradeUrl ?? null);
+  } catch (error) {
+    if (isMissingTradeUrlColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+};
+
+const updateTradeUrlBestEffort = async (
+  userId: string,
+  tradeUrl: string
+): Promise<{ steamTradeUrl: string | null; updatedAt: Date }> => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ steamTradeUrl: unknown; updatedAt: Date }>>`
+      UPDATE "users"
+      SET "steamTradeUrl" = ${tradeUrl},
+          "updatedAt" = NOW()
+      WHERE id = ${userId}
+      RETURNING "steamTradeUrl", "updatedAt"
+    `;
+    const row = rows[0];
+    if (!row) {
+      throw new Error("USER_NOT_FOUND");
+    }
+    return {
+      steamTradeUrl: toOptionalString(row.steamTradeUrl ?? null),
+      updatedAt: row.updatedAt
+    };
+  } catch (error) {
+    if (isMissingTradeUrlColumnError(error)) {
+      return {
+        steamTradeUrl: tradeUrl,
+        updatedAt: new Date()
+      };
+    }
+    throw error;
+  }
+};
+
+const tradeUrlSchema = updateTradeUrlSchema;
+const selfExclusionCreateSchema = setSelfExclusionSchema;
 
 type PublicChatProfileSummary = {
   user: {
@@ -854,6 +1032,71 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({
       profileVisible: updated.profileVisible,
       updatedAt: updated.updatedAt
+    });
+  });
+
+  fastify.get("/me/security-settings", { preHandler: requireAuth }, async (request, reply) => {
+    const [tradeUrl, selfExclusion] = await Promise.all([
+      getTradeUrlBestEffort(request.user.sub),
+      getSelfExclusionState(request.user.sub)
+    ]);
+    return reply.send({
+      steamTradeUrl: tradeUrl,
+      selfExclusion: {
+        active: selfExclusion.active,
+        until: selfExclusion.until ? selfExclusion.until.toISOString() : null,
+        noWager: selfExclusion.noWager,
+        noWithdraw: selfExclusion.noWithdraw,
+        noTip: selfExclusion.noTip
+      }
+    });
+  });
+
+  fastify.put("/me/trade-url", { preHandler: requireAuth }, async (request, reply) => {
+    const body = updateTradeUrlSchema.parse(request.body);
+    const normalized = normalizeSteamTradeUrl(body.tradeUrl);
+    const updated = await updateTradeUrlBestEffort(request.user.sub, normalized);
+    return reply.send({
+      steamTradeUrl: updated.steamTradeUrl,
+      updatedAt: updated.updatedAt.toISOString()
+    });
+  });
+
+  fastify.post("/me/self-exclusion", { preHandler: requireAuth }, async (request, reply) => {
+    const body = selfExclusionCreateSchema.parse(request.body);
+    const confirmation = body.confirmationText.trim().toLowerCase();
+    if (confirmation !== "confirm") {
+      throw new AppError("You must type CONFIRM to continue", 400, "SELF_EXCLUSION_CONFIRMATION_INVALID");
+    }
+
+    const now = new Date();
+    const until = new Date(now.getTime() + body.durationDays * 24 * 60 * 60 * 1000);
+    const reason = `Self-excluded for ${body.durationDays} day(s)`;
+
+    try {
+      await prisma.$executeRaw`
+        UPDATE "users"
+        SET "selfExcludeUntil" = ${until},
+            "selfExclusionReason" = ${reason},
+            "selfExclusionNoWager" = true,
+            "selfExclusionNoWithdraw" = true,
+            "selfExclusionNoTip" = true,
+            "updatedAt" = NOW()
+        WHERE id = ${request.user.sub}
+      `;
+    } catch (error) {
+      if (!isMissingSelfExclusionColumnError(error)) {
+        throw error;
+      }
+      throw new AppError("Self-exclusion is not available yet in this environment", 503, "SELF_EXCLUSION_UNAVAILABLE");
+    }
+
+    return reply.send({
+      active: true,
+      until: until.toISOString(),
+      noWager: true,
+      noWithdraw: true,
+      noTip: true
     });
   });
 
@@ -1386,26 +1629,132 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  const updateUsernameSchema = z.object({
-    username: z
-      .string()
-      .trim()
-      .min(3, "Username must be at least 3 characters")
-      .max(20, "Username must be at most 20 characters")
-      .regex(/^[a-zA-Z0-9_.-]+$/, "Username can only contain letters, numbers, dots, hyphens and underscores")
+  fastify.put("/me/trade-url", { preHandler: requireAuth }, async (request, reply) => {
+    const body = tradeUrlSchema.parse(request.body);
+    await ensureProfileControlColumnsBestEffort();
+    const normalized = normalizeSteamTradeUrl(body.tradeUrl ?? "");
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET "steamTradeUrl" = ${normalized || null},
+          "updatedAt" = NOW()
+      WHERE id = ${request.user.sub}
+    `;
+    return reply.send({
+      tradeUrl: normalized || null
+    });
+  });
+
+  fastify.get("/me/security-settings", { preHandler: requireAuth }, async (request, reply) => {
+    await ensureProfileControlColumnsBestEffort();
+    const row = await prisma.$queryRaw<
+      Array<{
+        username: string | null;
+        tradeUrl: string | null;
+        usernameChangedAt: Date | null;
+        selfExcludeUntil: Date | null;
+      }>
+    >`
+      SELECT
+        username,
+        "steamTradeUrl" AS "tradeUrl",
+        "usernameUpdatedAt" AS "usernameChangedAt",
+        "selfExcludedUntil" AS "selfExcludeUntil"
+      FROM "users"
+      WHERE id = ${request.user.sub}
+      LIMIT 1
+    `;
+    const current = row[0] ?? null;
+    if (!current) {
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    }
+    const now = Date.now();
+    const changedAt = current.usernameChangedAt?.getTime() ?? 0;
+    const nextChangeAt = changedAt ? new Date(changedAt + USERNAME_CHANGE_COOLDOWN_MS) : null;
+    const canChangeUsername = !nextChangeAt || nextChangeAt.getTime() <= now;
+    return reply.send({
+      username: current.username ?? null,
+      tradeUrl: current.tradeUrl ?? null,
+      usernameChangedAt: current.usernameChangedAt ? current.usernameChangedAt.toISOString() : null,
+      usernameNextChangeAt: nextChangeAt ? nextChangeAt.toISOString() : null,
+      canChangeUsername,
+      selfExcludeUntil: current.selfExcludeUntil ? current.selfExcludeUntil.toISOString() : null
+    });
   });
 
   fastify.put("/me/username", { preHandler: requireAuth }, async (request, reply) => {
     const body = updateUsernameSchema.parse(request.body);
-    const existing = await prisma.user.findUnique({ where: { username: body.username } });
-    if (existing && existing.id !== request.user.sub) {
-      return reply.code(409).send({ code: "USERNAME_TAKEN", message: "This username is already taken" });
+    await ensureProfileControlColumnsBestEffort();
+    const normalized = normalizeUsername(body.username);
+    try {
+      const existing = await prisma.user.findUnique({ where: { username: normalized } });
+      if (existing && existing.id !== request.user.sub) {
+        return reply.code(409).send({ code: "USERNAME_TAKEN", message: "This username is already taken" });
+      }
+    } catch (error) {
+      if (!isMissingUsernameColumnError(error)) {
+        throw error;
+      }
+    }
+    const rows = await prisma.$queryRaw<Array<{ usernameChangedAt: Date | null; username: string | null }>>`
+      SELECT "usernameUpdatedAt" AS "usernameChangedAt", username
+      FROM "users"
+      WHERE id = ${request.user.sub}
+      LIMIT 1
+    `;
+    const current = rows[0] ?? null;
+    if (!current) {
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    }
+    const now = new Date();
+    const sameUsername = normalizeUsername(current.username ?? "") === normalized;
+    const changedAt = current.usernameChangedAt?.getTime() ?? 0;
+    const nextChangeAtMs = changedAt > 0 ? changedAt + USERNAME_CHANGE_COOLDOWN_MS : 0;
+    if (!sameUsername && nextChangeAtMs > now.getTime()) {
+      return reply.code(429).send({
+        code: "USERNAME_COOLDOWN_ACTIVE",
+        message: "You can only change your username once every 24 hours.",
+        nextChangeAt: new Date(nextChangeAtMs).toISOString()
+      });
     }
     const updated = await prisma.user.update({
       where: { id: request.user.sub },
-      data: { username: body.username },
-      select: { id: true, username: true }
+      data: {
+        username: normalized,
+        ...(sameUsername ? {} : { usernameUpdatedAt: now })
+      },
+      select: { id: true, username: true, usernameUpdatedAt: true }
     });
-    return reply.send(updated);
+    return reply.send({
+      id: updated.id,
+      username: updated.username,
+      usernameChangedAt: updated.usernameUpdatedAt ? updated.usernameUpdatedAt.toISOString() : null,
+      nextChangeAt: updated.usernameUpdatedAt
+        ? new Date(updated.usernameUpdatedAt.getTime() + USERNAME_CHANGE_COOLDOWN_MS).toISOString()
+        : null
+    });
+  });
+
+  fastify.post("/me/self-exclusion", { preHandler: requireAuth }, async (request, reply) => {
+    const body = setSelfExclusionSchema.parse(request.body);
+    await ensureProfileControlColumnsBestEffort();
+    const now = new Date();
+    const until = new Date(now.getTime() + body.durationDays * 24 * 60 * 60 * 1000);
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET "selfExcludedUntil" = ${until},
+          "selfExclusionReason" = ${body.confirmationText},
+          "selfExclusionNoWager" = ${body.noWager},
+          "selfExclusionNoWithdraw" = ${body.noWithdraw},
+          "selfExclusionNoTip" = ${body.noTip},
+          "updatedAt" = NOW()
+      WHERE id = ${request.user.sub}
+    `;
+    return reply.send({
+      success: true,
+      until: until.toISOString(),
+      noWager: body.noWager,
+      noWithdraw: body.noWithdraw,
+      noTip: body.noTip
+    });
   });
 };
