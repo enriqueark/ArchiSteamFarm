@@ -44,7 +44,8 @@ const updateUserStatusSchema = z.object({
   status: z.nativeEnum(UserStatus),
   role: z.nativeEnum(UserRole).optional(),
   canWithdraw: z.boolean().optional(),
-  canTip: z.boolean().optional()
+  canTip: z.boolean().optional(),
+  clearSelfExclusion: z.boolean().optional()
 });
 
 const adjustByAdminSchema = z
@@ -1025,6 +1026,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
+              <div class="mono">selfExcludeUntil=\${user.selfExcludeUntil ? new Date(user.selfExcludeUntil).toISOString() : "-"}</div>
               <div class="mono">level=\${user.level} xp=\${user.levelXp || user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
               \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
@@ -1042,6 +1044,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 <button class="suspend danger">Suspend</button>
                 <button class="withdraw-toggle warn">\${user.canWithdraw === false ? "Enable withdraw" : "Disable withdraw"}</button>
                 <button class="tip-toggle warn">\${user.canTip === false ? "Enable tip" : "Disable tip"}</button>
+                <button class="self-exclusion-toggle warn">\${user.selfExcludeUntil ? "Clear self-exclusion" : "No self-exclusion"}</button>
                 <button class="details">View details</button>
               </div>
               <div class="mono msg"></div>
@@ -1095,6 +1098,14 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           tr.querySelector(".tip-toggle").addEventListener("click", () =>
             void setUserAccess(user.id, user.status, user.role, msgEl, { canTip: user.canTip === false })
           );
+          tr.querySelector(".self-exclusion-toggle").addEventListener("click", () => {
+            if (!user.selfExcludeUntil) {
+              msgEl.className = "mono err";
+              msgEl.textContent = "User has no active self-exclusion.";
+              return;
+            }
+            void setUserAccess(user.id, user.status, user.role, msgEl, { clearSelfExclusion: true });
+          });
           tr.querySelector(".details").addEventListener("click", () => void openUserDetails(user.id, user.email));
           usersTbody.appendChild(tr);
         }
@@ -1332,11 +1343,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           publicId: true,
+          username: true,
           email: true,
           role: true,
           status: true,
           canWithdraw: true,
           canTip: true,
+          selfExcludedUntil: true,
           createdAt: true,
           updatedAt: true,
           levelXpAtomic: true,
@@ -1366,11 +1379,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           take,
           select: {
             id: true,
+            username: true,
             email: true,
             role: true,
             status: true,
             canWithdraw: true,
             canTip: true,
+            selfExcludedUntil: true,
             createdAt: true,
             updatedAt: true,
             wallets: {
@@ -1391,7 +1406,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return legacyRows.map((row) => ({
           ...row,
           publicId: null,
-          levelXpAtomic: 0n
+          levelXpAtomic: 0n,
+          selfExcludeUntil: null
         }));
       });
 
@@ -1401,16 +1417,19 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         users: rows.map((user) => ({
           id: user.id,
           publicId: user.publicId ?? null,
+          username: user.username ?? null,
           email: user.email,
           role: user.role,
           status: user.status,
           canWithdraw: "canWithdraw" in user ? user.canWithdraw : true,
           canTip: "canTip" in user ? user.canTip : true,
+          selfExcludeUntil:
+            "selfExcludedUntil" in user && user.selfExcludedUntil ? user.selfExcludedUntil : null,
           level: getLevelFromXp(user.levelXpAtomic),
           levelXpAtomic: user.levelXpAtomic.toString(),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
-          wallets: user.wallets.map((wallet) => ({
+          wallets: ("wallets" in user ? user.wallets : []).map((wallet) => ({
             id: wallet.id,
             currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
             balanceAtomic: wallet.balanceAtomic.toString(),
@@ -1418,7 +1437,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             lockedAtomic: wallet.lockedAtomic.toString(),
             lockedCoins: toCoinsString(wallet.lockedAtomic),
             availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
-            availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic),
+            availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic as bigint),
             updatedAt: wallet.updatedAt
           }))
         }))
@@ -1441,7 +1460,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           status: body.status,
           ...(body.role ? { role: body.role } : {}),
           ...(typeof body.canWithdraw === "boolean" ? { canWithdraw: body.canWithdraw } : {}),
-          ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {})
+          ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {}),
+          ...(body.clearSelfExclusion
+            ? {
+                selfExcludedUntil: null,
+                selfExclusionReason: null,
+                selfExclusionNoWager: true,
+                selfExclusionNoWithdraw: true,
+                selfExclusionNoTip: true
+              }
+            : {})
         },
         select: {
           id: true,
@@ -1483,9 +1511,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           publicId: true,
+          username: true,
           email: true,
           role: true,
           status: true,
+          selfExcludedUntil: true,
           createdAt: true,
           updatedAt: true,
           levelXpAtomic: true,
@@ -1509,9 +1539,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           where: { id: params.userId },
           select: {
             id: true,
+            username: true,
             email: true,
             role: true,
             status: true,
+            selfExcludedUntil: true,
             createdAt: true,
             updatedAt: true,
             wallets: {
@@ -1533,7 +1565,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           ...legacy,
           publicId: null,
-          levelXpAtomic: 0n
+          levelXpAtomic: 0n,
+          selfExcludedUntil: null
         };
       });
 
@@ -1763,15 +1796,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         user: {
           id: userRow.id,
           publicId: userRow.publicId ?? null,
+          username: "username" in userRow ? userRow.username ?? null : null,
           email: userRow.email,
           role: userRow.role,
           status: userRow.status,
+          selfExcludeUntil:
+            "selfExcludedUntil" in userRow && userRow.selfExcludedUntil ? userRow.selfExcludedUntil : null,
           level: getLevelFromXp(userRow.levelXpAtomic),
           levelXpAtomic: userRow.levelXpAtomic.toString(),
           createdAt: userRow.createdAt,
           updatedAt: userRow.updatedAt
         },
-        wallets: userRow.wallets.map((wallet) => ({
+        wallets: ("wallets" in userRow ? userRow.wallets : []).map((wallet) => ({
           id: wallet.id,
           currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
           balanceAtomic: wallet.balanceAtomic.toString(),
@@ -1779,7 +1815,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           lockedAtomic: wallet.lockedAtomic.toString(),
           lockedCoins: toCoinsString(wallet.lockedAtomic),
           availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
-          availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic),
+          availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic as bigint),
           updatedAt: wallet.updatedAt
         })),
         summary: {

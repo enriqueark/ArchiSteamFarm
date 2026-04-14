@@ -57,6 +57,7 @@ type RouletteBetWithRelations = RouletteBet & {
   user: {
     id: string;
     email: string;
+    username: string | null;
   };
 };
 
@@ -321,10 +322,18 @@ const getEmptyBetBreakdownEntriesByType = (): BetBreakdownEntriesByType => ({
 const formatUserLabel = (email: string, userId: string): string => {
   const local = email.split("@")[0]?.trim();
   if (local && local.length > 0) {
-    return `Usuario ${local.slice(0, 18)}`;
+    return local.slice(0, 24);
   }
 
-  return `Usuario ${userId.slice(0, 8)}`;
+  return `user_${userId.slice(0, 8)}`;
+};
+
+const formatUserLabelWithUsername = (username: string | null | undefined, email: string, userId: string): string => {
+  const normalized = typeof username === "string" ? username.trim() : "";
+  if (normalized.length > 0) {
+    return normalized.slice(0, 24);
+  }
+  return formatUserLabel(email, userId);
 };
 
 const createRoundForCurrencyTx = async (
@@ -445,12 +454,13 @@ const loadBetBreakdownByRoundId = async (
         },
         select: {
           id: true,
+          username: true,
           email: true
         }
       })
     : [];
 
-  const userEmailById = new Map(users.map((user) => [user.id, user.email]));
+  const userDataById = new Map(users.map((user) => [user.id, { email: user.email, username: user.username }]));
   const entriesByType = getEmptyBetBreakdownEntriesByType();
   for (const row of groupedByTypeAndUser) {
     const stakeAtomic = row._sum.stakeAtomic ?? 0n;
@@ -458,10 +468,11 @@ const loadBetBreakdownByRoundId = async (
       continue;
     }
 
-    const email = userEmailById.get(row.userId) ?? "";
+    const userData = userDataById.get(row.userId);
+    const email = userData?.email ?? "";
     const entry: BetBreakdownUserEntry = {
       userId: row.userId,
-      userLabel: formatUserLabel(email, row.userId),
+      userLabel: formatUserLabelWithUsername(userData?.username ?? null, email, row.userId),
       stakeAtomic
     };
 
@@ -749,7 +760,8 @@ const settleRoundOnce = async (
             user: {
               select: {
                 id: true,
-                email: true
+                email: true,
+                username: true
               }
             }
           }
@@ -796,7 +808,7 @@ const settleRoundOnce = async (
       } else {
         perUserNet.set(bet.userId, {
           userId: bet.userId,
-          userLabel: formatUserLabel(bet.user.email, bet.user.id),
+          userLabel: formatUserLabelWithUsername(bet.user.username, bet.user.email, bet.user.id),
           netAtomic
         });
       }

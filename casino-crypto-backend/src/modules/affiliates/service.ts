@@ -46,7 +46,11 @@ const normalizeAffiliateCode = (value: string): string =>
 const calculateBps = (baseAtomic: bigint, bps: bigint): bigint =>
   (baseAtomic * bps) / 10_000n;
 
-const formatUserLabel = (email: string, publicId: number | null): string => {
+const formatUserLabel = (email: string, publicId: number | null, username?: string | null): string => {
+  const explicit = typeof username === "string" ? username.trim() : "";
+  if (explicit.length > 0) {
+    return explicit.slice(0, 24);
+  }
   const local = email.split("@")[0]?.trim();
   if (local && local.length > 0) {
     return local.slice(0, 24);
@@ -115,7 +119,7 @@ export const applyAffiliateCode = async (userId: string, rawCode: string) => {
       id: true,
       code: true,
       userId: true,
-      user: { select: { publicId: true, email: true } }
+        user: { select: { publicId: true, email: true, username: true } }
     }
   });
   if (!affiliateCode) {
@@ -175,7 +179,8 @@ export const getAffiliateDashboard = async (userId: string) => {
         referrer: {
           select: {
             publicId: true,
-            email: true
+            email: true,
+            username: true
           }
         }
       }
@@ -196,6 +201,7 @@ export const getAffiliateDashboard = async (userId: string) => {
             id: true,
             publicId: true,
             email: true,
+            username: true,
             createdAt: true
           }
         }
@@ -237,7 +243,8 @@ export const getAffiliateDashboard = async (userId: string) => {
             publicId: referralApplied.referrer.publicId,
             userLabel: formatUserLabel(
               referralApplied.referrer.email,
-              referralApplied.referrer.publicId
+              referralApplied.referrer.publicId,
+              referralApplied.referrer.username ?? null
             )
           }
         }
@@ -260,7 +267,7 @@ export const getAffiliateDashboard = async (userId: string) => {
       user: {
         id: row.referred.id,
         publicId: row.referred.publicId,
-        userLabel: formatUserLabel(row.referred.email, row.referred.publicId),
+        userLabel: formatUserLabel(row.referred.email, row.referred.publicId, row.referred.username ?? null),
         createdAt: row.referred.createdAt
       },
       totalWageredAtomic: row.totalWageredAtomic.toString(),
