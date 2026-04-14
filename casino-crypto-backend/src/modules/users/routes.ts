@@ -1563,7 +1563,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     await ensureProfileControlColumnsBestEffort();
     const normalized = normalizeUsername(body.username);
     try {
-      const existing = await prisma.user.findUnique({ where: { username: normalized } });
+      const existing = await prisma.user.findUnique({
+        where: { username: normalized },
+        select: { id: true }
+      });
       if (existing && existing.id !== request.user.sub) {
         return reply.code(409).send({ code: "USERNAME_TAKEN", message: "This username is already taken" });
       }
