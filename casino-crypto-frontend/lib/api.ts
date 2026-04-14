@@ -882,6 +882,15 @@ export interface User {
     xp?: string;
     currency?: string;
   };
+  steamTradeUrl?: string | null;
+  usernameChangedAt?: string | null;
+  selfExclusion?: {
+    active: boolean;
+    until: string | null;
+    noWager: boolean;
+    noWithdraw: boolean;
+    noTip: boolean;
+  };
 }
 
 export async function getMe(): Promise<User> {
@@ -924,8 +933,108 @@ export async function getTwoFactorState(): Promise<TwoFactorState> {
   return request<TwoFactorState>("/security/2fa");
 }
 
-export async function updateUsername(username: string): Promise<{ id: string; username: string }> {
-  return request<{ id: string; username: string }>("/users/me/username", { method: "PUT", body: JSON.stringify({ username }) });
+export interface SecuritySettingsResponse {
+  username: string | null;
+  tradeUrl: string | null;
+  usernameChangedAt: string | null;
+  usernameNextChangeAt: string | null;
+  canChangeUsername: boolean;
+  selfExcludeUntil: string | null;
+  selfExclusionActive: boolean;
+}
+
+export async function getSecuritySettings(): Promise<SecuritySettingsResponse> {
+  const raw = await request<{
+    username?: string | null;
+    tradeUrl?: string | null;
+    steamTradeUrl?: string | null;
+    usernameChangedAt?: string | null;
+    usernameNextChangeAt?: string | null;
+    canChangeUsername?: boolean;
+    selfExcludeUntil?: string | null;
+    selfExclusion?: {
+      active?: boolean;
+      until?: string | null;
+    } | null;
+  }>("/users/me/security-settings");
+
+  const tradeUrl = raw.tradeUrl ?? raw.steamTradeUrl ?? null;
+  const selfExcludeUntil = raw.selfExcludeUntil ?? raw.selfExclusion?.until ?? null;
+  const now = Date.now();
+  const exclusionUntilMs = selfExcludeUntil ? Date.parse(selfExcludeUntil) : Number.NaN;
+  const selfExclusionActive =
+    typeof raw.selfExclusion?.active === "boolean"
+      ? raw.selfExclusion.active
+      : Number.isFinite(exclusionUntilMs) && exclusionUntilMs > now;
+
+  return {
+    username: raw.username ?? null,
+    tradeUrl,
+    usernameChangedAt: raw.usernameChangedAt ?? null,
+    usernameNextChangeAt: raw.usernameNextChangeAt ?? null,
+    canChangeUsername: typeof raw.canChangeUsername === "boolean" ? raw.canChangeUsername : true,
+    selfExcludeUntil,
+    selfExclusionActive
+  };
+}
+
+export interface SetTradeUrlResponse {
+  tradeUrl: string | null;
+  updatedAt: string | null;
+}
+
+export async function setTradeUrl(tradeUrl: string): Promise<SetTradeUrlResponse> {
+  const raw = await request<{
+    tradeUrl?: string | null;
+    steamTradeUrl?: string | null;
+    updatedAt?: string;
+  }>("/users/me/trade-url", {
+    method: "PUT",
+    body: JSON.stringify({ tradeUrl })
+  });
+
+  return {
+    tradeUrl: raw.tradeUrl ?? raw.steamTradeUrl ?? null,
+    updatedAt: raw.updatedAt ?? null
+  };
+}
+
+export interface UpdateUsernameResponse {
+  id: string;
+  username: string;
+  usernameChangedAt?: string | null;
+  nextChangeAt?: string | null;
+}
+
+export async function updateUsername(username: string): Promise<UpdateUsernameResponse> {
+  return request<UpdateUsernameResponse>("/users/me/username", {
+    method: "PUT",
+    body: JSON.stringify({ username })
+  });
+}
+
+export interface SetSelfExclusionInput {
+  durationDays: 1 | 3 | 7 | 14 | 30;
+  confirmationText: string;
+}
+
+export interface SetSelfExclusionResponse {
+  until: string;
+  noWager: boolean;
+  noWithdraw: boolean;
+  noTip: boolean;
+  success?: boolean;
+  active?: boolean;
+}
+
+export async function setSelfExclusion(input: SetSelfExclusionInput): Promise<SetSelfExclusionResponse> {
+  return request<SetSelfExclusionResponse>("/users/me/self-exclusion", {
+    method: "POST",
+    body: JSON.stringify({
+      durationDays: input.durationDays,
+      confirmationText: input.confirmationText
+    })
+  });
 }
 
 export type AvatarSource = "CUSTOM" | "PROVIDER" | "INITIAL";

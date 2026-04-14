@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
 import {
   changeMyPassword,
   getChatProfileByPublicId,
@@ -7,10 +6,14 @@ import {
   getMyGameHistory,
   getMe,
   getProfileSummary,
+  getSecuritySettings,
   getTwoFactorState,
-  type ProfileSummary,
+  setSelfExclusion,
+  setTradeUrl,
   setMyProfileVisibility,
+  updateUsername,
   type ChatPublicProfileSummary,
+  type SecuritySettingsResponse,
   type User
 } from "@/lib/api";
 import { useToast } from "@/lib/toast";
@@ -28,6 +31,11 @@ type HydratedProfile = {
   xpCurrent: number;
   xpTarget: number;
   xpRatio: number;
+  steamTradeUrl: string | null;
+  usernameNextChangeAt: string | null;
+  canChangeUsername: boolean;
+  selfExcludeUntil: string | null;
+  selfExclusionActive: boolean;
   stats: {
     totalPlayed: string;
     battles: string;
@@ -48,6 +56,29 @@ type PasswordModalState = {
   error: string | null;
 };
 
+type TradeUrlModalState = {
+  open: boolean;
+  tradeUrl: string;
+  loading: boolean;
+  error: string | null;
+};
+
+type UsernameModalState = {
+  open: boolean;
+  username: string;
+  nextChangeAt: string | null;
+  loading: boolean;
+  error: string | null;
+};
+
+type SelfExclusionModalState = {
+  open: boolean;
+  durationDays: 1 | 3 | 7 | 14 | 30;
+  confirmationText: string;
+  loading: boolean;
+  error: string | null;
+};
+
 const PROFILE_CANVAS_WIDTH = 1286;
 const PROFILE_FETCH_RETRIES = 3;
 const PROFILE_FETCH_RETRY_DELAY_MS = 350;
@@ -62,6 +93,11 @@ const FALLBACK_PROFILE: HydratedProfile = {
   xpCurrent: 0,
   xpTarget: 1000,
   xpRatio: 0,
+  steamTradeUrl: null,
+  usernameNextChangeAt: null,
+  canChangeUsername: true,
+  selfExcludeUntil: null,
+  selfExclusionActive: false,
   stats: {
     totalPlayed: "0.00",
     battles: "0.00",
@@ -82,6 +118,29 @@ const PASSWORD_MODAL_INITIAL_STATE: PasswordModalState = {
   error: null
 };
 
+const TRADE_URL_MODAL_INITIAL_STATE: TradeUrlModalState = {
+  open: false,
+  tradeUrl: "",
+  loading: false,
+  error: null
+};
+
+const USERNAME_MODAL_INITIAL_STATE: UsernameModalState = {
+  open: false,
+  username: "",
+  nextChangeAt: null,
+  loading: false,
+  error: null
+};
+
+const SELF_EXCLUSION_MODAL_INITIAL_STATE: SelfExclusionModalState = {
+  open: false,
+  durationDays: 1,
+  confirmationText: "",
+  loading: false,
+  error: null
+};
+
 const LEVEL_BADGE_TIERS = [
   { max: 19, color: "#53ff87", bg: "linear-gradient(180deg, #53ff8738, #53ff87)" },
   { max: 39, color: "#53a3ff", bg: "linear-gradient(180deg, #53a3ff38, #53a3ff)" },
@@ -89,6 +148,36 @@ const LEVEL_BADGE_TIERS = [
   { max: 79, color: "#c053ff", bg: "linear-gradient(180deg, #c053ff38, #c053ff)" },
   { max: 99, color: "#ff5353", bg: "linear-gradient(180deg, #ff535338, #ff5353)" }
 ] as const;
+
+const USERNAME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const SELF_EXCLUSION_DURATIONS = [1, 3, 7, 14, 30] as const;
+
+function isValidSteamTradeUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    if (!/steamcommunity\.com$/i.test(parsed.hostname)) return false;
+    if (!/\/tradeoffer\/new\/?/i.test(parsed.pathname)) return false;
+    const partner = parsed.searchParams.get("partner")?.trim() ?? "";
+    const token = parsed.searchParams.get("token")?.trim() ?? "";
+    return /^\d+$/.test(partner) && token.length >= 5;
+  } catch {
+    return false;
+  }
+}
+
+function formatDateTime(input: string | null): string {
+  if (!input) return "N/A";
+  const parsed = Date.parse(input);
+  if (!Number.isFinite(parsed)) return "N/A";
+  return new Date(parsed).toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 
 function getLevelBadgeTier(level: number) {
   return LEVEL_BADGE_TIERS.find((tier) => level <= tier.max) ?? LEVEL_BADGE_TIERS[LEVEL_BADGE_TIERS.length - 1];
@@ -610,6 +699,17 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
     xpRatio = 1;
   }
   const avatarUrl = user.avatarUrl ?? user.customAvatarUrl ?? user.providerAvatarUrl ?? null;
+  const usernameChangedAtMs = user.usernameChangedAt ? Date.parse(user.usernameChangedAt) : Number.NaN;
+  const usernameNextChangeAt =
+    Number.isFinite(usernameChangedAtMs)
+      ? new Date(usernameChangedAtMs + USERNAME_COOLDOWN_MS).toISOString()
+      : null;
+  const selfExcludeUntil = user.selfExclusion?.until ?? null;
+  const selfExclusionUntilMs = selfExcludeUntil ? Date.parse(selfExcludeUntil) : Number.NaN;
+  const selfExclusionActive =
+    typeof user.selfExclusion?.active === "boolean"
+      ? user.selfExclusion.active
+      : Number.isFinite(selfExclusionUntilMs) && selfExclusionUntilMs > Date.now();
 
   return {
     avatarUrl,
@@ -622,6 +722,12 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
     xpCurrent,
     xpTarget,
     xpRatio,
+    steamTradeUrl: user.steamTradeUrl ?? null,
+    usernameNextChangeAt,
+    canChangeUsername:
+      !usernameNextChangeAt || Date.parse(usernameNextChangeAt) <= Date.now(),
+    selfExcludeUntil,
+    selfExclusionActive,
     stats: {
       totalPlayed: toCoinsDisplay(summary?.stats.wageredTotalCoins),
       battles: toCoinsDisplay(summary?.stats.wageredByMode.caseBattlesCoins),
@@ -634,7 +740,6 @@ function mapProfileData(user: User, summary: ChatPublicProfileSummary | null): H
 }
 
 export default function ProfilePage() {
-  const router = useRouter();
   const toast = useToast();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [profile, setProfile] = useState<HydratedProfile | null>(null);
@@ -643,6 +748,12 @@ export default function ProfilePage() {
   const [contentReady, setContentReady] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
   const [passwordModal, setPasswordModal] = useState<PasswordModalState>(PASSWORD_MODAL_INITIAL_STATE);
+  const [tradeUrlModal, setTradeUrlModal] = useState<TradeUrlModalState>(TRADE_URL_MODAL_INITIAL_STATE);
+  const [usernameModal, setUsernameModal] = useState<UsernameModalState>(USERNAME_MODAL_INITIAL_STATE);
+  const [selfExclusionModal, setSelfExclusionModal] = useState<SelfExclusionModalState>(
+    SELF_EXCLUSION_MODAL_INITIAL_STATE
+  );
+  const [selfExclusionDuration, setSelfExclusionDuration] = useState<1 | 3 | 7 | 14 | 30>(1);
   const isDraggingVolumeRef = useRef(false);
   const hasHydratedStatsFallbackRef = useRef(false);
   const cacheBustRef = useRef(`${Date.now()}`);
@@ -668,10 +779,24 @@ export default function ProfilePage() {
           }
         })();
         const profileSummaryPromise = getProfileSummary().catch(() => null);
+        const securitySettingsPromise = getSecuritySettings().catch(() => null);
 
-        const [summary, profileSummary] = await Promise.all([summaryPromise, profileSummaryPromise]);
+        const [summary, profileSummary, securitySettings] = await Promise.all([
+          summaryPromise,
+          profileSummaryPromise,
+          securitySettingsPromise
+        ]);
         if (cancelled) return;
         const mapped = mapProfileData(me, summary);
+        if (securitySettings) {
+          const exclusionUntil = securitySettings.selfExcludeUntil ?? mapped.selfExcludeUntil;
+          mapped.steamTradeUrl = securitySettings.tradeUrl ?? mapped.steamTradeUrl;
+          mapped.username = securitySettings.username?.trim() || mapped.username;
+          mapped.usernameNextChangeAt = securitySettings.usernameNextChangeAt;
+          mapped.canChangeUsername = securitySettings.canChangeUsername;
+          mapped.selfExcludeUntil = exclusionUntil;
+          mapped.selfExclusionActive = securitySettings.selfExclusionActive;
+        }
         if (profileSummary) {
           const totalPlayedFromSummary = parseCoins(profileSummary.totals.wageredCoins);
           const minesFromSummary = parseCoins(profileSummary.perGame.mines.wageredCoins);
@@ -864,25 +989,242 @@ export default function ProfilePage() {
     }
   }, [passwordModal, toast]);
 
+  const updateSecuritySettingsOnProfile = useCallback((settings: SecuritySettingsResponse) => {
+    setProfile((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        username: settings.username?.trim() || current.username,
+        steamTradeUrl: settings.tradeUrl ?? current.steamTradeUrl,
+        usernameNextChangeAt: settings.usernameNextChangeAt ?? null,
+        canChangeUsername: settings.canChangeUsername,
+        selfExcludeUntil: settings.selfExcludeUntil,
+        selfExclusionActive: settings.selfExclusionActive
+      };
+    });
+  }, []);
+
+  const closeTradeUrlModal = useCallback(() => {
+    setTradeUrlModal(TRADE_URL_MODAL_INITIAL_STATE);
+  }, []);
+
+  const openTradeUrlModal = useCallback(() => {
+    setTradeUrlModal({
+      open: true,
+      tradeUrl: profile?.steamTradeUrl ?? "",
+      loading: false,
+      error: null
+    });
+  }, [profile?.steamTradeUrl]);
+
+  const submitTradeUrl = useCallback(async () => {
+    if (tradeUrlModal.loading) return;
+    const value = tradeUrlModal.tradeUrl.trim();
+    if (!value) {
+      setTradeUrlModal((current) => ({ ...current, error: "Steam trade URL is required." }));
+      return;
+    }
+    if (!isValidSteamTradeUrl(value)) {
+      setTradeUrlModal((current) => ({ ...current, error: "Please enter a valid Steam trade URL." }));
+      return;
+    }
+
+    setTradeUrlModal((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const response = await setTradeUrl(value);
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              steamTradeUrl: response.tradeUrl
+            }
+          : current
+      );
+      toast.showSuccess("Steam trade URL updated.");
+      setTradeUrlModal(TRADE_URL_MODAL_INITIAL_STATE);
+    } catch (error) {
+      setTradeUrlModal((current) => ({
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : "Could not save Steam trade URL."
+      }));
+    }
+  }, [toast, tradeUrlModal]);
+
+  const closeUsernameModal = useCallback(() => {
+    setUsernameModal(USERNAME_MODAL_INITIAL_STATE);
+  }, []);
+
+  const openUsernameModal = useCallback(() => {
+    setUsernameModal({
+      open: true,
+      username: profile?.username ?? "",
+      nextChangeAt: profile?.usernameNextChangeAt ?? null,
+      loading: false,
+      error: null
+    });
+  }, [profile?.username, profile?.usernameNextChangeAt]);
+
+  const submitUsernameChange = useCallback(async () => {
+    if (usernameModal.loading) return;
+    const nextUsername = usernameModal.username.trim();
+    if (nextUsername.length < 3 || nextUsername.length > 20) {
+      setUsernameModal((current) => ({
+        ...current,
+        error: "Username must be between 3 and 20 characters."
+      }));
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(nextUsername)) {
+      setUsernameModal((current) => ({
+        ...current,
+        error: "Use only letters, numbers, dots, hyphens, and underscores."
+      }));
+      return;
+    }
+
+    const currentUsername = profile?.username?.trim() ?? "";
+    const changingUsername = nextUsername !== currentUsername;
+    if (!profile?.canChangeUsername && changingUsername) {
+      setUsernameModal((current) => ({
+        ...current,
+        error: `You can change your username again at ${formatDateTime(profile?.usernameNextChangeAt ?? null)}.`
+      }));
+      return;
+    }
+
+    setUsernameModal((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const response = await updateUsername(nextUsername);
+      const nextChangeAt = response.nextChangeAt ?? null;
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              username: response.username,
+              usernameNextChangeAt: nextChangeAt,
+              canChangeUsername: !nextChangeAt || Date.parse(nextChangeAt) <= Date.now()
+            }
+          : current
+      );
+      toast.showSuccess("Username updated.");
+      setUsernameModal(USERNAME_MODAL_INITIAL_STATE);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not update username.";
+      try {
+        const security = await getSecuritySettings();
+        updateSecuritySettingsOnProfile(security);
+      } catch {
+        // best effort
+      }
+      setUsernameModal((current) => ({
+        ...current,
+        loading: false,
+        error: message
+      }));
+    }
+  }, [profile, toast, updateSecuritySettingsOnProfile, usernameModal]);
+
+  const closeSelfExclusionModal = useCallback(() => {
+    setSelfExclusionModal(SELF_EXCLUSION_MODAL_INITIAL_STATE);
+  }, []);
+
+  const openSelfExclusionModal = useCallback(() => {
+    setSelfExclusionModal({
+      open: true,
+      durationDays: selfExclusionDuration,
+      confirmationText: "",
+      loading: false,
+      error: null
+    });
+  }, [selfExclusionDuration]);
+
+  const submitSelfExclusion = useCallback(async () => {
+    if (selfExclusionModal.loading) return;
+    if (selfExclusionModal.confirmationText.trim().toUpperCase() !== "CONFIRM") {
+      setSelfExclusionModal((current) => ({
+        ...current,
+        error: 'Type "CONFIRM" exactly to continue.'
+      }));
+      return;
+    }
+
+    setSelfExclusionModal((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const response = await setSelfExclusion({
+        durationDays: selfExclusionModal.durationDays,
+        confirmationText: selfExclusionModal.confirmationText
+      });
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              selfExcludeUntil: response.until,
+              selfExclusionActive: true
+            }
+          : current
+      );
+      setSelfExclusionDuration(selfExclusionModal.durationDays);
+      toast.showSuccess(`Account locked until ${formatDateTime(response.until)}.`);
+      setSelfExclusionModal(SELF_EXCLUSION_MODAL_INITIAL_STATE);
+    } catch (error) {
+      setSelfExclusionModal((current) => ({
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : "Could not lock account."
+      }));
+    }
+  }, [selfExclusionModal, toast]);
+
+  const showAnyModal =
+    passwordModal.open || tradeUrlModal.open || usernameModal.open || selfExclusionModal.open;
+
   useEffect(() => {
-    if (!passwordModal.open) return;
+    if (!showAnyModal) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [passwordModal.open]);
+  }, [showAnyModal]);
 
   useEffect(() => {
-    if (!passwordModal.open) return;
+    if (!showAnyModal) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !passwordModal.loading) {
+      if (event.key !== "Escape") return;
+      if (selfExclusionModal.open && !selfExclusionModal.loading) {
+        closeSelfExclusionModal();
+        return;
+      }
+      if (usernameModal.open && !usernameModal.loading) {
+        closeUsernameModal();
+        return;
+      }
+      if (tradeUrlModal.open && !tradeUrlModal.loading) {
+        closeTradeUrlModal();
+        return;
+      }
+      if (passwordModal.open && !passwordModal.loading) {
         closeChangePasswordModal();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeChangePasswordModal, passwordModal.loading, passwordModal.open]);
+  }, [
+    closeChangePasswordModal,
+    closeSelfExclusionModal,
+    closeTradeUrlModal,
+    closeUsernameModal,
+    passwordModal.loading,
+    passwordModal.open,
+    selfExclusionModal.loading,
+    selfExclusionModal.open,
+    showAnyModal,
+    tradeUrlModal.loading,
+    tradeUrlModal.open,
+    usernameModal.loading,
+    usernameModal.open
+  ]);
 
   const syncFrameContent = useCallback(() => {
     const frame = iframeRef.current;
@@ -940,7 +1282,52 @@ export default function ProfilePage() {
       forceStatValue(doc, "n20731407", hydratedProfile.stats.blackjack);
       forceStatValue(doc, "n20731416", hydratedProfile.stats.mines);
       setContainerParagraphText(doc, "n20731441", hydratedProfile.email);
+      setContainerParagraphText(doc, "n20731423", "SET PASSWORD");
+      setContainerParagraphText(doc, "n20731428", "SET TRADE URL");
+      setContainerParagraphText(doc, "n20731431", "Change username");
+      setContainerParagraphText(
+        doc,
+        "n20731432",
+        hydratedProfile.canChangeUsername
+          ? "Change your username (max 20 characters). You can change it once every 24 hours."
+          : `Username cooldown active. Next change: ${formatDateTime(hydratedProfile.usernameNextChangeAt)}`
+      );
+      setContainerParagraphText(doc, "n20731433", "Change username");
+      setContainerParagraphText(doc, "n20731464", "Self exclusion");
+      setContainerParagraphText(doc, "n20731478", "LOCK ACCOUNT");
       renderPrivacyToggle(doc, hydratedProfile.profileVisible, privacyBusy);
+      setContainerParagraphText(
+        doc,
+        "n20731479",
+        hydratedProfile.selfExclusionActive && hydratedProfile.selfExcludeUntil
+          ? `Self-exclusion active until ${formatDateTime(
+              hydratedProfile.selfExcludeUntil
+            )}. Wagering, withdrawals, and tips are disabled until expiry.`
+          : "If you want to lock your account for longer periods, please contact support."
+      );
+      const durationButtonMap: Array<{ containerId: string; labelId: string; days: 1 | 3 | 7 | 14 | 30 }> = [
+        { containerId: "n20731468", labelId: "n20731469", days: 1 },
+        { containerId: "n20731470", labelId: "n20731471", days: 3 },
+        { containerId: "n20731472", labelId: "n20731473", days: 7 },
+        { containerId: "n20731474", labelId: "n20731475", days: 14 },
+        { containerId: "n20731476", labelId: "n20731477", days: 30 }
+      ];
+      durationButtonMap.forEach(({ containerId, labelId, days }) => {
+        const chip = doc.getElementById(containerId) as HTMLElement | null;
+        const label = doc.getElementById(labelId) as HTMLElement | null;
+        if (!chip) return;
+        const selected = selfExclusionDuration === days;
+        chip.style.border = selected ? "1px solid rgba(247,81,84,0.75)" : "1px solid rgba(49,49,49,0.95)";
+        chip.style.background = selected
+          ? "linear-gradient(180deg, rgba(247,81,84,0.30), rgba(172,46,48,0.35))"
+          : "linear-gradient(180deg, rgba(23,23,23,0.98), rgba(14,14,14,0.98))";
+        chip.style.boxShadow = selected ? "0 0 14px rgba(247,81,84,0.22)" : "none";
+        chip.style.cursor = hydratedProfile.selfExclusionActive ? "default" : "pointer";
+        chip.style.transition = "background 180ms ease, border-color 180ms ease, box-shadow 180ms ease";
+        if (label) {
+          label.style.color = selected ? "#ffd3d4" : "#c8c8c8";
+        }
+      });
 
       const idParagraph = doc.getElementById("n20731349")?.querySelector("p");
       if (idParagraph) {
@@ -1002,6 +1389,32 @@ export default function ProfilePage() {
         holder.style.flexShrink = "0";
         holder.style.minWidth = "88px";
         holder.style.justifyContent = "flex-end";
+      });
+
+      const selfExclusionOptions: Array<{ days: 1 | 3 | 7 | 14 | 30; id: string }> = [
+        { days: 1, id: "n20731468" },
+        { days: 3, id: "n20731470" },
+        { days: 7, id: "n20731472" },
+        { days: 14, id: "n20731474" },
+        { days: 30, id: "n20731476" }
+      ];
+      selfExclusionOptions.forEach(({ days, id }) => {
+        const option = doc.getElementById(id) as HTMLElement | null;
+        if (!option) return;
+        const selected = selfExclusionDuration === days;
+        option.style.cursor = hydratedProfile.selfExclusionActive ? "default" : "pointer";
+        option.style.borderRadius = "10px";
+        option.style.border = selected ? "1px solid #f75154" : "1px solid #2d2d2d";
+        option.style.background = selected
+          ? "linear-gradient(180deg, rgba(247,81,84,0.22) 0%, rgba(172,46,48,0.22) 100%)"
+          : "#151515";
+        option.style.transition = "border-color 160ms ease, background 160ms ease";
+        option.onclick = (event: Event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (hydratedProfile.selfExclusionActive) return;
+          setSelfExclusionDuration(days);
+        };
       });
     }
 
@@ -1074,13 +1487,33 @@ export default function ProfilePage() {
       void openChangePasswordModal();
     });
     bindAction("n20731428", () => {
-      void router.push("/support");
+      openTradeUrlModal();
     });
     bindAction("n20731433", () => {
-      window.open("https://discord.com", "_blank", "noopener,noreferrer");
+      openUsernameModal();
     });
     bindAction("n20731442", () => {
       toast.showError("Email verification is not available yet.");
+    });
+    bindAction("n20731468", () => {
+      if (profile?.selfExclusionActive) return;
+      setSelfExclusionDuration(1);
+    });
+    bindAction("n20731470", () => {
+      if (profile?.selfExclusionActive) return;
+      setSelfExclusionDuration(3);
+    });
+    bindAction("n20731472", () => {
+      if (profile?.selfExclusionActive) return;
+      setSelfExclusionDuration(7);
+    });
+    bindAction("n20731474", () => {
+      if (profile?.selfExclusionActive) return;
+      setSelfExclusionDuration(14);
+    });
+    bindAction("n20731476", () => {
+      if (profile?.selfExclusionActive) return;
+      setSelfExclusionDuration(30);
     });
     const bindPrivacyToggle = () => {
       const toggle = doc.getElementById("n20731455");
@@ -1094,7 +1527,13 @@ export default function ProfilePage() {
     };
     bindPrivacyToggle();
     bindAction("n20731478", () => {
-      toast.showError("Please contact support for account lock actions.");
+      if (profile?.selfExclusionActive) {
+        toast.showError(
+          `Self-exclusion is active until ${formatDateTime(profile.selfExcludeUntil)} and cannot be reversed.`
+        );
+        return;
+      }
+      openSelfExclusionModal();
     });
 
     const syncHeight = () => {
@@ -1118,10 +1557,13 @@ export default function ProfilePage() {
     setContentReady(true);
   }, [
     openChangePasswordModal,
+    openSelfExclusionModal,
+    openTradeUrlModal,
+    openUsernameModal,
     privacyBusy,
     profile,
     profileResolved,
-    router,
+    selfExclusionDuration,
     toast,
     toggleProfileVisibility
   ]);
@@ -1307,6 +1749,329 @@ export default function ProfilePage() {
                 className="h-10 rounded-[10px] border border-[#f75154]/60 bg-[linear-gradient(180deg,#f75154_0%,#ac2e30_100%)] px-5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_16px_rgba(247,81,84,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {passwordModal.loading ? "Updating..." : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {tradeUrlModal.open ? (
+        <div
+          className="fixed inset-0 z-[201] flex items-center justify-center bg-black/70 px-4"
+          onMouseDown={() => {
+            if (!tradeUrlModal.loading) {
+              closeTradeUrlModal();
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[520px] rounded-[18px] border border-[#2d2d2d] bg-[#101010] shadow-[0_20px_80px_rgba(0,0,0,0.65),0_0_28px_rgba(247,81,84,0.12)]"
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="border-b border-[#282828] px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="m-0 text-[22px] font-semibold leading-[22px] text-white">Set Trade URL</h2>
+                <button
+                  type="button"
+                  aria-label="Close modal"
+                  disabled={tradeUrlModal.loading}
+                  className="h-8 w-8 rounded-full border border-[#353535] bg-[#1a1a1a] text-[16px] leading-none text-[#b8b8b8] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeTradeUrlModal}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="mt-3 text-[13px] leading-[18px] text-[#8f8f8f]">
+                Add your Steam trade URL so you can deposit or withdraw skins. You can edit this
+                value at any time.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  Steam trade URL
+                </span>
+                <input
+                  type="url"
+                  autoComplete="off"
+                  value={tradeUrlModal.tradeUrl}
+                  disabled={tradeUrlModal.loading}
+                  onChange={(event) =>
+                    setTradeUrlModal((current) => ({
+                      ...current,
+                      tradeUrl: event.target.value,
+                      error: null
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitTradeUrl();
+                    }
+                  }}
+                  className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                  placeholder="https://steamcommunity.com/tradeoffer/new/?partner=...&token=..."
+                />
+              </label>
+
+              {tradeUrlModal.error ? (
+                <p className="m-0 rounded-[10px] border border-[#f75154]/30 bg-[#2a1213] px-3 py-2 text-[12px] leading-[16px] text-[#ffa7a8]">
+                  {tradeUrlModal.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#282828] px-6 py-4">
+              <button
+                type="button"
+                disabled={tradeUrlModal.loading}
+                onClick={closeTradeUrlModal}
+                className="h-10 rounded-[10px] border border-[#3a3a3a] bg-[#191919] px-4 text-[13px] font-semibold text-[#c7c7c7] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={tradeUrlModal.loading}
+                onClick={() => {
+                  void submitTradeUrl();
+                }}
+                className="h-10 rounded-[10px] border border-[#f75154]/60 bg-[linear-gradient(180deg,#f75154_0%,#ac2e30_100%)] px-5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_16px_rgba(247,81,84,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {tradeUrlModal.loading ? "Saving..." : "Save URL"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {usernameModal.open ? (
+        <div
+          className="fixed inset-0 z-[202] flex items-center justify-center bg-black/70 px-4"
+          onMouseDown={() => {
+            if (!usernameModal.loading) {
+              closeUsernameModal();
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[520px] rounded-[18px] border border-[#2d2d2d] bg-[#101010] shadow-[0_20px_80px_rgba(0,0,0,0.65),0_0_28px_rgba(247,81,84,0.12)]"
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="border-b border-[#282828] px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="m-0 text-[22px] font-semibold leading-[22px] text-white">
+                  Change Username
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close modal"
+                  disabled={usernameModal.loading}
+                  className="h-8 w-8 rounded-full border border-[#353535] bg-[#1a1a1a] text-[16px] leading-none text-[#b8b8b8] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeUsernameModal}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="mt-3 text-[13px] leading-[18px] text-[#8f8f8f]">
+                Your username can contain up to 20 characters and may be changed once every 24
+                hours.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  New username
+                </span>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  maxLength={20}
+                  value={usernameModal.username}
+                  disabled={usernameModal.loading}
+                  onChange={(event) =>
+                    setUsernameModal((current) => ({
+                      ...current,
+                      username: event.target.value,
+                      error: null
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitUsernameChange();
+                    }
+                  }}
+                  className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                  placeholder="Enter your username"
+                />
+              </label>
+
+              {!profile?.canChangeUsername ? (
+                <p className="m-0 rounded-[10px] border border-[#3a3a3a] bg-[#181818] px-3 py-2 text-[12px] leading-[16px] text-[#b8b8b8]">
+                  Cooldown active. Next change available at{" "}
+                  <span className="font-semibold text-[#ffd2d3]">
+                    {formatDateTime(usernameModal.nextChangeAt)}
+                  </span>
+                  .
+                </p>
+              ) : null}
+
+              {usernameModal.error ? (
+                <p className="m-0 rounded-[10px] border border-[#f75154]/30 bg-[#2a1213] px-3 py-2 text-[12px] leading-[16px] text-[#ffa7a8]">
+                  {usernameModal.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#282828] px-6 py-4">
+              <button
+                type="button"
+                disabled={usernameModal.loading}
+                onClick={closeUsernameModal}
+                className="h-10 rounded-[10px] border border-[#3a3a3a] bg-[#191919] px-4 text-[13px] font-semibold text-[#c7c7c7] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={usernameModal.loading}
+                onClick={() => {
+                  void submitUsernameChange();
+                }}
+                className="h-10 rounded-[10px] border border-[#f75154]/60 bg-[linear-gradient(180deg,#f75154_0%,#ac2e30_100%)] px-5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_16px_rgba(247,81,84,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {usernameModal.loading ? "Saving..." : "Save Username"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {selfExclusionModal.open ? (
+        <div
+          className="fixed inset-0 z-[203] flex items-center justify-center bg-black/70 px-4"
+          onMouseDown={() => {
+            if (!selfExclusionModal.loading) {
+              closeSelfExclusionModal();
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[560px] rounded-[18px] border border-[#2d2d2d] bg-[#101010] shadow-[0_20px_80px_rgba(0,0,0,0.65),0_0_28px_rgba(247,81,84,0.12)]"
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="border-b border-[#282828] px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="m-0 text-[22px] font-semibold leading-[22px] text-white">
+                  Confirm Self Exclusion
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close modal"
+                  disabled={selfExclusionModal.loading}
+                  className="h-8 w-8 rounded-full border border-[#353535] bg-[#1a1a1a] text-[16px] leading-none text-[#b8b8b8] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeSelfExclusionModal}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="mt-3 text-[13px] leading-[18px] text-[#8f8f8f]">
+                This action is irreversible for the selected period. During self-exclusion you
+                cannot wager, withdraw, or send tips.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  Duration
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {SELF_EXCLUSION_DURATIONS.map((days) => {
+                    const selected = selfExclusionModal.durationDays === days;
+                    return (
+                      <button
+                        key={days}
+                        type="button"
+                        disabled={selfExclusionModal.loading}
+                        onClick={() =>
+                          setSelfExclusionModal((current) => ({
+                            ...current,
+                            durationDays: days,
+                            error: null
+                          }))
+                        }
+                        className={`h-9 rounded-[9px] px-3 text-[12px] font-semibold transition ${
+                          selected
+                            ? "border border-[#f75154]/70 bg-[#2a1213] text-[#ffd5d6]"
+                            : "border border-[#333] bg-[#171717] text-[#bcbcbc] hover:text-white"
+                        }`}
+                      >
+                        {days} day{days > 1 ? "s" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.06em] text-[#f75154]">
+                  Type CONFIRM
+                </span>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={selfExclusionModal.confirmationText}
+                  disabled={selfExclusionModal.loading}
+                  onChange={(event) =>
+                    setSelfExclusionModal((current) => ({
+                      ...current,
+                      confirmationText: event.target.value,
+                      error: null
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitSelfExclusion();
+                    }
+                  }}
+                  className="h-11 w-full rounded-[10px] border border-[#2e2e2e] bg-[#161616] px-3 text-[14px] text-white outline-none transition focus:border-[#f75154]/70"
+                  placeholder='Type "CONFIRM"'
+                />
+              </label>
+
+              {selfExclusionModal.error ? (
+                <p className="m-0 rounded-[10px] border border-[#f75154]/30 bg-[#2a1213] px-3 py-2 text-[12px] leading-[16px] text-[#ffa7a8]">
+                  {selfExclusionModal.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#282828] px-6 py-4">
+              <button
+                type="button"
+                disabled={selfExclusionModal.loading}
+                onClick={closeSelfExclusionModal}
+                className="h-10 rounded-[10px] border border-[#3a3a3a] bg-[#191919] px-4 text-[13px] font-semibold text-[#c7c7c7] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={selfExclusionModal.loading}
+                onClick={() => {
+                  void submitSelfExclusion();
+                }}
+                className="h-10 rounded-[10px] border border-[#f75154]/60 bg-[linear-gradient(180deg,#f75154_0%,#ac2e30_100%)] px-5 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_16px_rgba(247,81,84,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {selfExclusionModal.loading ? "Locking..." : "Confirm Lock"}
               </button>
             </div>
           </div>
