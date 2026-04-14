@@ -96,7 +96,6 @@ const clearExpiredSelfExclusion = async (userId: string): Promise<void> => {
         AND "selfExcludedUntil" IS NOT NULL
         AND "selfExcludedUntil" <= NOW()
     `;
-    return;
   } catch (error) {
     if (!isMissingSelfExclusionColumnError(error)) {
       throw error;
@@ -118,6 +117,27 @@ const queryFlagsRaw = async (userId: string) =>
     Array<{
       role: unknown;
       selfExcludeUntil: unknown;
+      selfExclusionNoWager?: unknown;
+      selfExclusionNoWithdraw?: unknown;
+      selfExclusionNoTip?: unknown;
+    }>
+  >`
+    SELECT
+      role,
+      COALESCE("selfExcludedUntil", "selfExcludeUntil") AS "selfExcludeUntil",
+      "selfExclusionNoWager" AS "selfExclusionNoWager",
+      "selfExclusionNoWithdraw" AS "selfExclusionNoWithdraw",
+      "selfExclusionNoTip" AS "selfExclusionNoTip"
+    FROM "users"
+    WHERE id = ${userId}
+    LIMIT 1
+  `;
+
+const queryFlagsRawCurrent = async (userId: string) =>
+  prisma.$queryRaw<
+    Array<{
+      role: unknown;
+      selfExcludeUntil: unknown;
       selfExclusionNoWager: unknown;
       selfExclusionNoWithdraw: unknown;
       selfExclusionNoTip: unknown;
@@ -129,21 +149,6 @@ const queryFlagsRaw = async (userId: string) =>
       "selfExclusionNoWager" AS "selfExclusionNoWager",
       "selfExclusionNoWithdraw" AS "selfExclusionNoWithdraw",
       "selfExclusionNoTip" AS "selfExclusionNoTip"
-    FROM "users"
-    WHERE id = ${userId}
-    LIMIT 1
-  `;
-
-const queryFlagsLegacy = async (userId: string) =>
-  prisma.$queryRaw<
-    Array<{
-      role: unknown;
-      selfExcludeUntil: unknown;
-    }>
-  >`
-    SELECT
-      role,
-      "selfExcludedUntil" AS "selfExcludeUntil"
     FROM "users"
     WHERE id = ${userId}
     LIMIT 1
@@ -215,7 +220,7 @@ export const getSelfExclusionState = async (userId: string): Promise<{
       throw error;
     }
     try {
-      const rows = await queryFlagsLegacy(userId);
+      const rows = await queryFlagsRawCurrent(userId);
       const row = rows[0];
       if (!row) {
         throw new AppError("User not found", 404, "USER_NOT_FOUND");
