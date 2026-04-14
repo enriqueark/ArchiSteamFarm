@@ -1245,11 +1245,9 @@ export default function ProfilePage() {
     normalizeEmbeddedAssetPaths(doc);
     injectRuntimeProfileStyles(doc);
 
-    const root = doc.getElementById("n20731272");
-    const footer = doc.getElementById("n20731273");
-    if (root && footer && root.lastElementChild !== footer) {
-      root.appendChild(footer);
-    }
+    // Remove embedded footer from iframe so page uses shared app footer only.
+    const embeddedFooter = doc.getElementById("n20731273");
+    embeddedFooter?.remove();
 
     // Hold the imported frame hidden until data hydration is resolved.
     if (!profileResolved) return;
@@ -1535,6 +1533,8 @@ export default function ProfilePage() {
       }
       openSelfExclusionModal();
     });
+
+    const root = doc.getElementById("n20731272");
 
     const syncHeight = () => {
       const contentHeight = Math.max(
