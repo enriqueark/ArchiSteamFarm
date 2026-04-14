@@ -17,12 +17,6 @@ const RESTRICTION_CODES: Record<RestrictionTarget, string> = {
   WAGER: "SELF_EXCLUDED_WAGER_FORBIDDEN"
 };
 
-const SELF_EXCLUSION_FLAG_BY_TARGET: Record<RestrictionTarget, string> = {
-  TIP: "selfExclusionNoTip",
-  WITHDRAW: "selfExclusionNoWithdraw",
-  WAGER: "selfExclusionNoWager"
-};
-
 const toDateSafe = (value: unknown): Date | null => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === "string" && value.trim().length > 0) {
@@ -346,11 +340,6 @@ export const ensureUserAllowedFor = async (
   void roleOverride;
   void state.role;
   if (!state.active) {
-    return;
-  }
-  const flagKey = SELF_EXCLUSION_FLAG_BY_TARGET[target];
-  const blocked = (state as Record<string, unknown>)[flagKey] === true;
-  if (!blocked) {
     return;
   }
   throw new AppError(RESTRICTION_MESSAGES[target], 403, RESTRICTION_CODES[target], {
