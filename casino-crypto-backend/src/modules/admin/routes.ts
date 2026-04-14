@@ -570,14 +570,14 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           tr.querySelector(".catalog-delete").addEventListener("click", async () => {
             try {
               const confirmed = window.confirm(
-                "Delete this skin permanently from catalog?\n\n" +
-                  "Skin: " + skin.name + "\n" +
-                  "Price: " + formatCoins(skin.valueAtomic) + " " + COIN_SYMBOL + "\n\n" +
+                "Delete this skin permanently from catalog?\\n\\n" +
+                  "Skin: " + skin.name + "\\n" +
+                  "Price: " + formatCoins(skin.valueAtomic) + " " + COIN_SYMBOL + "\\n\\n" +
                   "After deletion, preload will NOT bring it back."
               );
               if (!confirmed) return;
-              const res = await req("/api/v1/cases/admin/catalog/skins/" + encodeURIComponent(skin.id), {
-                method: "DELETE"
+              const res = await req("/api/v1/cases/admin/catalog/skins/" + encodeURIComponent(skin.id) + "/delete", {
+                method: "POST"
               });
               if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete skin"));
               const data = await res.json();
@@ -796,7 +796,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           casesStatus.className = "mono ok";
           casesStatus.textContent =
             "Deleted " + Number(data.deletedCount || 0) + " skins." +
-            (data.skippedInUseCount > 0 ? " Skipped linked: " + data.skippedInUseCount + "." : "") +
+            (data.skippedLinkedCount > 0 ? " Skipped linked: " + data.skippedLinkedCount + "." : "") +
             " Matched: " + Number(data.matchedCount || 0) + ".";
           await loadCatalog();
         } catch (error) {
