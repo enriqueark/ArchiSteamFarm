@@ -62,6 +62,48 @@ function idempotencyKey(): string {
   return `fe-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+type TokenPair = {
+  accessToken: string;
+  refreshToken: string;
+  sessionId: string;
+};
+
+async function refreshAccessTokenBestEffort(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const refreshToken = localStorage.getItem("refreshToken");
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const res = await fetch(`${getApi()}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ refreshToken })
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const tokens = (await res.json()) as Partial<TokenPair>;
+    if (!tokens.accessToken || !tokens.refreshToken) {
+      return null;
+    }
+
+    setAccessToken(tokens.accessToken);
+    localStorage.setItem("refreshToken", tokens.refreshToken);
+    return tokens.accessToken;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -74,7 +116,10 @@ async function request<T>(
   };
 
   if (needsAuth) {
-    const token = getAccessToken();
+    let token = getAccessToken();
+    if (!token) {
+      token = await refreshAccessTokenBestEffort();
+    }
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -82,7 +127,18 @@ async function request<T>(
     headers["Idempotency-Key"] = idempotencyKey();
   }
 
-  const res = await fetch(`${getApi()}${path}`, { ...options, headers });
+  let res = await fetch(`${getApi()}${path}`, { ...options, headers });
+
+  if (res.status === 401 && needsAuth) {
+    const refreshedToken = await refreshAccessTokenBestEffort();
+    if (refreshedToken) {
+      const retryHeaders: Record<string, string> = {
+        ...headers,
+        Authorization: `Bearer ${refreshedToken}`
+      };
+      res = await fetch(`${getApi()}${path}`, { ...options, headers: retryHeaders });
+    }
+  }
 
   if (!res.ok) {
     if (res.status === 401 && needsAuth) {
