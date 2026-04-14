@@ -9,6 +9,7 @@ import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wal
 import {
   getCaseById,
   deleteCs2SkinCatalogByPriceRangeByAdmin,
+  softDeleteCs2SkinCatalogByAdmin,
   findClosestCatalogSkinByValueAtomic,
   importRainCasesIntoSkinCatalogByAdmin,
   listCs2SkinCatalogByAdmin,
@@ -262,6 +263,19 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
       }))
     );
   });
+
+  fastify.post(
+    "/admin/catalog/skins/:skinId/delete",
+    { preHandler: [requireRoles(["ADMIN"])] },
+    async (request, reply) => {
+      const params = z.object({ skinId: z.string().cuid() }).parse(request.params);
+      const result = await softDeleteCs2SkinCatalogByAdmin({
+        skinId: params.skinId,
+        actorUserId: request.user.sub
+      });
+      return reply.send(result);
+    }
+  );
 
   fastify.post(
     "/admin/catalog/skins/delete-by-price",

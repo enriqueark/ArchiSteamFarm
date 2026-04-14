@@ -554,7 +554,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             "<td><div><strong>" + skin.name + "</strong></div><div class=\\"mono\\">" + skin.id + "</div></td>" +
             "<td class=\\"mono\\">" + formatCoins(skin.valueAtomic) + "</td>" +
             "<td class=\\"mono\\">" + (skin.sourceCaseSlug || "-") + "</td>" +
-            "<td><button class=\\"case-add success\\">Add</button></td>";
+            "<td><div class=\\"row\\" style=\\"gap:6px;\\"><button class=\\"case-add success\\">Add</button><button class=\\"catalog-delete danger\\">Delete</button></div></td>";
           tr.querySelector(".case-add").addEventListener("click", () => {
             casesState.draft.items.push({
               name: skin.name,
@@ -566,6 +566,30 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             });
             renderCaseItems();
             deriveVolatilityFromDraft();
+          });
+          tr.querySelector(".catalog-delete").addEventListener("click", async () => {
+            try {
+              const confirmed = window.confirm(
+                "Delete this skin permanently from catalog?\n\n" +
+                  "Skin: " + skin.name + "\n" +
+                  "Price: " + formatCoins(skin.valueAtomic) + " " + COIN_SYMBOL + "\n\n" +
+                  "After deletion, preload will NOT bring it back."
+              );
+              if (!confirmed) return;
+              const res = await req("/api/v1/cases/admin/catalog/skins/" + encodeURIComponent(skin.id), {
+                method: "DELETE"
+              });
+              if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete skin"));
+              const data = await res.json();
+              casesStatus.className = "mono ok";
+              casesStatus.textContent =
+                "Deleted skin: " + skin.name +
+                ". Catalog now has " + Number(data.remainingCatalogCount || 0) + " skins.";
+              await loadCatalog();
+            } catch (error) {
+              casesStatus.className = "mono err";
+              casesStatus.textContent = error && error.message ? error.message : "Failed to delete skin.";
+            }
           });
           catalogSkinsTbody.appendChild(tr);
         }

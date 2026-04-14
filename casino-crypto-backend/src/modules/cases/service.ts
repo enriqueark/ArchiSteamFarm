@@ -500,8 +500,7 @@ export const importRainCatalogPageByAdmin = async (
             sourceCaseSlug: item.sourceCaseSlug,
             name: item.name,
             valueAtomic: item.valueAtomic,
-            imageUrl: item.imageUrl,
-            isActive: true
+            imageUrl: item.imageUrl
           }
         });
         skinsUpserted += 1;
@@ -593,12 +592,14 @@ export const listCs2SkinCatalogByAdmin = async (input: {
   q?: string;
   limit?: number;
   sourceCaseSlug?: string;
+  includeInactive?: boolean;
   actorUserId?: string;
 }): Promise<Cs2SkinCatalogItem[]> => {
   const limit = Math.max(1, Math.min(5000, Math.trunc(input.limit ?? 5000)));
   await ensureCs2SkinCatalogPreloaded(input.actorUserId ?? null);
   const q = input.q?.trim();
   const where = {
+    ...(input.includeInactive ? {} : { isActive: true }),
     ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
     ...(input.sourceCaseSlug ? { sourceCaseSlug: input.sourceCaseSlug } : {})
   };
@@ -621,6 +622,37 @@ export const listCs2SkinCatalogByAdmin = async (input: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }));
+};
+
+export const softDeleteCs2SkinCatalogByAdmin = async (input: {
+  skinId: string;
+  actorUserId?: string;
+}): Promise<{ id: string; alreadyDeleted: boolean }> => {
+  await ensureCs2SkinCatalogPreloaded(input.actorUserId ?? null);
+  const existing = await prisma.cs2SkinCatalog.findUnique({
+    where: { id: input.skinId },
+    select: {
+      id: true,
+      isActive: true
+    }
+  });
+  if (!existing) {
+    throw new AppError("Skin not found in catalog", 404, "CATALOG_SKIN_NOT_FOUND");
+  }
+  if (!existing.isActive) {
+    return {
+      id: existing.id,
+      alreadyDeleted: true
+    };
+  }
+  await prisma.cs2SkinCatalog.update({
+    where: { id: existing.id },
+    data: { isActive: false }
+  });
+  return {
+    id: existing.id,
+    alreadyDeleted: false
+  };
 };
 
 export const deleteCs2SkinCatalogByPriceRangeByAdmin = async (input: {
