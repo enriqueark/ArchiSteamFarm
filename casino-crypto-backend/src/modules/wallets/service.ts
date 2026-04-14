@@ -56,6 +56,8 @@ const debitBalanceWithRowLock = async (
   tx: Prisma.TransactionClient,
   input: DebitBalanceInput
 ): Promise<DebitBalanceResult> => {
+  await ensureUserAllowedFor(input.userId, "WAGER");
+
   if (input.amountAtomic <= 0n) {
     throw new AppError("amountAtomic must be greater than 0", 400, "INVALID_AMOUNT");
   }

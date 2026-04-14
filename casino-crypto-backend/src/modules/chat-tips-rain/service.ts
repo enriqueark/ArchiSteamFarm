@@ -308,6 +308,7 @@ export const getCurrentRainState = async (userId?: string): Promise<RainRoundSta
 };
 
 export const joinRain = async (userId: string): Promise<RainRoundState> => {
+  await ensureUserAllowedFor(userId, "WAGER");
   const now = new Date();
   const state = await prisma.$transaction(async (tx) => {
     await settlePreviousRoundIfNeeded(tx, now);

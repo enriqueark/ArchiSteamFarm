@@ -55,8 +55,10 @@ const isMissingSelfExclusionColumnError = (error: unknown): boolean => {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
   return (
+    message.includes("selfexcludeduntil") ||
     message.includes("selfexcludeuntil") ||
     message.includes("selfexclusionreason") ||
+    message.includes("selfexclusionnote") ||
     message.includes("selfexclusionnowager") ||
     message.includes("selfexclusionnowithdraw") ||
     message.includes("selfexclusionnotip")
@@ -66,9 +68,9 @@ const isMissingSelfExclusionColumnError = (error: unknown): boolean => {
 const resolveFlags = (raw: {
   role: unknown;
   selfExcludeUntil: unknown;
-  selfExclusionNoWager: unknown;
-  selfExclusionNoWithdraw: unknown;
-  selfExclusionNoTip: unknown;
+  selfExclusionNoWager?: unknown;
+  selfExclusionNoWithdraw?: unknown;
+  selfExclusionNoTip?: unknown;
 }) => {
   const role = parseUserRole(raw.role);
   const selfExcludeUntil = toDateSafe(raw.selfExcludeUntil);
@@ -85,13 +87,25 @@ const resolveFlags = (raw: {
 };
 
 const clearExpiredSelfExclusion = async (userId: string): Promise<void> => {
+  try {
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET "selfExcludedUntil" = NULL,
+          "updatedAt" = NOW()
+      WHERE id = ${userId}
+        AND "selfExcludedUntil" IS NOT NULL
+        AND "selfExcludedUntil" <= NOW()
+    `;
+    return;
+  } catch (error) {
+    if (!isMissingSelfExclusionColumnError(error)) {
+      throw error;
+    }
+  }
+
   await prisma.$executeRaw`
     UPDATE "users"
     SET "selfExcludeUntil" = NULL,
-        "selfExclusionReason" = NULL,
-        "selfExclusionNoWager" = true,
-        "selfExclusionNoWithdraw" = true,
-        "selfExclusionNoTip" = true,
         "updatedAt" = NOW()
     WHERE id = ${userId}
       AND "selfExcludeUntil" IS NOT NULL
@@ -111,7 +125,7 @@ const queryFlagsRaw = async (userId: string) =>
   >`
     SELECT
       role,
-      "selfExcludeUntil" AS "selfExcludeUntil",
+      "selfExcludedUntil" AS "selfExcludeUntil",
       "selfExclusionNoWager" AS "selfExclusionNoWager",
       "selfExclusionNoWithdraw" AS "selfExclusionNoWithdraw",
       "selfExclusionNoTip" AS "selfExclusionNoTip"
@@ -121,6 +135,36 @@ const queryFlagsRaw = async (userId: string) =>
   `;
 
 const queryFlagsLegacy = async (userId: string) =>
+  prisma.$queryRaw<
+    Array<{
+      role: unknown;
+      selfExcludeUntil: unknown;
+    }>
+  >`
+    SELECT
+      role,
+      "selfExcludedUntil" AS "selfExcludeUntil"
+    FROM "users"
+    WHERE id = ${userId}
+    LIMIT 1
+  `;
+
+const queryFlagsLegacyOld = async (userId: string) =>
+  prisma.$queryRaw<
+    Array<{
+      role: unknown;
+      selfExcludeUntil: unknown;
+    }>
+  >`
+    SELECT
+      role,
+      "selfExcludeUntil" AS "selfExcludeUntil"
+    FROM "users"
+    WHERE id = ${userId}
+    LIMIT 1
+  `;
+
+const queryFlagsRoleOnly = async (userId: string) =>
   prisma.$queryRaw<
     Array<{
       role: unknown;
@@ -170,19 +214,81 @@ export const getSelfExclusionState = async (userId: string): Promise<{
     if (!isMissingSelfExclusionColumnError(error)) {
       throw error;
     }
-    const rows = await queryFlagsLegacy(userId);
-    const row = rows[0];
-    if (!row) {
-      throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    try {
+      const rows = await queryFlagsLegacy(userId);
+      const row = rows[0];
+      if (!row) {
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
+      }
+      const flags = resolveFlags(row);
+      if (!flags.isActive && flags.selfExcludeUntil) {
+        await clearExpiredSelfExclusion(userId);
+        return {
+          active: false,
+          until: null,
+          noWager: true,
+          noWithdraw: true,
+          noTip: true,
+          role: flags.role
+        };
+      }
+      return {
+        active: flags.isActive,
+        until: flags.selfExcludeUntil,
+        noWager: flags.noWager,
+        noWithdraw: flags.noWithdraw,
+        noTip: flags.noTip,
+        role: flags.role
+      };
+    } catch (legacyError) {
+      if (!isMissingSelfExclusionColumnError(legacyError)) {
+        throw legacyError;
+      }
+      try {
+        const rows = await queryFlagsLegacyOld(userId);
+        const row = rows[0];
+        if (!row) {
+          throw new AppError("User not found", 404, "USER_NOT_FOUND");
+        }
+        const flags = resolveFlags(row);
+        if (!flags.isActive && flags.selfExcludeUntil) {
+          await clearExpiredSelfExclusion(userId);
+          return {
+            active: false,
+            until: null,
+            noWager: true,
+            noWithdraw: true,
+            noTip: true,
+            role: flags.role
+          };
+        }
+        return {
+          active: flags.isActive,
+          until: flags.selfExcludeUntil,
+          noWager: flags.noWager,
+          noWithdraw: flags.noWithdraw,
+          noTip: flags.noTip,
+          role: flags.role
+        };
+      } catch (legacyOldError) {
+        if (!isMissingSelfExclusionColumnError(legacyOldError)) {
+          throw legacyOldError;
+        }
+        const rows = await queryFlagsRoleOnly(userId);
+        const row = rows[0];
+        if (!row) {
+          throw new AppError("User not found", 404, "USER_NOT_FOUND");
+        }
+        return {
+          active: false,
+          until: null,
+          noWager: true,
+          noWithdraw: true,
+          noTip: true,
+          role: parseUserRole(row.role)
+        };
+      }
     }
-    return {
-      active: false,
-      until: null,
-      noWager: true,
-      noWithdraw: true,
-      noTip: true,
-      role: parseUserRole(row.role)
-    };
   }
 };
 

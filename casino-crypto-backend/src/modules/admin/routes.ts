@@ -1027,6 +1027,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
               <div class="mono">selfExcludeUntil=\${user.selfExcludeUntil ? new Date(user.selfExcludeUntil).toISOString() : "-"}</div>
+              <div class="mono">\${user.selfExcludeUntil ? "selfExclusionStatus=ACTIVE" : "selfExclusionStatus=INACTIVE"}</div>
               <div class="mono">level=\${user.level} xp=\${user.levelXp || user.levelXpAtomic}</div>
               <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
               \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
@@ -1099,7 +1100,9 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             void setUserAccess(user.id, user.status, user.role, msgEl, { canTip: user.canTip === false })
           );
           tr.querySelector(".self-exclusion-toggle").addEventListener("click", () => {
-            if (!user.selfExcludeUntil) {
+            const exclusionUntilMs = user.selfExcludeUntil ? Date.parse(user.selfExcludeUntil) : Number.NaN;
+            const hasActiveSelfExclusion = Number.isFinite(exclusionUntilMs) && exclusionUntilMs > Date.now();
+            if (!hasActiveSelfExclusion) {
               msgEl.className = "mono err";
               msgEl.textContent = "User has no active self-exclusion.";
               return;
@@ -1423,8 +1426,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           status: user.status,
           canWithdraw: "canWithdraw" in user ? user.canWithdraw : true,
           canTip: "canTip" in user ? user.canTip : true,
-          selfExcludeUntil:
-            "selfExcludedUntil" in user && user.selfExcludedUntil ? user.selfExcludedUntil : null,
+          selfExcludeUntil: "selfExcludedUntil" in user && user.selfExcludedUntil ? user.selfExcludedUntil : null,
+          selfExclusionActive:
+            "selfExcludedUntil" in user &&
+            user.selfExcludedUntil instanceof Date &&
+            user.selfExcludedUntil.getTime() > Date.now(),
           level: getLevelFromXp(user.levelXpAtomic),
           levelXpAtomic: user.levelXpAtomic.toString(),
           createdAt: user.createdAt,

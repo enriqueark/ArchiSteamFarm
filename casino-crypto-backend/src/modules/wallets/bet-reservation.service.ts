@@ -10,6 +10,7 @@ import {
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { ensureUserAllowedFor } from "../users/access-guard";
 import { debitBalanceInTx } from "./service";
 
 type WalletState = {
@@ -79,6 +80,7 @@ export const holdFundsForBet = async (input: HoldFundsInput): Promise<Reservatio
   if (input.amountAtomic <= 0n) {
     throw new AppError("amountAtomic must be greater than 0", 400, "INVALID_AMOUNT");
   }
+  await ensureUserAllowedFor(input.userId, "WAGER");
 
   const wallet = await prisma.wallet.findUnique({
     where: {
