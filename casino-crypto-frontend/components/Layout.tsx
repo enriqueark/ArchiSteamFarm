@@ -101,6 +101,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     const stored = localStorage.getItem("lastKnownUsername");
     return (stored || "").trim();
   });
+  const latestTickerIdRef = useRef<string | null>(null);
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -117,7 +118,19 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const refreshLiveTicker = useCallback(async () => {
     try {
       const response = await getLiveWinsTicker(24);
-      setTickerEvents((response.items || []).slice(0, 24));
+      const nextItems = (response.items || []).slice(0, 24);
+      if (!nextItems.length) return;
+      const nextTopId = nextItems[0]?.id ?? null;
+      if (!nextTopId) return;
+      if (latestTickerIdRef.current === null) {
+        latestTickerIdRef.current = nextTopId;
+        setTickerEvents(nextItems);
+        return;
+      }
+      if (nextTopId !== latestTickerIdRef.current) {
+        latestTickerIdRef.current = nextTopId;
+        setTickerEvents(nextItems);
+      }
     } catch {
       // keep previous ticker state on transient failures
     }
@@ -697,9 +710,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           {/* Right: ticker + content */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
             {/* Live ticker */}
-            <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden shrink-0">
-              <div className={`flex items-center gap-1.5 py-1.5 px-1.5 ${tickerEvents.length > 5 ? "ticker-scroll" : ""}`}>
-                {(tickerEvents.length > 0 ? [...tickerEvents, ...tickerEvents] : Array.from({ length: 10 })).map((ev, i) => {
+            <div className="bg-strip rounded-panel mx-1 my-1 overflow-x-auto shrink-0">
+              <div className="flex items-center gap-1.5 py-1.5 px-1.5">
+                {(tickerEvents.length > 0 ? tickerEvents : Array.from({ length: 10 })).map((ev, i) => {
                   const win = ev as LiveWinTickerItem | undefined;
                   const modeLabel = win?.modeLabel ?? "Game";
                   const href = win?.route ?? "/";
