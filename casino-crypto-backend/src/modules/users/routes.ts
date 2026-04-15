@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
+import { findClosestCatalogSkinByValueAtomic } from "../cases/service";
 import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
 import { verifyTwoFactorCode } from "../security-2fa/service";
@@ -33,6 +34,9 @@ const gameHistoryQuerySchema = z.object({
   mode: z
     .enum(["ALL", "MINES", "BLACKJACK", "ROULETTE", "CASES", "BATTLES"])
     .default("ALL")
+});
+const winsTickerQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(40).default(12)
 });
 const profileVisibilitySchema = z.object({
   profileVisible: z.boolean()
@@ -244,6 +248,212 @@ const resolveWithdrawalAssetAmount = (metadata: unknown): number | null => {
     return null;
   }
   return parseAmountNumber(root.payoutAmountAsset);
+};
+
+const formatUserLabel = (username: string | null | undefined, email: string): string => {
+  const normalized = (typeof username === "string" ? username.trim() : "") || email.split("@")[0]?.trim() || "player";
+  return normalized.slice(0, 24);
+};
+
+const formatWinMultiplier = (wagerAtomic: bigint, payoutAtomic: bigint): string | null => {
+  if (wagerAtomic <= 0n || payoutAtomic <= 0n) return null;
+  const ratio = Number(payoutAtomic) / Number(wagerAtomic);
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  return `x${ratio.toFixed(2)}`;
+};
+
+type WinsTickerItem = {
+  id: string;
+  mode: "MINES" | "CASES" | "BATTLES";
+  modeLabel: string;
+  route: string;
+  occurredAt: string;
+  user: {
+    publicId: number | null;
+    username: string;
+  };
+  skin: {
+    name: string;
+    imageUrl: string | null;
+    valueAtomic: string;
+    valueCoins: string;
+  };
+  multiplier: string | null;
+};
+
+const getWinsTickerFeed = async (limit: number): Promise<WinsTickerItem[]> => {
+  const safeLimit = Math.max(1, Math.min(40, Math.trunc(limit)));
+  const perModeLimit = Math.min(40, safeLimit * 3);
+
+  const [minesWins, casesWins, battleWins] = await Promise.all([
+    prisma.minesGame.findMany({
+      where: {
+        status: "CASHED_OUT",
+        payoutAtomic: { gt: 0n },
+        finishedAt: { not: null },
+        currency: PLATFORM_INTERNAL_CURRENCY
+      },
+      orderBy: [{ finishedAt: "desc" }],
+      take: perModeLimit,
+      select: {
+        id: true,
+        betAtomic: true,
+        payoutAtomic: true,
+        finishedAt: true,
+        user: {
+          select: {
+            publicId: true,
+            username: true,
+            email: true
+          }
+        }
+      }
+    }),
+    prisma.caseOpening.findMany({
+      where: {
+        payoutAtomic: { gt: 0n },
+        currency: PLATFORM_INTERNAL_CURRENCY
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: perModeLimit,
+      select: {
+        id: true,
+        priceAtomic: true,
+        payoutAtomic: true,
+        createdAt: true,
+        user: {
+          select: {
+            publicId: true,
+            username: true,
+            email: true
+          }
+        },
+        caseItem: {
+          select: {
+            name: true,
+            imageUrl: true,
+            valueAtomic: true
+          }
+        }
+      }
+    }),
+    prisma.battleItemDrop.findMany({
+      where: {
+        battleSlot: {
+          userId: { not: null },
+          paidAmountAtomic: { gt: 0n }
+        },
+        valueAtomic: { gt: 0n }
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: perModeLimit,
+      select: {
+        id: true,
+        valueAtomic: true,
+        createdAt: true,
+        battleSlot: {
+          select: {
+            paidAmountAtomic: true,
+            user: {
+              select: {
+                publicId: true,
+                username: true,
+                email: true
+              }
+            }
+          }
+        },
+        caseItem: {
+          select: {
+            name: true,
+            imageUrl: true
+          }
+        }
+      }
+    })
+  ]);
+
+  const minesItems = await Promise.all(
+    minesWins.map(async (row): Promise<WinsTickerItem | null> => {
+      const payoutAtomic = row.payoutAtomic ?? 0n;
+      if (payoutAtomic <= 0n || !row.finishedAt) return null;
+      const previewSkin = await findClosestCatalogSkinByValueAtomic({
+        valueAtomic: payoutAtomic
+      });
+      if (!previewSkin) return null;
+      const username = formatUserLabel(row.user.username, row.user.email);
+      return {
+        id: `MINES:${row.id}`,
+        mode: "MINES",
+        modeLabel: "Mines",
+        route: "/mines",
+        occurredAt: row.finishedAt.toISOString(),
+        user: {
+          publicId: row.user.publicId ?? null,
+          username
+        },
+        skin: {
+          name: previewSkin.name,
+          imageUrl: previewSkin.imageUrl,
+          valueAtomic: previewSkin.valueAtomic.toString(),
+          valueCoins: toCoinsString(previewSkin.valueAtomic)
+        },
+        multiplier: formatWinMultiplier(row.betAtomic, payoutAtomic)
+      };
+    })
+  );
+
+  const caseItems = casesWins.map((row): WinsTickerItem => {
+    const username = formatUserLabel(row.user.username, row.user.email);
+    return {
+      id: `CASES:${row.id}`,
+      mode: "CASES",
+      modeLabel: "Cases",
+      route: "/cases",
+      occurredAt: row.createdAt.toISOString(),
+      user: {
+        publicId: row.user.publicId ?? null,
+        username
+      },
+      skin: {
+        name: row.caseItem.name,
+        imageUrl: row.caseItem.imageUrl,
+        valueAtomic: row.caseItem.valueAtomic.toString(),
+        valueCoins: toCoinsString(row.caseItem.valueAtomic)
+      },
+      multiplier: formatWinMultiplier(row.priceAtomic, row.payoutAtomic)
+    };
+  });
+
+  const battleItems = battleWins
+    .map((row): WinsTickerItem | null => {
+      const user = row.battleSlot.user;
+      if (!user) return null;
+      const username = formatUserLabel(user.username, user.email);
+      return {
+        id: `BATTLES:${row.id}`,
+        mode: "BATTLES",
+        modeLabel: "Case Battles",
+        route: "/case-battles",
+        occurredAt: row.createdAt.toISOString(),
+        user: {
+          publicId: user.publicId ?? null,
+          username
+        },
+        skin: {
+          name: row.caseItem.name,
+          imageUrl: row.caseItem.imageUrl,
+          valueAtomic: row.valueAtomic.toString(),
+          valueCoins: toCoinsString(row.valueAtomic)
+        },
+        multiplier: formatWinMultiplier(row.battleSlot.paidAmountAtomic, row.valueAtomic)
+      };
+    })
+    .filter((item): item is WinsTickerItem => item !== null);
+
+  return [...minesItems.filter((item): item is WinsTickerItem => item !== null), ...caseItems, ...battleItems]
+    .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))
+    .slice(0, safeLimit);
 };
 
 const transactionKindFromReason = (
@@ -936,6 +1146,12 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       items,
       total: items.length
     });
+  });
+
+  fastify.get("/me/wins-ticker", { preHandler: requireAuth }, async (request, reply) => {
+    const query = winsTickerQuerySchema.parse(request.query ?? {});
+    const items = await getWinsTickerFeed(query.limit);
+    return reply.send({ items });
   });
 
   fastify.patch("/me/avatar", { preHandler: requireAuth }, async (request, reply) => {

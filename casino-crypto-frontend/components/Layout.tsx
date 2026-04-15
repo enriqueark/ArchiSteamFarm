@@ -7,16 +7,18 @@ import LevelBadge from "./LevelBadge";
 import NotificationsPanel, { type Notification as HeaderNotification } from "./NotificationsPanel";
 import {
   depositVault,
+  getLiveWinsTicker,
   getMyCashierNotifications,
   getVaultState,
   getWallets,
   updateMyAvatar,
+  type LiveWinTickerItem,
   type VaultLockDuration,
   type VaultState,
   type Wallet,
   withdrawVault
 } from "@/lib/api";
-import { CasinoSocket, type SocketEvent, type RouletteRoundEvent } from "@/lib/socket";
+import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 
 const sideLinks = [
   { href: "/cases", src: "/assets/e2aff152f333aa01b1f9280bef464454.svg", label: "Cases" },
@@ -76,7 +78,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [vaultInfo, setVaultInfo] = useState<string | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [tickerEvents, setTickerEvents] = useState<RouletteRoundEvent[]>([]);
+  const [tickerEvents, setTickerEvents] = useState<LiveWinTickerItem[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [balanceFlash, setBalanceFlash] = useState<"up" | "down" | null>(null);
@@ -112,17 +114,34 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     return () => { clearInterval(interval); window.removeEventListener("refreshBalance", onRefresh); };
   }, [refreshWallets]);
 
+  const refreshLiveTicker = useCallback(async () => {
+    try {
+      const response = await getLiveWinsTicker(24);
+      setTickerEvents((response.items || []).slice(0, 24));
+    } catch {
+      // keep previous ticker state on transient failures
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshLiveTicker();
+    const interval = setInterval(() => {
+      void refreshLiveTicker();
+    }, 12_000);
+    return () => clearInterval(interval);
+  }, [refreshLiveTicker]);
+
   useEffect(() => {
     const sock = new CasinoSocket("USDT");
     socketRef.current = sock;
     sock.subscribe((ev: SocketEvent) => {
-      if (ev.type === "roulette.round" && ev.data.status === "SETTLED" && ev.data.winningNumber !== null) {
-        setTickerEvents((prev) => [ev.data, ...prev].slice(0, 20));
+      if (ev.type === "roulette.round" && ev.data.status === "SETTLED") {
+        void refreshLiveTicker();
       }
     });
     sock.connect();
     return () => sock.disconnect();
-  }, []);
+  }, [refreshLiveTicker]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -681,37 +700,42 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             <div className="bg-strip rounded-panel mx-1 my-1 overflow-hidden shrink-0">
               <div className={`flex items-center gap-1.5 py-1.5 px-1.5 ${tickerEvents.length > 5 ? "ticker-scroll" : ""}`}>
                 {(tickerEvents.length > 0 ? [...tickerEvents, ...tickerEvents] : Array.from({ length: 10 })).map((ev, i) => {
-                  const round = ev as RouletteRoundEvent | undefined;
-                  return (
+                  const win = ev as LiveWinTickerItem | undefined;
+                  const modeLabel = win?.modeLabel ?? "Game";
+                  const href = win?.route ?? "/";
+                  const card = (
                     <div
                       key={i}
-                      className="flex items-center gap-2 min-w-[189px] h-[65px] rounded-btn px-3 shrink-0"
+                      className="flex items-center gap-2 min-w-[210px] h-[65px] rounded-btn px-3 shrink-0"
                       style={{ background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)" }}
+                      title={win ? `Mode: ${modeLabel}` : "Waiting for wins..."}
                     >
-                      <div className="relative w-[50px] h-[50px] shrink-0 flex items-center justify-center">
-                        <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[32px] rounded-r ${
-                          round?.winningColor === "RED" ? "bg-red-500" : round?.winningColor === "BLACK" ? "bg-gray-400" : round?.winningColor === "GREEN" ? "bg-green-500" : "bg-accent-red"
-                        }`} />
-                        {round ? (
-                          <span className={`text-2xl font-bold ${
-                            round.winningColor === "RED" ? "text-red-400" : round.winningColor === "GREEN" ? "text-green-400" : "text-white"
-                          }`}>
-                            {round.winningNumber}
-                          </span>
+                      <div className="relative w-[50px] h-[50px] shrink-0 rounded-[8px] overflow-hidden bg-[#111] border border-[#232323] flex items-center justify-center">
+                        {win?.skin?.imageUrl ? (
+                          <img src={win.skin.imageUrl} alt={win.skin.name} className="w-full h-full object-contain" />
                         ) : (
                           <span className="w-8 h-8 rounded bg-[#1a1a1a]" />
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] text-muted truncate">Roulette</p>
+                        <p className="text-[10px] text-muted truncate">{win ? win.user.username : "Live wins"}</p>
                         <p className="text-[11px] text-white truncate">
-                          {round ? `Round #${round.roundNumber}` : "Waiting..."}
+                          {win ? win.skin.name : "Waiting for wins..."}
                         </p>
                         <p className="text-[12px] font-medium text-accent-green">
-                          {round ? `${round.currency}` : "—"}
+                          {win?.multiplier ?? "—"}
                         </p>
                       </div>
                     </div>
+                  );
+                  return (
+                    win ? (
+                      <Link key={i} href={href} className="no-underline">
+                        {card}
+                      </Link>
+                    ) : (
+                      card
+                    )
                   );
                 })}
               </div>

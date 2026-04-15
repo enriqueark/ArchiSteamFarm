@@ -1207,6 +1207,33 @@ export async function getProfileSummary(): Promise<ProfileSummary> {
   return request<ProfileSummary>("/users/profile/summary");
 }
 
+export interface LiveWinTickerItem {
+  id: string;
+  mode: "MINES" | "CASES" | "BATTLES";
+  modeLabel: string;
+  route: string;
+  occurredAt: string;
+  user: {
+    publicId: number | null;
+    username: string;
+  };
+  skin: {
+    name: string;
+    valueAtomic: string;
+    valueCoins: string;
+    imageUrl: string | null;
+  };
+  multiplier: string | null;
+}
+
+export interface LiveWinsTickerResponse {
+  items: LiveWinTickerItem[];
+}
+
+export async function getLiveWinsTicker(limit = 30): Promise<LiveWinsTickerResponse> {
+  return request<LiveWinsTickerResponse>(`/users/me/wins-ticker?limit=${limit}`);
+}
+
 export interface VaultLock {
   id: string;
   amountAtomic: string;
