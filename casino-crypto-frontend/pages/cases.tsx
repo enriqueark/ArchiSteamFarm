@@ -11,6 +11,7 @@ import {
   type CaseListItem,
   type CaseOpeningResult
 } from "@/lib/api";
+import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 
 const toCoins = (atomic: string): number => {
   const n = Number(atomic);
@@ -196,6 +197,7 @@ export default function CasesPage() {
     try {
       const result = await openCase(selectedCase.id);
       showSuccess(`You won ${result.item.name} (${fmtCoins(result.item.valueAtomic)} COINS)`);
+      requestLiveWinsRefresh();
       const refreshed = await getMyCaseOpenings(20);
       setMyOpenings(refreshed);
       if (result.topTierEligible) {

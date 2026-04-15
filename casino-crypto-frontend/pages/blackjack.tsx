@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { startBlackjackGame, actBlackjack, getActiveBlackjackGame, type BlackjackGame, type BlackjackAction } from "@/lib/api";
+import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { playDealSound, playWinSound, playLoseSound } from "@/lib/sounds";
 import { refreshBalance } from "@/lib/refreshBalance";
 
@@ -156,7 +157,17 @@ export default function BlackjackPage() {
       setRevealing(true);
       const t: ReturnType<typeof setTimeout>[] = [];
       for (let i = 1; i < all.length; i++) t.push(setTimeout(() => { setRevealedDealerCount(i + 1); playDealSound({ delayMs: 30 }); }, i * 400));
-      t.push(setTimeout(() => { setShowResult(true); setRevealing(false); refreshBalance(); if (game.status === "WON") playWinSound(); else if (game.status === "LOST") playLoseSound(); }, all.length * 400 + 300));
+      t.push(setTimeout(() => {
+        setShowResult(true);
+        setRevealing(false);
+        refreshBalance();
+        if (game.status === "WON") {
+          requestLiveWinsRefresh();
+          playWinSound();
+        } else if (game.status === "LOST") {
+          playLoseSound();
+        }
+      }, all.length * 400 + 300));
       return () => { t.forEach(clearTimeout); setRevealing(false); };
     } else { setShowResult(false); setRevealedDealerCount(0); setRevealing(false); }
   }, [ended, game?.dealerRevealed, game?.dealerCards, game?.status]);

@@ -18,6 +18,7 @@ import {
   type Wallet,
   withdrawVault
 } from "@/lib/api";
+import { LIVE_WINS_REFRESH_EVENT } from "@/lib/liveWinsTicker";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 
 const sideLinks = [
@@ -151,8 +152,30 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     void refreshLiveTicker();
     const interval = setInterval(() => {
       void refreshLiveTicker();
-    }, 12_000);
+    }, 2_000);
     return () => clearInterval(interval);
+  }, [refreshLiveTicker]);
+
+  useEffect(() => {
+    const burstRefresh = () => {
+      void refreshLiveTicker();
+      window.setTimeout(() => {
+        void refreshLiveTicker();
+      }, 450);
+      window.setTimeout(() => {
+        void refreshLiveTicker();
+      }, 1_200);
+      window.setTimeout(() => {
+        void refreshLiveTicker();
+      }, 2_500);
+      window.setTimeout(() => {
+        void refreshLiveTicker();
+      }, 4_000);
+    };
+    window.addEventListener(LIVE_WINS_REFRESH_EVENT, burstRefresh);
+    return () => {
+      window.removeEventListener(LIVE_WINS_REFRESH_EVENT, burstRefresh);
+    };
   }, [refreshLiveTicker]);
 
   useEffect(() => {

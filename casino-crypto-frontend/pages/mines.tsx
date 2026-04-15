@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 import { refreshBalance } from "@/lib/refreshBalance";
+import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { getGameVolume } from "@/lib/gameAudio";
 
 const BOARD = 25;
@@ -296,6 +297,7 @@ export default function MinesPage() {
       setGame(finished);
       if (finished.status === "CASHED_OUT") {
         await fetchSkin(finished.payoutAtomic ?? finished.potentialPayoutAtomic ?? game.potentialPayoutAtomic);
+        requestLiveWinsRefresh();
       } else {
         setSkinUrl(null);
       }

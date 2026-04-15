@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { refreshBalance } from "@/lib/refreshBalance";
+import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -26,6 +27,7 @@ export default function RoulettePage() {
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
   const [lastResult, setLastResult] = useState<{ number: number | null; color: string | null } | null>(null);
+  const notifiedSettledRoundRef = useRef<string | null>(null);
 
   const socketRef = useRef<CasinoSocket | null>(null);
 
@@ -59,6 +61,14 @@ export default function RoulettePage() {
     updateCountdown();
     return () => clearInterval(interval);
   }, [updateCountdown]);
+
+  useEffect(() => {
+    if (!round || round.status !== "SETTLED") return;
+    const settledKey = "roundId" in round ? round.roundId : round.id;
+    if (notifiedSettledRoundRef.current === settledKey) return;
+    notifiedSettledRoundRef.current = settledKey;
+    requestLiveWinsRefresh();
+  }, [round]);
 
   useEffect(() => {
     getCurrentRound(currency).then(setRound).catch(() => {});

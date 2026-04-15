@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import {
   callBattleBot,
   createBattle,
@@ -95,6 +96,7 @@ export default function BattlesPage() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [busySeat, setBusySeat] = useState<number | null>(null);
+  const notifiedSettledBattleIdRef = useRef<string | null>(null);
 
   const battleCaseCostAtomic = useMemo(() => {
     const caseMap = new Map(cases.map((c) => [c.id, c]));
@@ -183,6 +185,13 @@ export default function BattlesPage() {
       cancelled = true;
     };
   }, [selectedBattleId]);
+
+  useEffect(() => {
+    if (!selectedBattle || selectedBattle.status !== "SETTLED") return;
+    if (notifiedSettledBattleIdRef.current === selectedBattle.id) return;
+    notifiedSettledBattleIdRef.current = selectedBattle.id;
+    requestLiveWinsRefresh();
+  }, [selectedBattle]);
 
   const addCaseToDraft = (caseId: string) => {
     setDraft((prev) => {
