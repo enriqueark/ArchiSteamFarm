@@ -1231,7 +1231,11 @@ export interface LiveWinsTickerResponse {
 }
 
 export async function getLiveWinsTicker(limit = 30): Promise<LiveWinsTickerResponse> {
-  return request<LiveWinsTickerResponse>(`/users/me/wins-ticker?limit=${limit}`);
+  const cacheBust = Date.now();
+  return request<LiveWinsTickerResponse>(
+    `/users/me/wins-ticker?limit=${limit}&_t=${cacheBust}`,
+    { cache: "no-store" }
+  );
 }
 
 export interface VaultLock {

@@ -102,6 +102,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     return (stored || "").trim();
   });
   const latestTickerIdRef = useRef<string | null>(null);
+  const hasTickerBootstrappedRef = useRef(false);
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -119,22 +120,32 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     try {
       const response = await getLiveWinsTicker(24);
       const nextItems = (response.items || []).slice(0, 24);
-      if (!nextItems.length) return;
+      if (!nextItems.length) {
+        if (!hasTickerBootstrappedRef.current) {
+          hasTickerBootstrappedRef.current = true;
+          setTickerEvents([]);
+        }
+        return;
+      }
       const nextTopId = nextItems[0]?.id ?? null;
       if (!nextTopId) return;
-      if (latestTickerIdRef.current === null) {
+      if (!hasTickerBootstrappedRef.current) {
+        hasTickerBootstrappedRef.current = true;
         latestTickerIdRef.current = nextTopId;
         setTickerEvents(nextItems);
         return;
       }
-      if (nextTopId !== latestTickerIdRef.current) {
+      if (
+        nextTopId !== latestTickerIdRef.current ||
+        nextItems.length !== tickerEvents.length
+      ) {
         latestTickerIdRef.current = nextTopId;
         setTickerEvents(nextItems);
       }
     } catch {
       // keep previous ticker state on transient failures
     }
-  }, []);
+  }, [tickerEvents.length]);
 
   useEffect(() => {
     void refreshLiveTicker();
