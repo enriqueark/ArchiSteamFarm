@@ -39,7 +39,7 @@ export default function ProfilePage() {
         {data ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3 md:col-span-2 flex items-center gap-3">
-              <div className="relative h-14 w-14 shrink-0">
+              <div className="relative h-14 w-14 shrink-0 translate-y-1">
                 <div className="absolute inset-0 rounded-full border border-[#f2cb6a]/40 shadow-[0_0_8px_rgba(242,203,106,0.3)]" />
                 <img
                   src="/assets/69a77514d4212f89fc13bd58f30d7dcf.png"
@@ -61,9 +61,9 @@ export default function ProfilePage() {
               <p className="m-0 mt-1 text-white font-semibold">{data.user.email}</p>
             </div>
             <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
-              <p className="m-0 text-gray-400">User ID</p>
+              <p className="m-0 text-gray-400">ID</p>
               <p className="m-0 mt-1 text-white font-semibold">
-                #{data.user.publicId ?? "N/A"} ({data.user.id})
+                ID: {data.user.publicId ?? "N/A"}
               </p>
             </div>
             <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
