@@ -1061,16 +1061,29 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const nextHash = await argon2.hash(body.newPassword);
-    await prisma.$executeRaw`
-      UPDATE "users"
-      SET "passwordHash" = ${nextHash},
-          "updatedAt" = NOW()
-      WHERE id = ${user.id}
-    `;
+    const revocationTime = new Date();
+    const [, revokedSessions] = await prisma.$transaction([
+      prisma.$executeRaw`
+        UPDATE "users"
+        SET "passwordHash" = ${nextHash},
+            "updatedAt" = NOW()
+        WHERE id = ${user.id}
+      `,
+      prisma.session.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null
+        },
+        data: {
+          revokedAt: revocationTime
+        }
+      })
+    ]);
 
     return reply.send({
       success: true,
-      requiresTwoFactor: user.twoFactorEnabled
+      requiresTwoFactor: user.twoFactorEnabled,
+      sessionsRevoked: revokedSessions.count
     });
   });
 

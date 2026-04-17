@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   changeMyPassword,
+  clearSession,
   getChatProfileByPublicId,
   getChatProfileByUserId,
   getMyGameHistory,
@@ -977,8 +978,12 @@ export default function ProfilePage() {
       if (!changed) {
         throw new Error("Password could not be changed.");
       }
-      toast.showSuccess("Password updated successfully.");
+      toast.showSuccess("Password updated. Please sign in again.");
+      clearSession();
       setPasswordModal(PASSWORD_MODAL_INITIAL_STATE);
+      window.setTimeout(() => {
+        window.location.assign("/");
+      }, 200);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update password.";
       setPasswordModal((current) => ({
