@@ -1269,7 +1269,7 @@ export default function ProfilePage() {
         avatar.style.width = "120px";
         avatar.style.height = "120px";
         avatar.style.borderRadius = "120px";
-        avatar.style.marginTop = "16px";
+        avatar.style.marginTop = "24px";
         avatar.style.marginLeft = "10px";
         avatar.onerror = () => {
           avatar.onerror = null;
@@ -1332,15 +1332,26 @@ export default function ProfilePage() {
         }
       });
 
-      const idParagraph = doc.getElementById("n20731349")?.querySelector("p");
+      const idContainer = doc.getElementById("n20731349");
+      if (idContainer) {
+        idContainer.style.maxWidth = "none";
+        idContainer.style.whiteSpace = "nowrap";
+      }
+      const idParagraph = idContainer?.querySelector("p");
       if (idParagraph) {
         const spans = idParagraph.querySelectorAll("span");
+        idParagraph.style.display = "inline-flex";
+        idParagraph.style.alignItems = "center";
+        idParagraph.style.gap = "2px";
+        idParagraph.style.whiteSpace = "nowrap";
         if (spans.length >= 2) {
-          spans[0].textContent = "ID:";
+          spans[0].textContent = "ID: ";
+          spans[0].style.display = "inline";
           spans[1].textContent =
             hydratedProfile.publicId !== null ? String(hydratedProfile.publicId) : "N/A";
+          spans[1].style.display = "inline";
         } else {
-          idParagraph.textContent = `ID:${
+          idParagraph.textContent = `ID: ${
             hydratedProfile.publicId !== null ? hydratedProfile.publicId : "N/A"
           }`;
         }
