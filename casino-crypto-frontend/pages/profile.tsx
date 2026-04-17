@@ -1269,7 +1269,7 @@ export default function ProfilePage() {
         avatar.style.width = "120px";
         avatar.style.height = "120px";
         avatar.style.borderRadius = "120px";
-        avatar.style.marginTop = "12px";
+        avatar.style.marginTop = "16px";
         avatar.style.marginLeft = "10px";
         avatar.onerror = () => {
           avatar.onerror = null;
@@ -1336,11 +1336,11 @@ export default function ProfilePage() {
       if (idParagraph) {
         const spans = idParagraph.querySelectorAll("span");
         if (spans.length >= 2) {
-          spans[0].textContent = "Your ID:";
+          spans[0].textContent = "ID:";
           spans[1].textContent =
             hydratedProfile.publicId !== null ? String(hydratedProfile.publicId) : "N/A";
         } else {
-          idParagraph.textContent = `Your ID:${
+          idParagraph.textContent = `ID:${
             hydratedProfile.publicId !== null ? hydratedProfile.publicId : "N/A"
           }`;
         }
