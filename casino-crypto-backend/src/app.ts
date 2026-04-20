@@ -1,0 +1,197 @@
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import jwt from "@fastify/jwt";
+import rateLimit from "@fastify/rate-limit";
+import sensible from "@fastify/sensible";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
+import websocket from "@fastify/websocket";
+import Fastify, { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
+
+import { env } from "./config/env";
+import { isAppError, toZodDetails } from "./core/errors";
+import { redis } from "./infrastructure/cache/redis";
+import { adminRoutes } from "./modules/admin/routes";
+import { affiliatesRoutes } from "./modules/affiliates/routes";
+import { authRoutes } from "./modules/auth/routes";
+import { betsRoutes } from "./modules/bets/routes";
+import { blackjackRoutes } from "./modules/blackjack/routes";
+import { battlesRoutes } from "./modules/battles/routes";
+import { casesRoutes } from "./modules/cases/routes";
+import { chatRoutes } from "./modules/chat/routes";
+import { chatTipsRainRoutes } from "./modules/chat-tips-rain/routes";
+import { healthRoutes } from "./modules/health/routes";
+import { ledgerRoutes } from "./modules/ledger/routes";
+import { leaderboardRoutes } from "./modules/leaderboard/routes";
+import { minesRoutes } from "./modules/mines/routes";
+import { pricingRoutes } from "./modules/pricing/routes";
+import { rouletteRoutes } from "./modules/roulette/routes";
+import { cashierRoutes } from "./modules/cashier/routes";
+import { securityTwoFactorRoutes } from "./modules/security-2fa/routes";
+import { userRoutes } from "./modules/users/routes";
+import { vaultRoutes } from "./modules/vault/routes";
+import { walletRoutes } from "./modules/wallets/routes";
+
+export const buildApp = (): FastifyInstance => {
+  const app = Fastify({
+    logger: {
+      level: env.LOG_LEVEL
+    },
+    trustProxy: true,
+    requestIdHeader: "x-request-id",
+    genReqId: (request) => (request.headers["x-request-id"] as string | undefined) ?? randomUUID()
+  });
+
+  // Accept empty JSON bodies (e.g. POST cashout with Content-Type: application/json and no payload).
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    const bodyText = typeof body === "string" ? body : body.toString("utf8");
+    (_request as typeof _request & { rawBody?: string }).rawBody = bodyText;
+
+    if (bodyText.length === 0) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(bodyText));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
+  app.register(sensible);
+  app.register(cors, {
+    origin: true,
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key", "X-Request-Id"],
+    exposedHeaders: ["X-Request-Id"]
+  });
+  app.register(helmet);
+  app.register(websocket, {
+    options: {
+      perMessageDeflate: false,
+      maxPayload: 1024 * 8
+    }
+  });
+
+  app.register(jwt, {
+    secret: env.JWT_ACCESS_SECRET
+  });
+  app.register(jwt, {
+    secret: env.JWT_REFRESH_SECRET,
+    namespace: "refresh"
+  });
+
+  app.register(rateLimit, {
+    global: true,
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: `${env.RATE_LIMIT_WINDOW_SECONDS} seconds`,
+    redis
+  });
+
+  app.register(swagger, {
+    openapi: {
+      info: {
+        title: "Casino Crypto Backend API",
+        description: "Modular base API (without games) for a crypto casino platform.",
+        version: "1.0.0"
+      },
+      tags: [
+        { name: "health", description: "Health checks" },
+        { name: "auth", description: "Authentication and sessions" },
+        { name: "admin", description: "Administrative operations and panel" },
+        { name: "bets", description: "Transactional generic bet placement and settlement" },
+        { name: "blackjack", description: "Blackjack 21 game" },
+        { name: "battles", description: "Case battles game mode" },
+        { name: "cases", description: "Cases game mode and case openings" },
+        { name: "chat", description: "Realtime public chat messages" },
+        { name: "chat-rain", description: "Rain pool and chat tipping" },
+        { name: "wallets", description: "Wallet management and bet reservations" },
+        { name: "vault", description: "Vault storage and time-locked funds" },
+        { name: "pricing", description: "Market FX rates and COINS conversion quotes" },
+        { name: "ledger", description: "Ledger accounting entries" },
+        { name: "mines", description: "Mines game with provably fair backend generation" },
+        { name: "roulette", description: "Roulette rounds with websocket realtime updates" },
+        { name: "security", description: "Google 2FA security controls" },
+        { name: "users", description: "User profile" },
+        { name: "affiliates", description: "Affiliate system, profile summary and fairness controls" },
+        { name: "cashier", description: "Crypto deposit and withdraw via OxaPay" }
+      ]
+    }
+  });
+
+  app.register(swaggerUi, {
+    routePrefix: "/docs"
+  });
+
+  app.register(healthRoutes, { prefix: "/api/v1/health" });
+  app.register(authRoutes, { prefix: "/api/v1/auth" });
+  app.register(adminRoutes, { prefix: "/api/v1/admin" });
+  app.register(betsRoutes, { prefix: "/api/v1/bets" });
+  app.register(blackjackRoutes, { prefix: "/api/v1/blackjack" });
+  app.register(battlesRoutes, { prefix: "/api/v1/battles" });
+  app.register(casesRoutes, { prefix: "/api/v1/cases" });
+  app.register(chatRoutes, { prefix: "/api/v1/chat" });
+  app.register(chatTipsRainRoutes, { prefix: "/api/v1/chat" });
+  app.register(userRoutes, { prefix: "/api/v1/users" });
+  app.register(vaultRoutes, { prefix: "/api/v1/vault" });
+  app.register(securityTwoFactorRoutes, { prefix: "/api/v1/security/2fa" });
+  app.register(leaderboardRoutes, { prefix: "/api/v1/leaderboard" });
+  app.register(affiliatesRoutes, { prefix: "/api/v1" });
+  app.register(walletRoutes, { prefix: "/api/v1/wallets" });
+  app.register(pricingRoutes, { prefix: "/api/v1/pricing" });
+  app.register(ledgerRoutes, { prefix: "/api/v1/ledger" });
+  app.register(minesRoutes, { prefix: "/api/v1/mines" });
+  app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });
+  app.register(cashierRoutes, { prefix: "/api/v1/cashier" });
+
+  app.setErrorHandler((error, request, reply) => {
+    const jwtErrorCode =
+      typeof (error as { code?: unknown }).code === "string" ? ((error as { code: string }).code as string) : null;
+    const isJwtError = jwtErrorCode?.startsWith("FST_JWT_") || jwtErrorCode?.startsWith("FAST_JWT_");
+    if (isJwtError) {
+      const statusCode =
+        typeof (error as { statusCode?: unknown }).statusCode === "number"
+          ? ((error as { statusCode: number }).statusCode as number)
+          : 401;
+
+      return reply.code(statusCode).send({
+        code: jwtErrorCode,
+        message: typeof (error as { message?: unknown }).message === "string" ? (error as { message: string }).message : "Unauthorized"
+      });
+    }
+
+    if (error instanceof ZodError) {
+      return reply.code(400).send({
+        code: "VALIDATION_ERROR",
+        message: "Validation error",
+        details: toZodDetails(error)
+      });
+    }
+
+    if (isAppError(error)) {
+      return reply.code(error.statusCode).send({
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
+    }
+
+    request.log.error({ err: error }, "Unhandled error");
+    return reply.code(500).send({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "An internal error occurred"
+    });
+  });
+
+  app.addHook("onReady", async () => {
+    if (redis.status === "wait") {
+      await redis.connect();
+    }
+  });
+
+  return app;
+};

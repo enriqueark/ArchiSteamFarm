@@ -1,0 +1,1009 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PLAYER
+  ADMIN
+  SUPPORT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Currency {
+  BTC
+  ETH
+  USDT
+  USDC
+  SOL
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerReason {
+  ADMIN_ADJUSTMENT
+  DEPOSIT
+  WITHDRAWAL
+  WITHDRAWAL_FEE
+  BONUS
+  VAULT_DEPOSIT
+  VAULT_WITHDRAW
+  USER_TIP
+  RAIN_TIP
+  RAIN_PAYOUT
+  BET_HOLD
+  BET_RELEASE
+  BET_CAPTURE
+  BET_PAYOUT
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  BROADCASTED
+  CONFIRMING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+enum BetReservationStatus {
+  HELD
+  RELEASED
+  CAPTURED
+}
+
+enum ProvablyFairSeedStatus {
+  ACTIVE
+  REVEALED
+}
+
+enum MinesGameStatus {
+  ACTIVE
+  LOST
+  CASHED_OUT
+}
+
+enum BlackjackGameStatus {
+  ACTIVE
+  WON
+  LOST
+  PUSH
+  CANCELLED
+}
+
+enum RouletteRoundStatus {
+  OPEN
+  CLOSED
+  SPINNING
+  SETTLED
+  CANCELLED
+}
+
+enum RouletteBetType {
+  STRAIGHT
+  RED
+  BLACK
+  GREEN
+  BAIT
+  EVEN
+  ODD
+  LOW
+  HIGH
+  DOZEN_1
+  DOZEN_2
+  DOZEN_3
+}
+
+enum RouletteBetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
+enum BattleTemplate {
+  ONE_VS_ONE
+  TWO_VS_TWO
+  ONE_VS_ONE_VS_ONE
+  ONE_VS_ONE_VS_ONE_VS_ONE
+  ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE_VS_ONE
+  TWO_VS_TWO_VS_TWO
+  THREE_VS_THREE
+}
+
+enum BattleStatus {
+  OPEN
+  RUNNING
+  SETTLED
+  CANCELLED
+}
+
+enum BattleSlotState {
+  OPEN
+  JOINED
+  BOT_FILLED
+}
+
+enum CasinoBetStatus {
+  PENDING
+  WON
+  LOST
+}
+
+enum GameResultOutcome {
+  WON
+  LOST
+}
+
+model User {
+  id           String     @id @default(cuid())
+  publicId     Int        @unique @default(autoincrement())
+  email        String     @unique
+  username     String?    @unique
+  usernameUpdatedAt DateTime?
+  steamTradeUrl String?
+  passwordHash String
+  role         UserRole   @default(PLAYER)
+  status       UserStatus @default(ACTIVE)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  twoFactorTempSecret String?
+  canWithdraw  Boolean    @default(true)
+  canTip       Boolean    @default(true)
+  selfExcludedUntil DateTime?
+  selfExclusionNote String?
+  profileVisible Boolean  @default(true)
+  levelXpAtomic BigInt    @default(0)
+  levelCurrent  Int       @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sessions     Session[]
+  wallets      Wallet[]
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
+  betReserves  BetReservation[]
+  provablyFairProfile ProvablyFairProfile?
+  provablyFairSeeds   ProvablyFairSeed[]
+  minesGames          MinesGame[]
+  blackjackGames      BlackjackGame[]
+  rouletteBets        RouletteBet[]
+  rouletteRounds      RouletteRound[]
+  chatMessages        ChatMessage[]
+  casinoBets          CasinoBet[]
+  paymentAddresses    PaymentAddress[]
+  affiliateCode       AffiliateCode?
+  referralsAsReferrer Referral[]               @relation("ReferralReferrer")
+  referralAsReferred  Referral?                @relation("ReferralReferred")
+  affiliateCommissionEventsAsReferrer AffiliateCommissionEvent[] @relation("AffiliateCommissionEventsAsReferrer")
+  affiliateCommissionEventsAsReferred AffiliateCommissionEvent[] @relation("AffiliateCommissionEventsAsReferred")
+  affiliateDepositBonuses AffiliateDepositBonus[] @relation("AffiliateDepositBonusesAsReferred")
+  createdCases Case[] @relation("CasesCreatedByUser")
+  createdSkinCatalogEntries Cs2SkinCatalog[] @relation("Cs2SkinCatalogCreatedByUser")
+  caseOpenings CaseOpening[]
+  battleSlots  BattleSlot[]
+  createdBattles Battle[]
+  wonBattles Battle[] @relation("BattleWinnerUser")
+  vaultAccount VaultAccount?
+  rainJoins    RainJoin[]
+  rainTips     RainTip[]
+  tipsSent     UserTip[] @relation("UserTipSender")
+  tipsReceived UserTip[] @relation("UserTipRecipient")
+
+  @@map("users")
+}
+
+model Case {
+  id              String      @id @default(cuid())
+  slug            String      @unique
+  title           String
+  description     String?
+  logoUrl         String?
+  priceAtomic     BigInt
+  currency        Currency    @default(USDT)
+  isActive        Boolean     @default(true)
+  createdByUserId String?
+  createdByUser   User?       @relation("CasesCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  items           CaseItem[]
+  openings        CaseOpening[]
+  battleCases     BattleCase[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([isActive, createdAt(sort: Desc)])
+  @@map("cases")
+}
+
+model CaseItem {
+  id         String    @id @default(cuid())
+  caseId     String
+  name       String
+  valueAtomic BigInt
+  dropRate   Decimal   @db.Decimal(18, 8)
+  imageUrl   String?
+  sortOrder  Int       @default(0)
+  isActive   Boolean   @default(true)
+  cs2SkinId  String?
+  cs2Skin    Cs2SkinCatalog? @relation(fields: [cs2SkinId], references: [id], onDelete: SetNull)
+  case       Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  openings   CaseOpening[]
+  battleItemDrops BattleItemDrop[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([caseId, sortOrder])
+  @@map("case_items")
+}
+
+model Cs2SkinCatalog {
+  id              String   @id @default(cuid())
+  sourceProvider  String   @default("RAIN_GG")
+  sourceCaseSlug  String?
+  sourceSkinKey   String
+  name            String
+  valueAtomic     BigInt
+  imageUrl        String?
+  isActive        Boolean  @default(true)
+  createdByUserId String?
+  createdByUser   User?    @relation("Cs2SkinCatalogCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  caseItems       CaseItem[]
+
+  @@unique([sourceProvider, sourceSkinKey])
+  @@index([name])
+  @@index([sourceCaseSlug, createdAt(sort: Desc)])
+  @@map("cs2_skin_catalog")
+}
+
+model CaseOpening {
+  id               String          @id @default(cuid())
+  userId           String
+  caseId           String
+  caseItemId       String
+  currency         Currency
+  priceAtomic      BigInt
+  payoutAtomic     BigInt
+  profitAtomic     BigInt
+  betReference     String          @unique
+  betReservationId String          @unique
+  serverSeedId     String
+  serverSeedHash   String
+  clientSeed       String
+  nonce            Int
+  roll             Float
+  topTierEligible  Boolean         @default(false)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  case             Case            @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  caseItem         CaseItem        @relation(fields: [caseItemId], references: [id], onDelete: Restrict)
+  betReservation   BetReservation  @relation("BetReservationCaseOpening", fields: [betReservationId], references: [id], onDelete: Restrict)
+  serverSeed       ProvablyFairSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  createdAt        DateTime        @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([caseId, createdAt(sort: Desc)])
+  @@map("case_openings")
+}
+
+model Battle {
+  id               String        @id @default(cuid())
+  status           BattleStatus  @default(OPEN)
+  template         BattleTemplate
+  modeCrazy        Boolean       @default(false)
+  modeGroup        Boolean       @default(false)
+  modeJackpot      Boolean       @default(false)
+  modeTerminal     Boolean       @default(false)
+  modeFast         Boolean       @default(false)
+  modePrivate      Boolean       @default(false)
+  modeBorrow       Boolean       @default(false)
+  maxCases         Int           @default(50)
+  totalCostAtomic  BigInt        @default(0)
+  totalPayoutAtomic BigInt       @default(0)
+  winnerTeam       Int?
+  winnerUserId     String?
+  jackpotWinnerSlotId String?
+  jackpotSeed      String?
+  jackpotRoll      Float?
+  createdByUserId  String
+  createdAt        DateTime      @default(now())
+  startedAt        DateTime?
+  settledAt        DateTime?
+  updatedAt        DateTime      @updatedAt
+  createdByUser    User          @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  winnerUser       User?         @relation("BattleWinnerUser", fields: [winnerUserId], references: [id], onDelete: SetNull)
+  cases            BattleCase[]
+  slots            BattleSlot[]
+  itemDrops        BattleItemDrop[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([modePrivate, status, createdAt(sort: Desc)])
+  @@index([createdByUserId, createdAt(sort: Desc)])
+  @@map("battles")
+}
+
+model BattleCase {
+  id           String   @id @default(cuid())
+  battleId     String
+  caseId       String
+  orderIndex   Int
+  priceAtomic  BigInt
+  createdAt    DateTime @default(now())
+  battle       Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  itemDrops    BattleItemDrop[]
+
+  @@unique([battleId, orderIndex])
+  @@index([battleId])
+  @@map("battle_cases")
+}
+
+model BattleSlot {
+  id               String         @id @default(cuid())
+  battleId          String
+  seatIndex         Int
+  teamIndex         Int
+  state             BattleSlotState @default(OPEN)
+  userId            String?
+  displayName       String
+  isBot             Boolean        @default(false)
+  borrowPercent     Int            @default(100)
+  paidAmountAtomic  BigInt         @default(0)
+  payoutAtomic      BigInt         @default(0)
+  winWeightAtomic   BigInt         @default(0)
+  profitAtomic      BigInt         @default(0)
+  createdAt         DateTime       @default(now())
+  joinedAt          DateTime?
+  updatedAt         DateTime       @updatedAt
+  battle            Battle         @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user              User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  itemDrops         BattleItemDrop[]
+
+  @@unique([battleId, seatIndex])
+  @@index([battleId, teamIndex])
+  @@index([battleId, state])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("battle_slots")
+}
+
+model BattleItemDrop {
+  id               String   @id @default(cuid())
+  battleId          String
+  battleCaseId      String
+  battleSlotId      String
+  roundIndex        Int
+  orderIndex        Int
+  caseItemId        String
+  valueAtomic       BigInt
+  createdAt         DateTime @default(now())
+  battle            Battle    @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  battleCase        BattleCase @relation(fields: [battleCaseId], references: [id], onDelete: Cascade)
+  battleSlot        BattleSlot @relation(fields: [battleSlotId], references: [id], onDelete: Cascade)
+  caseItem          CaseItem   @relation(fields: [caseItemId], references: [id], onDelete: Restrict)
+
+  @@index([battleId, roundIndex, orderIndex])
+  @@index([battleSlotId, createdAt(sort: Desc)])
+  @@map("battle_item_drops")
+}
+
+model AffiliateCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referrals Referral[]
+
+  @@index([code])
+  @@map("affiliate_codes")
+}
+
+model Referral {
+  id                        String   @id @default(cuid())
+  referrerUserId            String
+  referredUserId            String   @unique
+  affiliateCodeId           String
+  bonusReceivedAtomic       BigInt   @default(0)
+  totalWageredAtomic        BigInt   @default(0)
+  totalCommissionAtomic     BigInt   @default(0)
+  claimableCommissionAtomic BigInt   @default(0)
+  claimedCommissionAtomic   BigInt   @default(0)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  referrer                  User     @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referred                  User     @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  affiliateCode             AffiliateCode @relation(fields: [affiliateCodeId], references: [id], onDelete: Restrict)
+  commissionEvents          AffiliateCommissionEvent[]
+  depositBonuses            AffiliateDepositBonus[]
+
+  @@index([referrerUserId, createdAt(sort: Desc)])
+  @@index([affiliateCodeId, createdAt(sort: Desc)])
+  @@map("referrals")
+}
+
+model AffiliateCommissionEvent {
+  id              String   @id @default(cuid())
+  referralId      String
+  referrerUserId  String
+  referredUserId  String
+  source          String
+  wagerAtomic     BigInt
+  commissionAtomic BigInt
+  idempotencyKey  String   @unique
+  createdAt       DateTime @default(now())
+  referral        Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referrer        User     @relation("AffiliateCommissionEventsAsReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referred        User     @relation("AffiliateCommissionEventsAsReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerUserId, createdAt(sort: Desc)])
+  @@index([referredUserId, createdAt(sort: Desc)])
+  @@map("affiliate_commission_events")
+}
+
+model AffiliateDepositBonus {
+  id             String   @id @default(cuid())
+  referralId     String
+  referredUserId String
+  depositId      String   @unique
+  bonusAtomic    BigInt
+  createdAt      DateTime @default(now())
+  referral       Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referred       User     @relation("AffiliateDepositBonusesAsReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referralId, createdAt(sort: Desc)])
+  @@index([referredUserId, createdAt(sort: Desc)])
+  @@map("affiliate_deposit_bonuses")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Wallet {
+  id            String      @id @default(cuid())
+  userId        String
+  currency      Currency
+  balanceAtomic BigInt      @default(0)
+  lockedAtomic  BigInt      @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries       LedgerEntry[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
+  betReserves   BetReservation[]
+  rouletteBets  RouletteBet[]
+  casinoBets    CasinoBet[]
+
+  @@unique([userId, currency])
+  @@unique([id, currency])
+  @@index([userId])
+  @@map("wallets")
+}
+
+model LedgerEntry {
+  id                  String          @id @default(cuid())
+  walletId            String
+  chainIndex          BigInt          @default(0)
+  previousHash        String          @default("0000000000000000000000000000000000000000000000000000000000000000")
+  currentHash         String          @default("0000000000000000000000000000000000000000000000000000000000000000")
+  direction           LedgerDirection
+  reason              LedgerReason
+  amountAtomic        BigInt
+  balanceBeforeAtomic BigInt
+  balanceAfterAtomic  BigInt
+  idempotencyKey      String
+  referenceId         String?
+  metadata            Json?
+  createdAt           DateTime        @default(now())
+  wallet              Wallet          @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  depositCredit       Deposit?        @relation("DepositCreditEntry")
+  withdrawalDebit     Withdrawal?     @relation("WithdrawalDebitEntry")
+  withdrawalFee       Withdrawal?     @relation("WithdrawalFeeEntry")
+  betHoldReserve      BetReservation? @relation("BetHoldEntry")
+  betReleaseReserve   BetReservation? @relation("BetReleaseEntry")
+  betCaptureReserve   BetReservation? @relation("BetCaptureEntry")
+  casinoBetCapture    CasinoBet?      @relation("CasinoBetCaptureEntry")
+  casinoBetPayout     CasinoBet?      @relation("CasinoBetPayoutEntry")
+
+  @@unique([walletId, chainIndex])
+  @@index([walletId, chainIndex(sort: Desc)])
+  @@index([walletId, createdAt(sort: Desc)])
+  @@index([currentHash])
+  @@unique([walletId, idempotencyKey])
+  @@map("wallet_transactions")
+}
+
+model CasinoBet {
+  id                   String          @id @default(cuid())
+  userId               String
+  walletId             String
+  currency             Currency
+  gameType             String
+  roundReference       String
+  amountAtomic         BigInt
+  multiplier           Decimal         @db.Decimal(18, 8)
+  placeBalanceBeforeAtomic BigInt
+  placeBalanceAfterAtomic  BigInt
+  placeLockedAfterAtomic   BigInt
+  payoutAtomic         BigInt?
+  status               CasinoBetStatus @default(PENDING)
+  placeIdempotencyKey  String
+  settleIdempotencyKey String?         @unique
+  captureTransactionId String?         @unique
+  payoutTransactionId  String?         @unique
+  settleBalanceBeforeAtomic BigInt?
+  settleBalanceAfterAtomic  BigInt?
+  settleLockedAfterAtomic   BigInt?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  settledAt            DateTime?
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet               Wallet          @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  captureTransaction   LedgerEntry?    @relation("CasinoBetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  payoutTransaction    LedgerEntry?    @relation("CasinoBetPayoutEntry", fields: [payoutTransactionId], references: [id], onDelete: SetNull)
+  validatedGameResult  BetGameResult?
+
+  @@unique([userId, placeIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([gameType, roundReference, createdAt(sort: Desc)])
+  @@map("casino_bets")
+}
+
+model BetGameResult {
+  id                  String            @id @default(cuid())
+  betId               String            @unique
+  gameResult          GameResultOutcome
+  decisionNonce       String            @unique
+  issuedAt            DateTime
+  signature           String
+  signatureVersion    String            @default("ED25519_V1")
+  payloadHash         String
+  createdByServiceRole String
+  verifiedAt          DateTime          @default(now())
+  createdAt           DateTime          @default(now())
+  bet                 CasinoBet         @relation(fields: [betId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([decisionNonce])
+  @@map("bet_game_results")
+}
+
+model BetReservation {
+  id                  String               @id @default(cuid())
+  userId              String
+  walletId            String
+  currency            Currency
+  betReference        String
+  amountAtomic        BigInt
+  status              BetReservationStatus @default(HELD)
+  holdIdempotencyKey  String?
+  releaseIdempotencyKey String?
+  captureIdempotencyKey String?
+  holdTransactionId   String               @unique
+  releaseTransactionId String?             @unique
+  captureTransactionId String?             @unique
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  releasedAt          DateTime?
+  capturedAt          DateTime?
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet              Wallet               @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  holdTransaction     LedgerEntry          @relation("BetHoldEntry", fields: [holdTransactionId], references: [id], onDelete: Restrict)
+  releaseTransaction  LedgerEntry?         @relation("BetReleaseEntry", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
+  captureTransaction  LedgerEntry?         @relation("BetCaptureEntry", fields: [captureTransactionId], references: [id], onDelete: SetNull)
+  minesGame           MinesGame?           @relation("BetReservationMinesGame")
+  blackjackGame       BlackjackGame?       @relation("BetReservationBlackjackGame")
+  rouletteBet         RouletteBet?         @relation("BetReservationRouletteBet")
+  caseOpening         CaseOpening?         @relation("BetReservationCaseOpening")
+
+  @@unique([walletId, betReference])
+  @@unique([walletId, holdIdempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@map("bet_reservations")
+}
+
+model ProvablyFairSeed {
+  id            String                 @id @default(cuid())
+  userId        String
+  serverSeed    String
+  serverSeedHash String                @unique
+  status        ProvablyFairSeedStatus @default(ACTIVE)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  revealedAt    DateTime?
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  activeForProfiles ProvablyFairProfile[] @relation("ActiveProvablyFairSeed")
+  minesGames    MinesGame[]
+  blackjackGames BlackjackGame[]
+  caseOpenings  CaseOpening[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@map("provably_fair_seeds")
+}
+
+model ProvablyFairProfile {
+  userId       String            @id
+  clientSeed   String
+  nonce        Int               @default(0)
+  activeSeedId String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeSeed   ProvablyFairSeed  @relation("ActiveProvablyFairSeed", fields: [activeSeedId], references: [id], onDelete: Restrict)
+
+  @@index([activeSeedId])
+  @@map("provably_fair_profiles")
+}
+
+model MinesGame {
+  id                String          @id @default(cuid())
+  userId            String
+  currency          Currency
+  betAtomic         BigInt
+  mineCount         Int
+  boardSize         Int             @default(25)
+  status            MinesGameStatus @default(ACTIVE)
+  serverSeedId      String
+  serverSeedHash    String
+  clientSeed        String
+  nonce             Int
+  betReference      String          @unique
+  betReservationId  String          @unique
+  revealedCells     Json
+  safeReveals       Int             @default(0)
+  currentMultiplier Decimal         @default(1.0) @db.Decimal(18, 8)
+  payoutAtomic      BigInt?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  finishedAt        DateTime?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serverSeed        ProvablyFairSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  betReservation    BetReservation  @relation("BetReservationMinesGame", fields: [betReservationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mines_games")
+}
+
+model BlackjackGame {
+  id                    String             @id @default(cuid())
+  userId                String
+  currency              Currency
+  initialBetAtomic      BigInt
+  mainBetAtomic         BigInt
+  sideBetPairsAtomic    BigInt             @default(0)
+  sideBet21Plus3Atomic  BigInt             @default(0)
+  insuranceBetAtomic    BigInt?
+  status                BlackjackGameStatus @default(ACTIVE)
+  outcome               String?
+  betReference          String             @unique
+  betReservationId      String             @unique
+  serverSeedId          String
+  serverSeedHash        String
+  clientSeed            String
+  nonce                 Int
+  paytable              Json
+  playerHands           Json
+  dealerCards           Json
+  deck                  Json
+  activeHandIndex       Int                @default(0)
+  dealerRevealed        Boolean            @default(false)
+  canSplit              Boolean            @default(false)
+  canInsurance          Boolean            @default(false)
+  mainPayoutAtomic      BigInt?
+  sidePayoutAtomic      BigInt?
+  insurancePayoutAtomic BigInt?
+  payoutAtomic          BigInt?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  finishedAt            DateTime?
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serverSeed            ProvablyFairSeed   @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  betReservation        BetReservation     @relation("BetReservationBlackjackGame", fields: [betReservationId], references: [id], onDelete: Restrict)
+
+  @@index([serverSeedId])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("blackjack_games")
+}
+
+model PlatformConfig {
+  key             String   @id
+  value           Json
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("platform_configs")
+}
+
+model RouletteRound {
+  id               String            @id @default(cuid())
+  roundNumber      Int
+  currency         Currency
+  status           RouletteRoundStatus @default(OPEN)
+  openAt           DateTime
+  betsCloseAt      DateTime
+  spinStartsAt     DateTime
+  settleAt         DateTime
+  closedAt         DateTime?
+  spinningAt       DateTime?
+  settledAt        DateTime?
+  cancelledAt      DateTime?
+  winningNumber    Int?
+  winningColor     String?
+  totalStakedAtomic BigInt          @default(0)
+  totalPayoutAtomic BigInt          @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdByUserId  String?
+  createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  bets             RouletteBet[]
+
+  @@unique([currency, roundNumber])
+  @@index([currency, status, betsCloseAt])
+  @@index([status, settleAt])
+  @@map("roulette_rounds")
+}
+
+model RouletteBet {
+  id               String           @id @default(cuid())
+  roundId          String
+  userId           String
+  walletId         String
+  currency         Currency
+  betType          RouletteBetType
+  betValue         Int?
+  stakeAtomic      BigInt
+  payoutAtomic     BigInt?
+  status           RouletteBetStatus @default(PENDING)
+  idempotencyKey   String
+  betReference     String           @unique
+  reservationId    String           @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  settledAt        DateTime?
+  round            RouletteRound    @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet           Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  reservation      BetReservation   @relation("BetReservationRouletteBet", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([roundId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("roulette_bets")
+}
+
+model Deposit {
+  id                    String        @id @default(cuid())
+  userId                String
+  walletId              String
+  currency              Currency
+  asset                 String?
+  network               String        @default("mainnet")
+  amountAtomic          BigInt
+  txHash                String?
+  txVout                Int?
+  sourceAddress         String?
+  providerTrackId       String?
+  status                DepositStatus @default(PENDING)
+  confirmations         Int           @default(0)
+  requiredConfirmations Int           @default(1)
+  idempotencyKey        String?
+  creditedTransactionId String?       @unique
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  confirmedAt           DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet                Wallet        @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  creditedTransaction   LedgerEntry?  @relation("DepositCreditEntry", fields: [creditedTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@index([providerTrackId])
+  @@map("deposits")
+}
+
+model Withdrawal {
+  id                 String           @id @default(cuid())
+  userId             String
+  walletId           String
+  currency           Currency
+  asset              String?
+  network            String           @default("mainnet")
+  destinationAddress String
+  amountAtomic       BigInt
+  feeAtomic          BigInt           @default(0)
+  status             WithdrawalStatus @default(PENDING)
+  idempotencyKey     String?
+  providerTrackId    String?          @unique
+  txHash             String?
+  debitTransactionId String?          @unique
+  feeTransactionId   String?          @unique
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  reviewedAt         DateTime?
+  broadcastedAt      DateTime?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  cancelledAt        DateTime?
+  user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet             Wallet           @relation(fields: [walletId, currency], references: [id, currency], onDelete: Restrict)
+  debitTransaction   LedgerEntry?     @relation("WithdrawalDebitEntry", fields: [debitTransactionId], references: [id], onDelete: SetNull)
+  feeTransaction     LedgerEntry?     @relation("WithdrawalFeeEntry", fields: [feeTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([walletId, idempotencyKey])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([walletId, status, createdAt(sort: Desc)])
+  @@index([network, txHash])
+  @@map("withdrawals")
+}
+
+model PaymentAddress {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String   @default("OXAPAY")
+  asset           String
+  network         String
+  networkLabel    String
+  address         String
+  providerTrackId String   @unique
+  callbackUrl     String?
+  qrCodeUrl       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, asset, network])
+  @@index([userId])
+  @@map("payment_addresses")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  channel    String   @default("GLOBAL")
+  message    String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channel, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("chat_messages")
+}
+
+model VaultAccount {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  balanceAtomic BigInt @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locks       VaultLock[]
+
+  @@index([updatedAt(sort: Desc)])
+  @@map("vault_accounts")
+}
+
+model VaultLock {
+  id          String   @id @default(cuid())
+  vaultId     String
+  amountAtomic BigInt
+  unlockAt    DateTime
+  createdAt   DateTime @default(now())
+  vault       VaultAccount @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+
+  @@index([vaultId, unlockAt(sort: Desc)])
+  @@map("vault_locks")
+}
+
+model RainRound {
+  id               String   @id @default(cuid())
+  startsAt         DateTime
+  endsAt           DateTime
+  baseAmountAtomic BigInt   @default(0)
+  tippedAmountAtomic BigInt @default(0)
+  settledAt        DateTime?
+  createdAt        DateTime @default(now())
+  joins            RainJoin[]
+  tips             RainTip[]
+
+  @@unique([startsAt, endsAt])
+  @@index([endsAt, settledAt])
+  @@map("rain_rounds")
+}
+
+model RainJoin {
+  id        String   @id @default(cuid())
+  roundId   String
+  userId    String
+  createdAt DateTime @default(now())
+  round     RainRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("rain_joins")
+}
+
+model RainTip {
+  id          String   @id @default(cuid())
+  roundId     String
+  userId      String
+  amountAtomic BigInt
+  createdAt   DateTime @default(now())
+  round       RainRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("rain_tips")
+}
+
+model UserTip {
+  id           String   @id @default(cuid())
+  fromUserId   String
+  toUserId     String
+  amountAtomic BigInt
+  message      String?
+  createdAt    DateTime @default(now())
+  fromUser     User     @relation("UserTipSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser       User     @relation("UserTipRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId, createdAt(sort: Desc)])
+  @@index([toUserId, createdAt(sort: Desc)])
+  @@map("user_tips")
+}
+
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

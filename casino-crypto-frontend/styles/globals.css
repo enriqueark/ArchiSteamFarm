@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+body {
+  background-color: #090909;
+  color: #fff;
+  font-family: "DM Sans", "Gotham", "Inter", system-ui, sans-serif;
+  margin: 0;
+}
+
+::-webkit-scrollbar { width: 0px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: transparent; }
+* { scrollbar-width: none; }
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes dealCard {
+  0% { opacity: 0; transform: translateY(-60px) translateX(200px) rotate(15deg) scale(0.7); }
+  100% { opacity: 1; transform: translateY(0) translateX(0) rotate(0deg) scale(1); }
+}
+
+@keyframes flipCard {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+@keyframes balancePulse {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes levelPulse {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 6px currentColor; }
+  50% { filter: brightness(1.3); box-shadow: 0 0 14px currentColor; }
+}
+
+@keyframes rainbowGlow {
+  0% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; background: linear-gradient(90deg, #ff535340, #ff535360); }
+  17% { border-color: #ffb753; color: #ffb753; box-shadow: 0 0 10px #ffb75380; text-shadow: 0 0 8px #ffb753; background: linear-gradient(90deg, #ffb75340, #ffb75360); }
+  33% { border-color: #53ff87; color: #53ff87; box-shadow: 0 0 10px #53ff8780; text-shadow: 0 0 8px #53ff87; background: linear-gradient(90deg, #53ff8740, #53ff8760); }
+  50% { border-color: #53a3ff; color: #53a3ff; box-shadow: 0 0 10px #53a3ff80; text-shadow: 0 0 8px #53a3ff; background: linear-gradient(90deg, #53a3ff40, #53a3ff60); }
+  67% { border-color: #c053ff; color: #c053ff; box-shadow: 0 0 10px #c053ff80; text-shadow: 0 0 8px #c053ff; background: linear-gradient(90deg, #c053ff40, #c053ff60); }
+  83% { border-color: #ff53a3; color: #ff53a3; box-shadow: 0 0 10px #ff53a380; text-shadow: 0 0 8px #ff53a3; background: linear-gradient(90deg, #ff53a340, #ff53a360); }
+  100% { border-color: #ff5353; color: #ff5353; box-shadow: 0 0 10px #ff535380; text-shadow: 0 0 8px #ff5353; background: linear-gradient(90deg, #ff535340, #ff535360); }
+}
+
+@keyframes rainbowBorder {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+.ticker-scroll {
+  animation: ticker-scroll 25s linear infinite;
+}

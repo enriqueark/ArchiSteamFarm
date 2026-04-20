@@ -1,0 +1,2050 @@
+import {
+  DepositStatus,
+  LedgerDirection,
+  LedgerReason,
+  Prisma,
+  UserRole,
+  UserStatus,
+  WithdrawalStatus
+} from "@prisma/client";
+import { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+
+import { requireRoles } from "../../core/auth";
+import { AppError } from "../../core/errors";
+import { requireIdempotencyKey } from "../../core/idempotency";
+import { prisma } from "../../infrastructure/db/prisma";
+import { getBlackjackPayoutConfig, setBlackjackPayoutConfig } from "../blackjack/config";
+import { adjustWalletBalance } from "../ledger/service";
+import { getLevelFromXp } from "../progression/service";
+import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
+
+const userSearchQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(5000).default(1000),
+  all: z.coerce.boolean().default(true)
+});
+
+const userDetailParamsSchema = z.object({
+  userId: z.string().cuid()
+});
+
+const userDetailQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  mode: z.string().trim().max(80).optional(),
+  reference: z.string().trim().max(120).optional(),
+  minAmount: z.coerce.number().min(0).optional(),
+  maxAmount: z.coerce.number().min(0).optional(),
+  from: z.string().trim().max(64).optional(),
+  to: z.string().trim().max(64).optional()
+});
+
+const updateUserStatusSchema = z.object({
+  status: z.nativeEnum(UserStatus),
+  role: z.nativeEnum(UserRole).optional(),
+  canWithdraw: z.boolean().optional(),
+  canTip: z.boolean().optional(),
+  clearSelfExclusion: z.boolean().optional()
+});
+
+const adjustByAdminSchema = z
+  .object({
+    userId: z.string().trim().min(1).optional(),
+    email: z.string().email().optional(),
+    publicId: z.coerce.number().int().positive().optional(),
+    amountAtomic: z
+      .string()
+      .regex(/^-?\d+$/, "amountAtomic must be an integer string")
+      .transform((value) => BigInt(value))
+      .refine((value) => value !== 0n, "amountAtomic cannot be 0"),
+    reason: z
+      .nativeEnum(LedgerReason)
+      .default(LedgerReason.ADMIN_ADJUSTMENT)
+      .refine(
+        (value) =>
+          value !== LedgerReason.BET_HOLD &&
+          value !== LedgerReason.BET_RELEASE &&
+          value !== LedgerReason.BET_CAPTURE &&
+          value !== LedgerReason.BET_PAYOUT,
+        {
+          message: "Reason is not allowed in this administrative endpoint"
+        }
+      ),
+    referenceId: z.string().max(64).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional()
+  })
+  .refine((value) => {
+    const provided = [Boolean(value.userId), Boolean(value.email), Boolean(value.publicId)].filter(Boolean).length;
+    return provided === 1;
+  }, {
+    message: "Provide exactly one of userId, email or publicId",
+    path: ["userId"]
+  });
+
+const isMissingLevelXpColumnError = (error: unknown): boolean => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes("levelxpatomic");
+  }
+  return false;
+};
+
+const clearSelfExclusionBestEffort = async (userId: string): Promise<void> => {
+  const updates: Array<() => Promise<unknown>> = [
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExcludedUntil" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExcludeUntil" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionReason" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNote" = NULL WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoWager" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoWithdraw" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "selfExclusionNoTip" = true WHERE id = ${userId}`,
+    () => prisma.$executeRaw`UPDATE "users" SET "updatedAt" = NOW() WHERE id = ${userId}`
+  ];
+  for (const update of updates) {
+    try {
+      await update();
+    } catch {
+      // Ignore schema drift per-column and keep best-effort clearing.
+    }
+  }
+};
+
+const COIN_ATOMIC_FACTOR = 100000000n;
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COIN_ATOMIC_FACTOR;
+  const fractionRaw = (abs % COIN_ATOMIC_FACTOR).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
+};
+
+const ADMIN_PANEL_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Casino Admin Panel</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #0b1220; color: #e5e7eb; }
+      h1 { margin: 0 0 16px; }
+      h2 { margin: 0 0 10px; font-size: 16px; }
+      .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+      input, select, button, textarea { padding: 8px; border-radius: 8px; border: 1px solid #374151; background: #0f172a; color: #e5e7eb; }
+      button { cursor: pointer; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border-bottom: 1px solid #1f2937; text-align: left; padding: 8px; vertical-align: top; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .ok { color: #22c55e; }
+      .err { color: #ef4444; white-space: pre-wrap; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .muted { color: #94a3b8; }
+      .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .pill { border: 1px solid #334155; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+      .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      .danger { background: #7f1d1d; border-color: #991b1b; }
+      .warn { background: #78350f; border-color: #92400e; }
+      .success { background: #14532d; border-color: #166534; }
+      .detail-table td { border-bottom: 1px solid #1e293b; }
+    </style>
+  </head>
+  <body>
+    <h1>Admin Panel</h1>
+
+    <div class="card">
+      <div class="row">
+        <label>Admin email:</label>
+        <input id="adminEmail" style="min-width:260px" placeholder="admin@domain.com" />
+        <label>Password:</label>
+        <input id="adminPassword" type="password" style="min-width:220px" placeholder="********" />
+        <button id="loginBtn">Login as admin</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <label>Access token:</label>
+        <input id="token" style="min-width:520px" placeholder="Auto-filled after login (or paste manually)" />
+        <button id="checkTokenBtn">Verify token</button>
+        <button id="logoutBtn">Logout current token</button>
+      </div>
+      <div id="authStatus" class="mono"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label>Search user:</label>
+        <input id="query" placeholder="email, uuid, or user #id..." />
+        <label>Limit:</label>
+        <input id="limit" type="number" min="1" max="5000" value="1000" style="width:100px" />
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input id="allUsers" type="checkbox" checked />
+          All users
+        </label>
+        <button id="searchBtn">Refresh users</button>
+      </div>
+      <div class="mono muted" style="margin-top:8px;">Balance adjust only uses ${PLATFORM_VIRTUAL_COIN_SYMBOL} (${PLATFORM_INTERNAL_CURRENCY})</div>
+      <div id="searchStatus"></div>
+      <table id="usersTable">
+        <thead>
+          <tr><th>User / Progression</th><th>Wallets</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="detailCard" class="card" style="display:none;">
+      <h2>User profile details</h2>
+      <div id="detailStatus" class="mono"></div>
+      <div class="row" style="margin-top:8px;">
+        <label>Mode</label>
+        <input id="detailMode" placeholder="blackjack / mines / roulette / cases" style="min-width:220px" />
+        <label>Reference</label>
+        <input id="detailReference" placeholder="reference id..." style="min-width:180px" />
+        <label>Min $</label>
+        <input id="detailMinAmount" type="number" min="0" step="0.01" style="width:110px" />
+        <label>Max $</label>
+        <input id="detailMaxAmount" type="number" min="0" step="0.01" style="width:110px" />
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <label>From</label>
+        <input id="detailFrom" type="datetime-local" />
+        <label>To</label>
+        <input id="detailTo" type="datetime-local" />
+        <button id="detailApplyBtn">Apply filters</button>
+        <button id="detailResetBtn">Reset</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="detailPrevBtn">Prev 50</button>
+        <button id="detailNextBtn">Next 50</button>
+        <span id="detailPageInfo" class="mono muted">Page 1/1</span>
+      </div>
+      <div id="detailContent"></div>
+    </div>
+
+    <div class="card">
+      <h2>Cases Manager (CS2)</h2>
+      <div class="row">
+        <label>Preload snapshot:</label>
+        <input id="casesImportPages" type="number" min="1" max="20" value="1" style="width:90px" />
+        <button id="casesImportBtn">Preload skins</button>
+        <input id="casesSkinSearch" placeholder="Search skin name..." style="min-width:220px" />
+        <button id="casesSearchSkinsBtn">Search skins</button>
+      </div>
+      <div class="row" style="margin-top:8px; align-items:center; flex-wrap:wrap;">
+        <label>Delete by price ($)</label>
+        <input id="casesDeleteMinPrice" type="number" min="0" step="0.01" placeholder="Min" style="width:110px" />
+        <input id="casesDeleteMaxPrice" type="number" min="0" step="0.01" placeholder="Max" style="width:110px" />
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input id="casesDeleteOnlyUnused" type="checkbox" checked />
+          Only unused skins
+        </label>
+        <button id="casesDeleteByPriceBtn" class="danger">Delete range</button>
+      </div>
+      <div id="casesStatus" class="mono" style="margin-top:8px;"></div>
+      <div class="mono muted" style="margin-top:4px;">
+        1) Preload once -> 2) Search skins -> 3) Add skins -> 4) Set drop % (must total 100) -> 5) Save case
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <label>Cases:</label>
+        <select id="casesSelect" style="min-width:320px"></select>
+        <button id="casesRefreshBtn">Refresh</button>
+        <button id="caseEditBtn">Edit selected</button>
+        <span id="caseMode" class="mono muted">Mode: New case</span>
+      </div>
+      <div class="grid-2" style="margin-top:10px;">
+        <div>
+          <h3 style="margin:0 0 8px;">Case form</h3>
+          <div class="row" style="margin-bottom:6px;">
+            <label>Slug</label><input id="caseSlug" style="min-width:180px" />
+            <label>Title</label><input id="caseTitle" style="min-width:180px" />
+          </div>
+          <div class="row" style="margin-bottom:6px;">
+            <label>Price (coins)</label><input id="casePriceCoins" type="number" step="0.01" min="0.01" style="width:120px" />
+            <label>Logo URL</label><input id="caseLogoUrl" style="min-width:220px" />
+          </div>
+          <div class="row" style="margin-bottom:6px;">
+            <label style="display:flex;align-items:center;gap:6px;"><input id="caseIsActive" type="checkbox" checked />Active</label>
+            <button id="caseNewBtn">New</button>
+            <button id="caseSaveBtn">Save case</button>
+            <button id="caseSuggestPriceBtn" type="button">Suggest 97% RTP price</button>
+          </div>
+          <textarea id="caseDescription" rows="3" placeholder="Description..." style="width:100%;"></textarea>
+          <div id="caseVolatility" class="mono" style="margin-top:8px;">Volatility: -</div>
+          <div id="caseRtpHint" class="mono muted" style="margin-top:6px;">RTP(97%) suggestion: -</div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Simulation</h3>
+          <div class="row">
+            <label>Rounds</label>
+            <input id="casesSimRounds" type="number" min="1" max="1000000" value="100000" style="width:120px" />
+            <button id="casesSimBtn">Run RTP simulation</button>
+          </div>
+          <div id="casesSimStatus" class="mono" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      <h3 style="margin:12px 0 6px;">Selected items for this case</h3>
+      <table id="caseItemsTable">
+        <thead>
+          <tr><th>Skin</th><th>Price</th><th>Drop %</th><th>Action</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <h3 style="margin:12px 0 6px;">Catalog skins (search results)</h3>
+      <table id="catalogSkinsTable">
+        <thead>
+          <tr><th>Name</th><th>Price</th><th>Source case</th><th>Action</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script>
+      const tokenInput = document.getElementById("token");
+      const adminEmailInput = document.getElementById("adminEmail");
+      const adminPasswordInput = document.getElementById("adminPassword");
+      const loginBtn = document.getElementById("loginBtn");
+      const queryInput = document.getElementById("query");
+      const limitInput = document.getElementById("limit");
+      const allUsersInput = document.getElementById("allUsers");
+      const usersTbody = document.querySelector("#usersTable tbody");
+      const searchStatus = document.getElementById("searchStatus");
+      const authStatus = document.getElementById("authStatus");
+      const checkTokenBtn = document.getElementById("checkTokenBtn");
+      const detailCard = document.getElementById("detailCard");
+      const detailStatus = document.getElementById("detailStatus");
+      const detailContent = document.getElementById("detailContent");
+      const detailModeInput = document.getElementById("detailMode");
+      const detailReferenceInput = document.getElementById("detailReference");
+      const detailMinAmountInput = document.getElementById("detailMinAmount");
+      const detailMaxAmountInput = document.getElementById("detailMaxAmount");
+      const detailFromInput = document.getElementById("detailFrom");
+      const detailToInput = document.getElementById("detailTo");
+      const detailApplyBtn = document.getElementById("detailApplyBtn");
+      const detailResetBtn = document.getElementById("detailResetBtn");
+      const detailPrevBtn = document.getElementById("detailPrevBtn");
+      const detailNextBtn = document.getElementById("detailNextBtn");
+      const detailPageInfo = document.getElementById("detailPageInfo");
+      const COIN_CURRENCY = "${PLATFORM_INTERNAL_CURRENCY}";
+      const COIN_SYMBOL = "${PLATFORM_VIRTUAL_COIN_SYMBOL}";
+
+      const req = async (url, options = {}) => {
+        const token = tokenInput.value.trim();
+        const headers = Object.assign({}, options.headers || {}, token ? { Authorization: "Bearer " + token } : {});
+        try {
+          return await fetch(url, Object.assign({}, options, { headers }));
+        } catch (_error) {
+          throw new Error("Network error while contacting backend.");
+        }
+      };
+
+      const amountToAtomic = (amount, decimals = 8) => {
+        const n = Number(amount);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        return String(Math.round(n * Math.pow(10, decimals)));
+      };
+
+      const atomicToCoins = (atomic) => {
+        const n = Number(atomic);
+        if (!Number.isFinite(n)) return 0;
+        return n / 1e8;
+      };
+
+      const formatCoins = (atomic) => atomicToCoins(atomic).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const withThousands = (value) => value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const parseAtomicBigInt = (value) => {
+        try {
+          if (typeof value === "bigint") return value;
+          if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+          if (typeof value === "string" && value.trim()) return BigInt(value.trim());
+        } catch (_error) {}
+        return 0n;
+      };
+      const formatAtomicUsd = (atomicValue, opts = {}) => {
+        const atomic = parseAtomicBigInt(atomicValue);
+        const negative = atomic < 0n;
+        const abs = negative ? -atomic : atomic;
+        // 1 coin = 1e8 atomic.
+        const cents = (abs + 500000n) / 1000000n;
+        const whole = cents / 100n;
+        const fraction = (cents % 100n).toString().padStart(2, "0");
+        const money = withThousands(whole.toString()) + "." + fraction + " " + COIN_SYMBOL;
+        const signed = opts.signed === true;
+        if (signed) {
+          return (negative ? "-" : "+") + money;
+        }
+        return negative ? "-" + money : money;
+      };
+      const toIsoIfPresent = (value) => {
+        if (!value || !String(value).trim()) return "";
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return "";
+        return parsed.toISOString();
+      };
+
+      const detailState = {
+        userId: null,
+        email: "",
+        page: 1,
+        pageSize: 50,
+        totalPages: 1,
+        totalMovements: 0
+      };
+
+      const detailFiltersToParams = () => {
+        const params = new URLSearchParams();
+        params.set("page", String(detailState.page));
+        params.set("pageSize", String(detailState.pageSize));
+        const mode = detailModeInput.value.trim();
+        const reference = detailReferenceInput.value.trim();
+        const minAmount = detailMinAmountInput.value.trim();
+        const maxAmount = detailMaxAmountInput.value.trim();
+        const from = toIsoIfPresent(detailFromInput.value);
+        const to = toIsoIfPresent(detailToInput.value);
+        if (mode) params.set("mode", mode);
+        if (reference) params.set("reference", reference);
+        if (minAmount) params.set("minAmount", minAmount);
+        if (maxAmount) params.set("maxAmount", maxAmount);
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        return params;
+      };
+
+      const newCasesDraft = () => ({
+        caseId: null,
+        slug: "",
+        title: "",
+        description: "",
+        logoUrl: "",
+        priceCoins: "",
+        isActive: true,
+        items: []
+      });
+
+      const casesState = {
+        list: [],
+        selectedCaseId: null,
+        draft: newCasesDraft(),
+        catalog: [],
+        simulation: []
+      };
+
+      const casesStatus = document.getElementById("casesStatus");
+      const casesSelect = document.getElementById("casesSelect");
+      const casesImportPages = document.getElementById("casesImportPages");
+      const casesImportBtn = document.getElementById("casesImportBtn");
+      const casesSkinSearch = document.getElementById("casesSkinSearch");
+      const casesSearchSkinsBtn = document.getElementById("casesSearchSkinsBtn");
+      const casesDeleteMinPrice = document.getElementById("casesDeleteMinPrice");
+      const casesDeleteMaxPrice = document.getElementById("casesDeleteMaxPrice");
+      const casesDeleteOnlyUnused = document.getElementById("casesDeleteOnlyUnused");
+      const casesDeleteByPriceBtn = document.getElementById("casesDeleteByPriceBtn");
+      const caseSlug = document.getElementById("caseSlug");
+      const caseTitle = document.getElementById("caseTitle");
+      const casePriceCoins = document.getElementById("casePriceCoins");
+      const caseLogoUrl = document.getElementById("caseLogoUrl");
+      const caseDescription = document.getElementById("caseDescription");
+      const caseIsActive = document.getElementById("caseIsActive");
+      const caseVolatility = document.getElementById("caseVolatility");
+      const caseNewBtn = document.getElementById("caseNewBtn");
+      const caseSaveBtn = document.getElementById("caseSaveBtn");
+      const caseItemsTbody = document.querySelector("#caseItemsTable tbody");
+      const catalogSkinsTbody = document.querySelector("#catalogSkinsTable tbody");
+      const casesRefreshBtn = document.getElementById("casesRefreshBtn");
+      const caseEditBtn = document.getElementById("caseEditBtn");
+      const caseMode = document.getElementById("caseMode");
+      const casesSimRounds = document.getElementById("casesSimRounds");
+      const casesSimBtn = document.getElementById("casesSimBtn");
+      const casesSimStatus = document.getElementById("casesSimStatus");
+      const caseSuggestPriceBtn = document.getElementById("caseSuggestPriceBtn");
+      const caseRtpHint = document.getElementById("caseRtpHint");
+      const IMPORT_TIMEOUT_MS = 120000;
+      const TARGET_CASE_RTP = 0.97;
+
+      const coinsToAtomicString = (coinsValue) => {
+        const value = Number(coinsValue);
+        if (!Number.isFinite(value) || value <= 0) {
+          throw new Error("Invalid case price");
+        }
+        return String(Math.round(value * 1e8));
+      };
+
+      const setEditorModeLabel = (text) => {
+        caseMode.textContent = text;
+      };
+
+      const deriveVolatilityFromDraft = () => {
+        if (!casesState.draft.items.length) {
+          caseVolatility.textContent = "Volatility: -";
+          caseRtpHint.textContent = "RTP(97%) suggestion: -";
+          return;
+        }
+        const items = casesState.draft.items.map((item) => ({
+          p: Number(item.dropRate) / 100,
+          v: atomicToCoins(item.valueAtomic)
+        }));
+        const expected = items.reduce((acc, item) => acc + item.p * item.v, 0);
+        if (!Number.isFinite(expected) || expected <= 0) {
+          caseVolatility.textContent = "Volatility: -";
+          caseRtpHint.textContent = "RTP(97%) suggestion: -";
+          return;
+        }
+        const variance = items.reduce((acc, item) => {
+          const d = item.v - expected;
+          return acc + item.p * d * d;
+        }, 0);
+        const cv = Math.sqrt(Math.max(0, variance)) / expected;
+        const index = Math.max(0, Math.min(100, Math.round(cv * 28)));
+        const tier = index < 25 ? "L" : index < 50 ? "M" : index < 75 ? "H" : "I";
+        caseVolatility.textContent = "Volatility: " + index + " (" + tier + ")";
+        const suggestedPrice = expected / TARGET_CASE_RTP;
+        caseRtpHint.textContent =
+          "RTP(97%) suggestion: " + suggestedPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+          " COINS (EV=" + expected.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ")";
+      };
+
+      const renderCasesSelect = () => {
+        casesSelect.innerHTML = "";
+        const defaultOpt = document.createElement("option");
+        defaultOpt.value = "";
+        defaultOpt.textContent = "New case";
+        casesSelect.appendChild(defaultOpt);
+        for (const c of casesState.list) {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.title + " (" + c.slug + ") [" + c.volatilityTier + " " + c.volatilityIndex + "]";
+          casesSelect.appendChild(opt);
+        }
+        casesSelect.value = casesState.selectedCaseId || "";
+      };
+
+      const renderCaseItems = () => {
+        caseItemsTbody.innerHTML = "";
+        casesState.draft.items.forEach((item, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><div><strong>" + item.name + "</strong></div><div class=\\"mono\\">skinId=" + (item.cs2SkinId || "-") + "</div></td>" +
+            "<td class=\\"mono\\">" + formatCoins(item.valueAtomic) + "</td>" +
+            "<td><input data-idx=\\"" + idx + "\\" class=\\"case-drop\\" type=\\"number\\" min=\\"0.0001\\" max=\\"100\\" step=\\"0.0001\\" value=\\"" + Number(item.dropRate).toFixed(4) + "\\" style=\\"width:110px\\" /></td>" +
+            "<td><button data-idx=\\"" + idx + "\\" class=\\"case-remove danger\\">Remove</button></td>";
+          caseItemsTbody.appendChild(tr);
+        });
+        caseItemsTbody.querySelectorAll(".case-remove").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.getAttribute("data-idx"));
+            casesState.draft.items.splice(idx, 1);
+            renderCaseItems();
+            deriveVolatilityFromDraft();
+          });
+        });
+        caseItemsTbody.querySelectorAll(".case-drop").forEach((input) => {
+          input.addEventListener("change", () => {
+            const idx = Number(input.getAttribute("data-idx"));
+            casesState.draft.items[idx].dropRate = String(Number(input.value || "0"));
+            deriveVolatilityFromDraft();
+          });
+        });
+      };
+
+      const renderCatalogSkins = () => {
+        catalogSkinsTbody.innerHTML = "";
+        for (const skin of casesState.catalog) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><div><strong>" + skin.name + "</strong></div><div class=\\"mono\\">" + skin.id + "</div></td>" +
+            "<td class=\\"mono\\">" + formatCoins(skin.valueAtomic) + "</td>" +
+            "<td class=\\"mono\\">" + (skin.sourceCaseSlug || "-") + "</td>" +
+            "<td><div class=\\"row\\" style=\\"gap:6px;\\"><button class=\\"case-add success\\">Add</button><button class=\\"catalog-delete danger\\">Delete</button></div></td>";
+          tr.querySelector(".case-add").addEventListener("click", () => {
+            casesState.draft.items.push({
+              name: skin.name,
+              valueAtomic: skin.valueAtomic,
+              dropRate: "0",
+              imageUrl: skin.imageUrl || undefined,
+              cs2SkinId: skin.id,
+              isActive: true
+            });
+            renderCaseItems();
+            deriveVolatilityFromDraft();
+          });
+          tr.querySelector(".catalog-delete").addEventListener("click", async () => {
+            try {
+              const confirmed = window.confirm(
+                "Delete this skin permanently from catalog?\\n\\n" +
+                  "Skin: " + skin.name + "\\n" +
+                  "Price: " + formatCoins(skin.valueAtomic) + " " + COIN_SYMBOL + "\\n\\n" +
+                  "After deletion, preload will NOT bring it back."
+              );
+              if (!confirmed) return;
+              const res = await req("/api/v1/cases/admin/catalog/skins/" + encodeURIComponent(skin.id) + "/delete", {
+                method: "POST"
+              });
+              if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete skin"));
+              const data = await res.json();
+              casesStatus.className = "mono ok";
+              casesStatus.textContent =
+                "Deleted skin: " + skin.name +
+                ". Catalog now has " + Number(data.remainingCatalogCount || 0) + " skins.";
+              await loadCatalog();
+            } catch (error) {
+              casesStatus.className = "mono err";
+              casesStatus.textContent = error && error.message ? error.message : "Failed to delete skin.";
+            }
+          });
+          catalogSkinsTbody.appendChild(tr);
+        }
+      };
+
+      const bindDraftFields = () => {
+        caseSlug.value = casesState.draft.slug;
+        caseTitle.value = casesState.draft.title;
+        casePriceCoins.value = casesState.draft.priceCoins;
+        caseLogoUrl.value = casesState.draft.logoUrl;
+        caseDescription.value = casesState.draft.description;
+        caseIsActive.checked = casesState.draft.isActive;
+      };
+
+      const pullDraftFromFields = () => {
+        casesState.draft.slug = caseSlug.value.trim();
+        casesState.draft.title = caseTitle.value.trim();
+        casesState.draft.priceCoins = casePriceCoins.value.trim();
+        casesState.draft.logoUrl = caseLogoUrl.value.trim();
+        casesState.draft.description = caseDescription.value.trim();
+        casesState.draft.isActive = !!caseIsActive.checked;
+      };
+
+      const pickCaseForEdit = (id) => {
+        if (!id) {
+          casesState.selectedCaseId = null;
+          casesState.draft = newCasesDraft();
+          bindDraftFields();
+          renderCaseItems();
+          caseSaveBtn.textContent = "Create case";
+          setEditorModeLabel("Mode: New case");
+          deriveVolatilityFromDraft();
+          return;
+        }
+        const row = casesState.list.find((c) => c.id === id);
+        if (!row) return;
+        casesState.selectedCaseId = id;
+        casesState.draft = {
+          caseId: row.id,
+          slug: row.slug || "",
+          title: row.title || "",
+          description: row.description || "",
+          logoUrl: row.logoUrl || "",
+          priceCoins: String(atomicToCoins(row.priceAtomic)),
+          isActive: !!row.isActive,
+          items: (row.items || []).map((it) => ({
+            name: it.name,
+            valueAtomic: it.valueAtomic,
+            dropRate: String(it.dropRate),
+            imageUrl: it.imageUrl || undefined,
+            cs2SkinId: it.cs2SkinId || undefined,
+            isActive: it.isActive
+          }))
+        };
+        bindDraftFields();
+        renderCaseItems();
+        caseSaveBtn.textContent = "Save changes";
+        setEditorModeLabel("Mode: Editing " + (row.title || row.slug || row.id));
+        deriveVolatilityFromDraft();
+      };
+
+      const loadCases = async () => {
+        const res = await req("/api/v1/cases/admin/cases");
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load cases"));
+        casesState.list = await res.json();
+        renderCasesSelect();
+      };
+
+      const loadCatalog = async () => {
+        const params = new URLSearchParams();
+        params.set("limit", "5000");
+        const q = casesSkinSearch.value.trim();
+        if (q) params.set("q", q);
+        const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
+        casesState.catalog = await res.json();
+        renderCatalogSkins();
+      };
+
+      const loadCatalogUnfiltered = async () => {
+        const params = new URLSearchParams();
+        params.set("limit", "5000");
+        const res = await req("/api/v1/cases/admin/catalog/skins?" + params.toString());
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load skins"));
+        casesState.catalog = await res.json();
+        renderCatalogSkins();
+      };
+
+      casesSelect.addEventListener("change", () => {
+        casesState.selectedCaseId = casesSelect.value || null;
+        if (!casesState.selectedCaseId) {
+          pickCaseForEdit("");
+          return;
+        }
+        const row = casesState.list.find((c) => c.id === casesState.selectedCaseId);
+        setEditorModeLabel(
+          row
+            ? "Mode: Selected " + row.title + " (click Edit selected)"
+            : "Mode: Select a case and click Edit selected"
+        );
+      });
+      caseEditBtn.addEventListener("click", () => {
+        if (!casesSelect.value) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Select a case first.";
+          return;
+        }
+        pickCaseForEdit(casesSelect.value);
+        casesStatus.className = "mono ok";
+        casesStatus.textContent = "Loaded case in edit mode.";
+      });
+      casesRefreshBtn.addEventListener("click", async () => {
+        try {
+          await loadCases();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Cases refreshed.";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to refresh cases.";
+        }
+      });
+      caseNewBtn.addEventListener("click", () => pickCaseForEdit(""));
+      caseSuggestPriceBtn.addEventListener("click", () => {
+        if (!casesState.draft.items.length) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Add items first to calculate suggested price.";
+          return;
+        }
+        const expected = casesState.draft.items.reduce((acc, item) => {
+          const p = Number(item.dropRate) / 100;
+          const v = atomicToCoins(item.valueAtomic);
+          if (!Number.isFinite(p) || !Number.isFinite(v)) {
+            return acc;
+          }
+          return acc + p * v;
+        }, 0);
+        if (!Number.isFinite(expected) || expected <= 0) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Drop rates are invalid. Ensure they sum to 100.";
+          return;
+        }
+        const suggested = expected / TARGET_CASE_RTP;
+        casePriceCoins.value = String(Math.max(0.01, Math.round(suggested * 100) / 100));
+        pullDraftFromFields();
+        deriveVolatilityFromDraft();
+        casesStatus.className = "mono ok";
+        casesStatus.textContent =
+          "Suggested price applied for 97% RTP: " +
+          suggested.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+          " COINS.";
+      });
+      casesSearchSkinsBtn.addEventListener("click", async () => {
+        try {
+          await loadCatalog();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Catalog updated (" + casesState.catalog.length + " skins).";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to load catalog.";
+        }
+      });
+      casesDeleteByPriceBtn.addEventListener("click", async () => {
+        try {
+          const minRaw = String(casesDeleteMinPrice.value || "").trim();
+          const maxRaw = String(casesDeleteMaxPrice.value || "").trim();
+          if (!minRaw && !maxRaw) {
+            throw new Error("Set min, max, or both before deleting.");
+          }
+          const minNum = minRaw ? Number(minRaw) : null;
+          const maxNum = maxRaw ? Number(maxRaw) : null;
+          if ((minNum !== null && (!Number.isFinite(minNum) || minNum < 0)) || (maxNum !== null && (!Number.isFinite(maxNum) || maxNum < 0))) {
+            throw new Error("Price range must be valid positive numbers.");
+          }
+          if (minNum !== null && maxNum !== null && minNum > maxNum) {
+            throw new Error("Min price cannot be greater than max price.");
+          }
+          const onlyUnused = !!casesDeleteOnlyUnused.checked;
+          const minLabel = minNum === null ? "-inf" : minNum.toFixed(2);
+          const maxLabel = maxNum === null ? "+inf" : maxNum.toFixed(2);
+          const confirmed = window.confirm(
+            "Delete catalog skins in range $" + minLabel + " to $" + maxLabel +
+              (onlyUnused ? " (only unused)." : " (including skins linked to cases).") +
+              "\\n\\nThis action cannot be undone."
+          );
+          if (!confirmed) return;
+
+          casesDeleteByPriceBtn.disabled = true;
+          casesStatus.className = "mono";
+          casesStatus.textContent = "Deleting skins by price range...";
+
+          const toAtomicString = (coins) => String(Math.round(Number(coins) * 1e8));
+          const payload = {
+            ...(minNum !== null ? { minValueAtomic: toAtomicString(minNum) } : {}),
+            ...(maxNum !== null ? { maxValueAtomic: toAtomicString(maxNum) } : {}),
+            onlyUnused
+          };
+          const res = await req("/api/v1/cases/admin/catalog/skins/delete-by-price", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to delete skins by price"));
+          const data = await res.json();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent =
+            "Deleted " + Number(data.deletedCount || 0) + " skins." +
+            (data.skippedLinkedCount > 0 ? " Skipped linked: " + data.skippedLinkedCount + "." : "") +
+            " Matched: " + Number(data.matchedCount || 0) + ".";
+          await loadCatalog();
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Delete by price failed.";
+        } finally {
+          casesDeleteByPriceBtn.disabled = false;
+        }
+      });
+      casesImportBtn.addEventListener("click", async () => {
+        casesImportBtn.disabled = true;
+        try {
+          casesStatus.className = "mono";
+          casesStatus.textContent = "Preloading static skins catalog...";
+          const pages = Math.max(1, Math.min(20, Number(casesImportPages.value || "1")));
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), IMPORT_TIMEOUT_MS);
+          const res = await req("/api/v1/cases/admin/catalog/import-rain", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pages }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Import failed"));
+          const summary = await res.json();
+          const total = Number(summary.totalCatalogSkins || 0);
+          const lowestName = summary.lowestSkinName || "";
+          const lowestAtomic = summary.lowestSkinValueAtomic || "0";
+          const lowestCoins = atomicToCoins(lowestAtomic);
+          casesStatus.className = total > 0 ? "mono ok" : "mono err";
+          casesStatus.textContent =
+            total > 0
+              ? "Catalog ready: " + total + " skins preloaded (persistent in DB). Lowest: " +
+                (lowestName || "-") + " @ " + lowestCoins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " COINS."
+              : "Preload finished but catalog is empty.";
+          await loadCatalogUnfiltered();
+          if (!casesState.catalog.length) {
+            casesStatus.className = "mono err";
+            casesStatus.textContent = "Catalog is still empty after preload. Check backend logs.";
+          }
+        } catch (error) {
+          casesStatus.className = "mono err";
+          if (error && error.name === "AbortError") {
+            casesStatus.textContent = "Preload timeout. Retry once; data is static snapshot.";
+          } else {
+            casesStatus.textContent = error && error.message ? error.message : "Preload failed.";
+          }
+        } finally {
+          casesImportBtn.disabled = false;
+        }
+      });
+      caseSaveBtn.addEventListener("click", async () => {
+        try {
+          pullDraftFromFields();
+          if (!casesState.draft.slug || !casesState.draft.title) {
+            throw new Error("Slug and title are required.");
+          }
+          if (!casesState.draft.items.length) {
+            throw new Error("Add at least 1 skin.");
+          }
+          const payload = {
+            caseId: casesState.draft.caseId || undefined,
+            slug: casesState.draft.slug,
+            title: casesState.draft.title,
+            description: casesState.draft.description || undefined,
+            logoUrl: casesState.draft.logoUrl || undefined,
+            priceAtomic: coinsToAtomicString(casesState.draft.priceCoins),
+            isActive: casesState.draft.isActive,
+            items: casesState.draft.items.map((item, idx) => ({
+              name: item.name,
+              valueAtomic: String(item.valueAtomic),
+              dropRate: String(item.dropRate),
+              imageUrl: item.imageUrl || undefined,
+              sortOrder: idx,
+              isActive: item.isActive !== false,
+              cs2SkinId: item.cs2SkinId || undefined
+            }))
+          };
+          const idempotency = "admin-cases:" + Date.now() + ":" + Math.random().toString(16).slice(2);
+          const res = await req("/api/v1/cases/admin/cases", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to save case"));
+          const saved = await res.json();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Saved case: " + saved.title;
+          await loadCases();
+          pickCaseForEdit(saved.id);
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to save case.";
+        }
+      });
+      casesSimBtn.addEventListener("click", async () => {
+        try {
+          casesSimStatus.className = "mono";
+          casesSimStatus.textContent = "Running simulation...";
+          const rounds = Math.max(1, Math.min(1000000, Number(casesSimRounds.value || "100000")));
+          const res = await req("/api/v1/cases/admin/simulate-rtp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rounds })
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Simulation failed"));
+          const rows = await res.json();
+          casesState.simulation = rows;
+          const summary = rows
+            .slice(0, 6)
+            .map((r) => r.caseTitle + " RTP=" + r.rtpPercent + "% VOL=" + r.volatilityTier + " (" + r.volatilityIndex + ")")
+            .join("\\n");
+          casesSimStatus.className = "mono ok";
+          casesSimStatus.textContent = summary || "No cases to simulate.";
+        } catch (error) {
+          casesSimStatus.className = "mono err";
+          casesSimStatus.textContent = error && error.message ? error.message : "Simulation failed.";
+        }
+      });
+
+      const getErrorMessage = async (res, fallback) => {
+        const data = await res.json().catch(() => ({}));
+        return (data && data.message) ? data.message : fallback;
+      };
+
+      const bootCasesAdmin = async () => {
+        try {
+          await loadCases();
+          pickCaseForEdit("");
+          await loadCatalog();
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Cases admin ready.";
+        } catch (error) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = error && error.message ? error.message : "Failed to initialize cases admin.";
+        }
+      };
+      void bootCasesAdmin();
+
+      const persistToken = () => {
+        try { localStorage.setItem("admin_panel_token", tokenInput.value.trim()); } catch (_e) {}
+      };
+
+      const persistAdminEmail = () => {
+        try { localStorage.setItem("admin_panel_email", adminEmailInput.value.trim()); } catch (_e) {}
+      };
+
+      const restoreToken = () => {
+        try {
+          const saved = localStorage.getItem("admin_panel_token");
+          if (saved) tokenInput.value = saved;
+        } catch (_e) {}
+      };
+
+      const restoreAdminEmail = () => {
+        try {
+          const saved = localStorage.getItem("admin_panel_email");
+          if (saved) adminEmailInput.value = saved;
+        } catch (_e) {}
+      };
+
+      const openUserDetails = async (userId, email) => {
+        detailState.userId = userId;
+        detailState.email = email;
+        detailState.page = Math.max(1, detailState.page || 1);
+        detailCard.style.display = "block";
+        detailStatus.className = "mono";
+        detailStatus.textContent = "Loading details for " + detailState.email + "...";
+        detailContent.innerHTML = "";
+        try {
+          const params = detailFiltersToParams();
+          const res = await req(
+            "/api/v1/admin/users/" + encodeURIComponent(detailState.userId) + "/details?" + params.toString()
+          );
+          if (!res.ok) {
+            detailStatus.className = "mono err";
+            detailStatus.textContent = await getErrorMessage(res, "Failed to load details");
+            return;
+          }
+          const data = await res.json();
+          const pagination = data.pagination || {};
+          detailState.totalPages = Math.max(1, Number(pagination.totalPages || 1));
+          detailState.totalMovements = Math.max(0, Number(pagination.totalMovements || 0));
+          detailState.page = Math.max(1, Math.min(detailState.page, detailState.totalPages));
+          detailPageInfo.textContent =
+            "Page " + detailState.page + "/" + detailState.totalPages + " | total movements: " + detailState.totalMovements;
+          detailPrevBtn.disabled = detailState.page <= 1;
+          detailNextBtn.disabled = detailState.page >= detailState.totalPages;
+          detailStatus.className = "mono ok";
+          detailStatus.textContent = "Loaded details for " + data.user.email + " (page " + detailState.page + ").";
+
+          const summary = data.summary || {};
+          const perGame = summary.perGame || {};
+          const wallets = (data.wallets || []).map((w) =>
+            "<div class=\\"mono\\">wallet=" + w.id + " " + w.currency +
+            " | balance=" + formatAtomicUsd(w.balanceAtomic) +
+            " | locked=" + formatAtomicUsd(w.lockedAtomic) +
+            " | available=" + formatAtomicUsd(w.availableAtomic) + "</div>"
+          ).join("");
+
+          const movementsRows = (data.movements || []).map((m) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + m.createdAt + "</td>" +
+              "<td class=\\"mono\\">" + m.tag + "</td>" +
+              "<td class=\\"mono\\">" + m.direction + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(m.signedAtomic, { signed: true }) + "</td>" +
+              "<td class=\\"mono\\">" + (m.referenceId || "") + "</td>" +
+            "</tr>"
+          ).join("");
+
+          detailContent.innerHTML =
+            "<div class=\\"grid-2\\">" +
+              "<div>" +
+                "<h3>User</h3>" +
+                "<div class=\\"mono\\">publicId=#" + (data.user.publicId ?? "-") + " | id=" + data.user.id + "</div>" +
+                "<div class=\\"mono\\">email=" + data.user.email + "</div>" +
+                "<div class=\\"mono\\">role=" + data.user.role + " status=" + data.user.status + "</div>" +
+                "<div class=\\"mono\\">level=" + data.user.level + " xp=" + (data.user.levelXp || data.user.levelXpAtomic) + "</div>" +
+                "<div class=\\"mono\\">createdAt=" + data.user.createdAt + "</div>" +
+              "</div>" +
+              "<div>" +
+                "<h3>Wallets (" + COIN_SYMBOL + ")</h3>" +
+                "<div class=\\"mono muted\\">locked = funds temporarily reserved by active bets/games; available = balance - locked.</div>" +
+                (wallets || "<div class=\\"mono\\">No wallet found</div>") +
+              "</div>" +
+            "</div>" +
+            "<div class=\\"grid-2\\" style=\\"margin-top:12px;\\">" +
+              "<div>" +
+                "<h3>Financial summary</h3>" +
+                "<div class=\\"mono\\">totalDeposits=" + formatAtomicUsd(summary.totalDepositsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawals=" + formatAtomicUsd(summary.totalWithdrawalsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWithdrawalFees=" + formatAtomicUsd(summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">rewardsRedeemed=" + formatAtomicUsd(summary.rewardsRedeemedAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalWagered=" + formatAtomicUsd(summary.totalWageredAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalPayout=" + formatAtomicUsd(summary.totalPayoutAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">houseProfit=" + formatAtomicUsd(summary.houseProfitAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">netPlayerGaming=" + formatAtomicUsd(summary.netPlayerGamingAtomic || "0") + "</div>" +
+              "</div>" +
+              "<div>" +
+                "<h3>Spent by game</h3>" +
+                "<div class=\\"mono\\">mines wagered=" + formatAtomicUsd((perGame.mines && perGame.mines.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.mines && perGame.mines.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.mines && perGame.mines.netAtomic) || "0", { signed: true }) + "</div>" +
+                "<div class=\\"mono\\">blackjack wagered=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.netAtomic) || "0", { signed: true }) + "</div>" +
+                "<div class=\\"mono\\">roulette wagered=" + formatAtomicUsd((perGame.roulette && perGame.roulette.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.roulette && perGame.roulette.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.roulette && perGame.roulette.netAtomic) || "0", { signed: true }) + "</div>" +
+              "</div>" +
+            "</div>" +
+            "<h3 style=\\"margin-top:12px;\\">Movement history</h3>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Tag</th><th>Direction</th><th>Amount</th><th>Reference</th></tr></thead><tbody>" +
+            (movementsRows || "<tr><td colspan=\\"5\\" class=\\"mono\\">No movements</td></tr>") +
+            "</tbody></table>";
+        } catch (error) {
+          detailPageInfo.textContent = "Page -/-";
+          detailStatus.className = "mono err";
+          detailStatus.textContent = error && error.message ? error.message : "Failed to load details";
+        }
+      };
+
+      detailApplyBtn.addEventListener("click", async () => {
+        if (!detailState.userId) {
+          detailStatus.className = "mono err";
+          detailStatus.textContent = "Select a user first.";
+          return;
+        }
+        detailState.page = 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailResetBtn.addEventListener("click", async () => {
+        detailModeInput.value = "";
+        detailReferenceInput.value = "";
+        detailMinAmountInput.value = "";
+        detailMaxAmountInput.value = "";
+        detailFromInput.value = "";
+        detailToInput.value = "";
+        if (!detailState.userId) {
+          detailStatus.className = "mono err";
+          detailStatus.textContent = "Select a user first.";
+          return;
+        }
+        detailState.page = 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailPrevBtn.addEventListener("click", async () => {
+        if (!detailState.userId || detailState.page <= 1) {
+          return;
+        }
+        detailState.page -= 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      detailNextBtn.addEventListener("click", async () => {
+        if (!detailState.userId || detailState.page >= detailState.totalPages) {
+          return;
+        }
+        detailState.page += 1;
+        await openUserDetails(detailState.userId, detailState.email);
+      });
+
+      const setUserAccess = async (userId, status, role, msgEl, extra = {}) => {
+        try {
+          const res = await req("/api/v1/admin/users/" + encodeURIComponent(userId) + "/access", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status, role, ...extra })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            msgEl.className = "mono err";
+            msgEl.textContent = (data && data.message) ? data.message : "Failed to update user access";
+            return;
+          }
+          msgEl.className = "mono ok";
+          const canWithdrawLabel = typeof data.user.canWithdraw === "boolean" ? " canWithdraw=" + data.user.canWithdraw : "";
+          const canTipLabel = typeof data.user.canTip === "boolean" ? " canTip=" + data.user.canTip : "";
+          msgEl.textContent = "Updated: role=" + data.user.role + " status=" + data.user.status + canWithdrawLabel + canTipLabel;
+          document.getElementById("searchBtn").click();
+        } catch (error) {
+          msgEl.className = "mono err";
+          msgEl.textContent = error && error.message ? error.message : "Failed to update user access";
+        }
+      };
+
+      const renderUsers = (users) => {
+        usersTbody.innerHTML = "";
+        for (const user of users) {
+          const tr = document.createElement("tr");
+          const walletLines = (user.wallets || []).map((w) =>
+            "<div class=\\"mono\\">" +
+            w.currency +
+            " balance=" + formatAtomicUsd(w.balanceAtomic) +
+            " locked=" + formatAtomicUsd(w.lockedAtomic) +
+            " available=" + formatAtomicUsd(w.availableAtomic) +
+            "</div>"
+          ).join("");
+          const pending = user.status !== "ACTIVE";
+          tr.innerHTML = \`
+            <td>
+              <div><strong>\${user.email}</strong></div>
+              <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
+              <div class="mono">role=\${user.role} status=\${user.status}</div>
+              <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
+              <div class="mono">selfExcludeUntil=\${user.selfExcludeUntil ? new Date(user.selfExcludeUntil).toISOString() : "-"}</div>
+              <div class="mono">\${user.selfExcludeUntil ? "selfExclusionStatus=ACTIVE" : "selfExclusionStatus=INACTIVE"}</div>
+              <div class="mono">level=\${user.level} xp=\${user.levelXp || user.levelXpAtomic}</div>
+              <div class="mono">createdAt=\${user.createdAt} updatedAt=\${user.updatedAt}</div>
+              \${pending ? '<span class="pill warn">Pending approval</span>' : '<span class="pill success">Active</span>'}
+            </td>
+            <td>\${walletLines || "<span class=\\"mono\\">No wallets</span>"}</td>
+            <td>
+              <div class="row">
+                <span class="mono">\${COIN_SYMBOL} only (\${COIN_CURRENCY})</span>
+                <input class="amount" placeholder="Amount (human)" />
+                <button class="credit">+ Credit</button>
+                <button class="debit">- Debit</button>
+              </div>
+              <div class="actions">
+                <button class="approve success">Approve (PLAYER+ACTIVE)</button>
+                <button class="suspend danger">Suspend</button>
+                <button class="withdraw-toggle warn">\${user.canWithdraw === false ? "Enable withdraw" : "Disable withdraw"}</button>
+                <button class="tip-toggle warn">\${user.canTip === false ? "Enable tip" : "Disable tip"}</button>
+                <button class="self-exclusion-toggle warn">\${user.selfExcludeUntil ? "Clear self-exclusion" : "No self-exclusion"}</button>
+                <button class="details">View details</button>
+              </div>
+              <div class="mono msg"></div>
+            </td>
+          \`;
+
+          const amountEl = tr.querySelector(".amount");
+          const msgEl = tr.querySelector(".msg");
+          const doAdjust = async (sign) => {
+            try {
+              msgEl.textContent = "";
+              const atomic = amountToAtomic(amountEl.value);
+              if (!atomic) {
+                msgEl.textContent = "Invalid amount.";
+                msgEl.className = "mono msg err";
+                return;
+              }
+              const idempotency = "admin-panel:" + Date.now() + ":" + Math.random().toString(16).slice(2);
+              const amountAtomic = sign === "-" ? "-" + atomic : atomic;
+              const res = await req("/api/v1/admin/wallets/adjust", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Idempotency-Key": idempotency },
+                body: JSON.stringify({
+                  userId: user.id,
+                  amountAtomic,
+                  reason: "ADMIN_ADJUSTMENT",
+                  referenceId: "admin-panel"
+                })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                msgEl.textContent = (data && data.message) ? data.message : "Adjustment failed.";
+                msgEl.className = "mono msg err";
+                return;
+              }
+              msgEl.textContent = "OK. " + COIN_SYMBOL + " balance=" + (data.balanceCoins || data.balanceAtomic);
+              msgEl.className = "mono msg ok";
+            } catch (error) {
+              msgEl.textContent = error && error.message ? error.message : "Adjustment failed.";
+              msgEl.className = "mono msg err";
+            }
+          };
+
+          tr.querySelector(".credit").addEventListener("click", () => void doAdjust("+"));
+          tr.querySelector(".debit").addEventListener("click", () => void doAdjust("-"));
+          tr.querySelector(".approve").addEventListener("click", () => void setUserAccess(user.id, "ACTIVE", "PLAYER", msgEl));
+          tr.querySelector(".suspend").addEventListener("click", () => void setUserAccess(user.id, "SUSPENDED", user.role, msgEl));
+          tr.querySelector(".withdraw-toggle").addEventListener("click", () =>
+            void setUserAccess(user.id, user.status, user.role, msgEl, { canWithdraw: user.canWithdraw === false })
+          );
+          tr.querySelector(".tip-toggle").addEventListener("click", () =>
+            void setUserAccess(user.id, user.status, user.role, msgEl, { canTip: user.canTip === false })
+          );
+          tr.querySelector(".self-exclusion-toggle").addEventListener("click", () => {
+            const exclusionUntilMs = user.selfExcludeUntil ? Date.parse(user.selfExcludeUntil) : Number.NaN;
+            const hasActiveSelfExclusion = Number.isFinite(exclusionUntilMs) && exclusionUntilMs > Date.now();
+            if (!hasActiveSelfExclusion) {
+              msgEl.className = "mono err";
+              msgEl.textContent = "User has no active self-exclusion.";
+              return;
+            }
+            void setUserAccess(user.id, user.status, user.role, msgEl, { clearSelfExclusion: true });
+          });
+          tr.querySelector(".details").addEventListener("click", () => void openUserDetails(user.id, user.email));
+          usersTbody.appendChild(tr);
+        }
+      };
+
+      document.getElementById("searchBtn").addEventListener("click", async () => {
+        try {
+          persistToken();
+          searchStatus.textContent = "Searching...";
+          searchStatus.className = "mono";
+          const q = encodeURIComponent(queryInput.value.trim());
+          const params = new URLSearchParams();
+          if (q) {
+            params.set("q", decodeURIComponent(q));
+          }
+          const limit = Number(limitInput.value);
+          if (Number.isFinite(limit) && limit > 0) {
+            params.set("limit", String(Math.min(5000, Math.trunc(limit))));
+          }
+          if (allUsersInput.checked) {
+            params.set("all", "true");
+          } else {
+            params.set("all", "false");
+          }
+          const res = await req("/api/v1/admin/users?" + params.toString());
+          if (!res.ok) {
+            searchStatus.textContent = await getErrorMessage(res, "Search failed");
+            searchStatus.className = "err";
+            usersTbody.innerHTML = "";
+            return;
+          }
+          const data = await res.json().catch(() => ({ users: [] }));
+          const pendingCount = Number(data.pendingApprovalCount || 0);
+          searchStatus.textContent = "Showing " + data.users.length + " / " + data.totalUsers + " user(s) | pending approval: " + pendingCount;
+          searchStatus.className = pendingCount > 0 ? "ok" : "mono";
+          renderUsers(data.users);
+        } catch (error) {
+          searchStatus.textContent = error && error.message ? error.message : "Search failed";
+          searchStatus.className = "err";
+        }
+      });
+
+      checkTokenBtn.addEventListener("click", async () => {
+        authStatus.textContent = "";
+        authStatus.className = "mono";
+        const token = tokenInput.value.trim();
+        if (!token) {
+          authStatus.textContent = "Paste access token first.";
+          authStatus.className = "mono err";
+          return;
+        }
+        try {
+          persistToken();
+          const meRes = await req("/api/v1/users/me");
+          if (!meRes.ok) {
+            authStatus.textContent = await getErrorMessage(meRes, "Token is invalid.");
+            authStatus.className = "mono err";
+            return;
+          }
+          const me = await meRes.json();
+          if (me.role !== "ADMIN") {
+            authStatus.textContent = "Token valid, but user role is " + me.role + " (ADMIN required).";
+            authStatus.className = "mono err";
+            return;
+          }
+          authStatus.textContent = "Token valid. ADMIN access granted for " + me.email + ".";
+          authStatus.className = "mono ok";
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Unable to validate token.";
+          authStatus.className = "mono err";
+        }
+      });
+
+      loginBtn.addEventListener("click", async () => {
+        authStatus.textContent = "";
+        authStatus.className = "mono";
+        const email = adminEmailInput.value.trim();
+        const password = adminPasswordInput.value;
+        if (!email || !password) {
+          authStatus.textContent = "Enter admin email and password first.";
+          authStatus.className = "mono err";
+          return;
+        }
+        try {
+          persistAdminEmail();
+          const res = await fetch("/api/v1/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            authStatus.textContent = (data && data.message) ? data.message : "Login failed.";
+            authStatus.className = "mono err";
+            return;
+          }
+          if (!data || !data.tokens || !data.tokens.accessToken) {
+            authStatus.textContent = "Login response is missing access token.";
+            authStatus.className = "mono err";
+            return;
+          }
+          if (!data.user || data.user.role !== "ADMIN") {
+            authStatus.textContent = "Login succeeded, but this user is not ADMIN.";
+            authStatus.className = "mono err";
+            tokenInput.value = "";
+            persistToken();
+            return;
+          }
+          tokenInput.value = data.tokens.accessToken;
+          persistToken();
+          adminPasswordInput.value = "";
+          authStatus.textContent = "Login OK. ADMIN access granted for " + data.user.email + ".";
+          authStatus.className = "mono ok";
+          document.getElementById("searchBtn").click();
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Login failed.";
+          authStatus.className = "mono err";
+        }
+      });
+
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          authStatus.textContent = "Paste access token first.";
+          authStatus.className = "mono err";
+          return;
+        }
+        try {
+          const res = await req("/api/v1/auth/logout", { method: "POST" });
+          if (res.status === 204) {
+            authStatus.textContent = "Logout OK for current token/session.";
+            authStatus.className = "mono ok";
+            return;
+          }
+          authStatus.textContent = await getErrorMessage(res, "Logout failed.");
+          authStatus.className = "mono err";
+        } catch (error) {
+          authStatus.textContent = error && error.message ? error.message : "Logout failed.";
+          authStatus.className = "mono err";
+        }
+      });
+
+      queryInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          document.getElementById("searchBtn").click();
+        }
+      });
+
+      adminPasswordInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loginBtn.click();
+        }
+      });
+
+      tokenInput.addEventListener("change", persistToken);
+      adminEmailInput.addEventListener("change", persistAdminEmail);
+      restoreToken();
+      restoreAdminEmail();
+      if (tokenInput.value.trim()) {
+        document.getElementById("searchBtn").click();
+      }
+    </script>
+  </body>
+</html>`;
+
+export const adminRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/blackjack/payout-config", { preHandler: requireRoles(["ADMIN"]) }, async (_request, reply) => {
+    const cfg = await getBlackjackPayoutConfig();
+    return reply.send(cfg);
+  });
+
+  fastify.put(
+    "/blackjack/payout-config",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = z
+        .object({
+          pairsMultiplier: z.coerce.number().int().min(2).max(50),
+          plus3Multiplier: z.coerce.number().int().min(2).max(50)
+        })
+        .parse(request.body);
+
+      const updated = await setBlackjackPayoutConfig({
+        pairsMultiplier: new Prisma.Decimal(body.pairsMultiplier),
+        plus3Multiplier: new Prisma.Decimal(body.plus3Multiplier)
+      });
+
+      return reply.send(updated);
+    }
+  );
+
+  fastify.get("/panel", async (_request, reply) => {
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+    );
+    reply.header("Cache-Control", "no-store");
+    return reply.type("text/html; charset=utf-8").send(ADMIN_PANEL_HTML);
+  });
+
+  fastify.get(
+    "/users",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const query = userSearchQuerySchema.parse(request.query);
+      const qPublicId = query.q ? Number.parseInt(query.q, 10) : Number.NaN;
+      const where = query.q
+        ? {
+            OR: [
+              { email: { contains: query.q, mode: "insensitive" as const } },
+              { id: { equals: query.q } },
+              ...(Number.isInteger(qPublicId) && qPublicId > 0 ? [{ publicId: { equals: qPublicId } }] : [])
+            ]
+          }
+        : {};
+
+      const [totalUsers, pendingApprovalCount] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.count({ where: { ...where, status: UserStatus.SUSPENDED, role: UserRole.PLAYER } })
+      ]);
+      const take = query.all ? undefined : query.limit;
+
+      const rows = await prisma.user.findMany({
+        where,
+        orderBy: {
+          createdAt: "desc"
+        },
+        take,
+        select: {
+          id: true,
+          publicId: true,
+          username: true,
+          email: true,
+          role: true,
+          status: true,
+          canWithdraw: true,
+          canTip: true,
+          selfExcludedUntil: true,
+          createdAt: true,
+          updatedAt: true,
+          levelXpAtomic: true,
+          wallets: {
+            where: { currency: PLATFORM_INTERNAL_CURRENCY },
+            select: {
+              id: true,
+              currency: true,
+              balanceAtomic: true,
+              lockedAtomic: true,
+              updatedAt: true
+            },
+            orderBy: {
+              createdAt: "asc"
+            }
+          }
+        }
+      }).catch(async (error) => {
+        if (!isMissingLevelXpColumnError(error)) {
+          throw error;
+        }
+        const legacyRows = await prisma.user.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc"
+          },
+          take,
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            status: true,
+            canWithdraw: true,
+            canTip: true,
+            selfExcludedUntil: true,
+            createdAt: true,
+            updatedAt: true,
+            wallets: {
+              where: { currency: PLATFORM_INTERNAL_CURRENCY },
+              select: {
+                id: true,
+                currency: true,
+                balanceAtomic: true,
+                lockedAtomic: true,
+                updatedAt: true
+              },
+              orderBy: {
+                createdAt: "asc"
+              }
+            }
+          }
+        });
+        return legacyRows.map((row) => ({
+          ...row,
+          publicId: null,
+          levelXpAtomic: 0n,
+          selfExcludeUntil: null
+        }));
+      });
+
+      return reply.send({
+        totalUsers,
+        pendingApprovalCount,
+        users: rows.map((user) => ({
+          id: user.id,
+          publicId: user.publicId ?? null,
+          username: user.username ?? null,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          canWithdraw: "canWithdraw" in user ? user.canWithdraw : true,
+          canTip: "canTip" in user ? user.canTip : true,
+          selfExcludeUntil: "selfExcludedUntil" in user && user.selfExcludedUntil ? user.selfExcludedUntil : null,
+          selfExclusionActive:
+            "selfExcludedUntil" in user &&
+            user.selfExcludedUntil instanceof Date &&
+            user.selfExcludedUntil.getTime() > Date.now(),
+          level: getLevelFromXp(user.levelXpAtomic),
+          levelXpAtomic: user.levelXpAtomic.toString(),
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          wallets: ("wallets" in user ? user.wallets : []).map((wallet) => ({
+            id: wallet.id,
+            currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+            balanceAtomic: wallet.balanceAtomic.toString(),
+            balanceCoins: toCoinsString(wallet.balanceAtomic),
+            lockedAtomic: wallet.lockedAtomic.toString(),
+            lockedCoins: toCoinsString(wallet.lockedAtomic),
+            availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+            availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic as bigint),
+            updatedAt: wallet.updatedAt
+          }))
+        }))
+      });
+    }
+  );
+
+  fastify.patch(
+    "/users/:userId/access",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const params = userDetailParamsSchema.parse(request.params);
+      const body = updateUserStatusSchema.parse(request.body);
+
+      const baseData: Prisma.UserUpdateInput = {
+        status: body.status,
+        ...(body.role ? { role: body.role } : {}),
+        ...(typeof body.canWithdraw === "boolean" ? { canWithdraw: body.canWithdraw } : {}),
+        ...(typeof body.canTip === "boolean" ? { canTip: body.canTip } : {})
+      };
+
+      // Keep admin unlock compatible with drifted schemas by clearing self-exclusion
+      // columns best-effort via raw SQL first, then performing the Prisma update.
+      if (body.clearSelfExclusion) {
+        await clearSelfExclusionBestEffort(params.userId);
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: params.userId },
+        data: baseData,
+        select: {
+          id: true,
+          publicId: true,
+          email: true,
+          role: true,
+          status: true,
+          canWithdraw: true,
+          canTip: true,
+          updatedAt: true
+        }
+      });
+
+      return reply.send({
+        user: {
+          id: updated.id,
+          email: updated.email,
+          role: updated.role,
+          status: updated.status,
+          canWithdraw: updated.canWithdraw,
+          canTip: updated.canTip,
+          updatedAt: updated.updatedAt
+        }
+      });
+    }
+  );
+
+  fastify.get(
+    "/users/:userId/details",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const params = userDetailParamsSchema.parse(request.params);
+      const query = userDetailQuerySchema.parse(request.query);
+
+      const userRow = await prisma.user.findUnique({
+        where: { id: params.userId },
+        select: {
+          id: true,
+          publicId: true,
+          username: true,
+          email: true,
+          role: true,
+          status: true,
+          selfExcludedUntil: true,
+          createdAt: true,
+          updatedAt: true,
+          levelXpAtomic: true,
+          wallets: {
+            where: { currency: PLATFORM_INTERNAL_CURRENCY },
+            select: {
+              id: true,
+              currency: true,
+              balanceAtomic: true,
+              lockedAtomic: true,
+              updatedAt: true
+            },
+            orderBy: { createdAt: "asc" }
+          }
+        }
+      }).catch(async (error) => {
+        if (!isMissingLevelXpColumnError(error)) {
+          throw error;
+        }
+        const legacy = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            status: true,
+            selfExcludedUntil: true,
+            createdAt: true,
+            updatedAt: true,
+            wallets: {
+              where: { currency: PLATFORM_INTERNAL_CURRENCY },
+              select: {
+                id: true,
+                currency: true,
+                balanceAtomic: true,
+                lockedAtomic: true,
+                updatedAt: true
+              },
+              orderBy: { createdAt: "asc" }
+            }
+          }
+        });
+        if (!legacy) {
+          return null;
+        }
+        return {
+          ...legacy,
+          publicId: null,
+          levelXpAtomic: 0n,
+          selfExcludedUntil: null
+        };
+      });
+
+      if (!userRow) {
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
+      }
+
+      const parseDateFilter = (value?: string): Date | null => {
+        if (!value?.trim()) {
+          return null;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new AppError("Invalid date filter", 400, "INVALID_DATE_FILTER");
+        }
+        return parsed;
+      };
+      const toAtomicFromCoinsFilter = (value?: number): bigint | null => {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          return null;
+        }
+        if (value < 0) {
+          throw new AppError("Amount filters must be >= 0", 400, "INVALID_AMOUNT_FILTER");
+        }
+        return BigInt(Math.round(value * 100000000));
+      };
+      const page = Math.max(1, query.page);
+      const pageSize = Math.max(1, Math.min(200, query.pageSize));
+      const fromDate = parseDateFilter(query.from);
+      const toDate = parseDateFilter(query.to);
+      if (fromDate && toDate && fromDate > toDate) {
+        throw new AppError("'from' must be before 'to'", 400, "INVALID_DATE_RANGE");
+      }
+      const minAmountAtomic = toAtomicFromCoinsFilter(query.minAmount);
+      const maxAmountAtomic = toAtomicFromCoinsFilter(query.maxAmount);
+      if (
+        typeof minAmountAtomic === "bigint" &&
+        typeof maxAmountAtomic === "bigint" &&
+        minAmountAtomic > maxAmountAtomic
+      ) {
+        throw new AppError("'minAmount' must be <= 'maxAmount'", 400, "INVALID_AMOUNT_RANGE");
+      }
+
+      const movementWhere: Prisma.LedgerEntryWhereInput = {
+        wallet: {
+          userId: params.userId,
+          currency: PLATFORM_INTERNAL_CURRENCY
+        },
+        ...(query.reference
+          ? {
+              referenceId: {
+                contains: query.reference,
+                mode: "insensitive"
+              }
+            }
+          : {}),
+        ...(fromDate || toDate
+          ? {
+              createdAt: {
+                ...(fromDate ? { gte: fromDate } : {}),
+                ...(toDate ? { lte: toDate } : {})
+              }
+            }
+          : {}),
+        ...(typeof minAmountAtomic === "bigint" || typeof maxAmountAtomic === "bigint"
+          ? {
+              amountAtomic: {
+                ...(typeof minAmountAtomic === "bigint" ? { gte: minAmountAtomic } : {}),
+                ...(typeof maxAmountAtomic === "bigint" ? { lte: maxAmountAtomic } : {})
+              }
+            }
+          : {})
+      };
+      const modeFilter = query.mode?.trim();
+      if (modeFilter) {
+        movementWhere.OR = [
+          {
+            reason: {
+              equals:
+                modeFilter
+                  .toUpperCase()
+                  .replace(/[\s-]+/g, "_")
+                  .replace(/[^A-Z_]/g, "") as LedgerReason
+            }
+          },
+          {
+            referenceId: {
+              contains: modeFilter,
+              mode: "insensitive"
+            }
+          },
+          {
+            metadata: {
+              path: ["game"],
+              string_contains: modeFilter
+            }
+          },
+          {
+            metadata: {
+              path: ["operation"],
+              string_contains: modeFilter
+            }
+          }
+        ];
+      }
+
+      const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements, totalMovements] = await Promise.all([
+        prisma.deposit.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY,
+            status: DepositStatus.COMPLETED
+          },
+          _sum: {
+            amountAtomic: true
+          }
+        }),
+        prisma.withdrawal.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY,
+            status: WithdrawalStatus.COMPLETED
+          },
+          _sum: {
+            amountAtomic: true,
+            feeAtomic: true
+          }
+        }),
+        prisma.minesGame.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            betAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.blackjackGame.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            initialBetAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.rouletteBet.aggregate({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          _sum: {
+            stakeAtomic: true,
+            payoutAtomic: true
+          }
+        }),
+        prisma.ledgerEntry.findMany({
+          where: movementWhere,
+          orderBy: {
+            createdAt: "desc"
+          },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            walletId: true,
+            direction: true,
+            reason: true,
+            amountAtomic: true,
+            balanceBeforeAtomic: true,
+            balanceAfterAtomic: true,
+            referenceId: true,
+            idempotencyKey: true,
+            metadata: true,
+            createdAt: true
+          }
+        }),
+        prisma.ledgerEntry.count({
+          where: movementWhere
+        })
+      ]);
+
+      const minesWagered = minesAgg._sum.betAtomic ?? 0n;
+      const minesPayout = minesAgg._sum.payoutAtomic ?? 0n;
+      const blackjackWagered = blackjackAgg._sum.initialBetAtomic ?? 0n;
+      const blackjackPayout = blackjackAgg._sum.payoutAtomic ?? 0n;
+      const rouletteWagered = rouletteAgg._sum.stakeAtomic ?? 0n;
+      const roulettePayout = rouletteAgg._sum.payoutAtomic ?? 0n;
+
+      const totalWageredAtomic = minesWagered + blackjackWagered + rouletteWagered;
+      const totalPayoutAtomic = minesPayout + blackjackPayout + roulettePayout;
+      const houseProfitAtomic = totalWageredAtomic - totalPayoutAtomic;
+      const netPlayerGamingAtomic = totalPayoutAtomic - totalWageredAtomic;
+
+      const movementRows = movements.map((row) => {
+        const metadata =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : {};
+        const game = typeof metadata.game === "string" ? metadata.game : null;
+        const operation = typeof metadata.operation === "string" ? metadata.operation : null;
+        const tag = game ? (operation ? `${game}:${operation}` : game) : row.reason;
+        const signedAtomic = row.direction === LedgerDirection.CREDIT ? row.amountAtomic : -row.amountAtomic;
+
+        return {
+          id: row.id,
+          createdAt: row.createdAt,
+          walletId: row.walletId,
+          direction: row.direction,
+          reason: row.reason,
+          game: game ?? null,
+          operation: operation ?? null,
+          tag,
+          amountAtomic: row.amountAtomic.toString(),
+          signedAtomic: signedAtomic.toString(),
+          balanceBeforeAtomic: row.balanceBeforeAtomic.toString(),
+          balanceAfterAtomic: row.balanceAfterAtomic.toString(),
+          referenceId: row.referenceId,
+          idempotencyKey: row.idempotencyKey,
+          metadata
+        };
+      });
+
+      return reply.send({
+        user: {
+          id: userRow.id,
+          publicId: userRow.publicId ?? null,
+          username: "username" in userRow ? userRow.username ?? null : null,
+          email: userRow.email,
+          role: userRow.role,
+          status: userRow.status,
+          selfExcludeUntil:
+            "selfExcludedUntil" in userRow && userRow.selfExcludedUntil ? userRow.selfExcludedUntil : null,
+          level: getLevelFromXp(userRow.levelXpAtomic),
+          levelXpAtomic: userRow.levelXpAtomic.toString(),
+          createdAt: userRow.createdAt,
+          updatedAt: userRow.updatedAt
+        },
+        wallets: ("wallets" in userRow ? userRow.wallets : []).map((wallet) => ({
+          id: wallet.id,
+          currency: PLATFORM_VIRTUAL_COIN_SYMBOL,
+          balanceAtomic: wallet.balanceAtomic.toString(),
+          balanceCoins: toCoinsString(wallet.balanceAtomic),
+          lockedAtomic: wallet.lockedAtomic.toString(),
+          lockedCoins: toCoinsString(wallet.lockedAtomic),
+          availableAtomic: (wallet.balanceAtomic - wallet.lockedAtomic).toString(),
+          availableCoins: toCoinsString(wallet.balanceAtomic - wallet.lockedAtomic as bigint),
+          updatedAt: wallet.updatedAt
+        })),
+        summary: {
+          totalDepositsAtomic: (depositsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalWithdrawalsAtomic: (withdrawalsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalWithdrawalFeesAtomic: (withdrawalsAgg._sum.feeAtomic ?? 0n).toString(),
+          rewardsRedeemedAtomic: "0",
+          totalWageredAtomic: totalWageredAtomic.toString(),
+          totalPayoutAtomic: totalPayoutAtomic.toString(),
+          houseProfitAtomic: houseProfitAtomic.toString(),
+          netPlayerGamingAtomic: netPlayerGamingAtomic.toString(),
+          perGame: {
+            mines: {
+              wageredAtomic: minesWagered.toString(),
+              payoutAtomic: minesPayout.toString(),
+              netAtomic: (minesPayout - minesWagered).toString()
+            },
+            blackjack: {
+              wageredAtomic: blackjackWagered.toString(),
+              payoutAtomic: blackjackPayout.toString(),
+              netAtomic: (blackjackPayout - blackjackWagered).toString()
+            },
+            roulette: {
+              wageredAtomic: rouletteWagered.toString(),
+              payoutAtomic: roulettePayout.toString(),
+              netAtomic: (roulettePayout - rouletteWagered).toString()
+            }
+          }
+        },
+        movements: movementRows,
+        pagination: {
+          page,
+          pageSize,
+          totalMovements,
+          totalPages: Math.max(1, Math.ceil(totalMovements / pageSize))
+        }
+      });
+    }
+  );
+
+  fastify.post(
+    "/wallets/adjust",
+    {
+      preHandler: [requireRoles(["ADMIN"]), requireIdempotencyKey]
+    },
+    async (request, reply) => {
+      const body = adjustByAdminSchema.parse(request.body);
+      let targetUserId = body.userId;
+
+      if (!targetUserId && body.email) {
+        const user = await prisma.user.findUnique({
+          where: {
+            email: body.email
+          },
+          select: {
+            id: true
+          }
+        });
+        if (!user) {
+          throw new AppError("User not found by email", 404, "USER_NOT_FOUND");
+        }
+        targetUserId = user.id;
+      }
+
+      if (!targetUserId && body.publicId) {
+        const user = await prisma.user.findFirst({
+          where: {
+            publicId: body.publicId
+          },
+          select: {
+            id: true
+          }
+        });
+        if (!user) {
+          throw new AppError("User not found by publicId", 404, "USER_NOT_FOUND");
+        }
+        targetUserId = user.id;
+      }
+
+      if (!targetUserId) {
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
+      }
+
+      const result = await adjustWalletBalance({
+        actorUserId: request.user.sub,
+        userId: targetUserId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
+        amountAtomic: body.amountAtomic,
+        reason: body.reason,
+        idempotencyKey: request.idempotencyKey,
+        metadata: body.metadata,
+        referenceId: body.referenceId
+      });
+
+      return reply.send({
+        targetUserId,
+        currency: PLATFORM_INTERNAL_CURRENCY,
+        entry: {
+          id: result.entry.id,
+          walletId: result.entry.walletId,
+          direction: result.entry.direction,
+          reason: result.entry.reason,
+          amountAtomic: result.entry.amountAtomic.toString(),
+          balanceBeforeAtomic: result.entry.balanceBeforeAtomic.toString(),
+          balanceAfterAtomic: result.entry.balanceAfterAtomic.toString(),
+          referenceId: result.entry.referenceId,
+          idempotencyKey: result.entry.idempotencyKey,
+          createdAt: result.entry.createdAt
+        },
+        balanceAtomic: result.balanceAtomic.toString()
+      });
+    }
+  );
+};

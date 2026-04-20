@@ -1,0 +1,344 @@
+import { Currency, RouletteRoundStatus } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { RawData, WebSocket } from "ws";
+import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
+
+type RouletteRealtimeEvent =
+  | {
+      type: "roulette.round";
+      data: {
+        roundId: string;
+        roundNumber: number;
+        currency: Currency;
+        status: RouletteRoundStatus;
+        openAt: string;
+        betsCloseAt: string;
+        spinStartsAt: string;
+        settleAt: string;
+        winningNumber: number | null;
+        winningColor: string | null;
+        totalStakedAtomic: string;
+        totalPayoutAtomic: string;
+      };
+    }
+  | {
+      type: "roulette.betTotals";
+      data: {
+        roundId: string;
+        currency: Currency;
+        totalStakedAtomic: string;
+      };
+    }
+  | {
+      type: "roulette.betBreakdown";
+      data: {
+        roundId: string;
+        roundNumber: number;
+        currency: Currency;
+        totalsAtomic: {
+          RED: string;
+          BLACK: string;
+          GREEN: string;
+          BAIT: string;
+        };
+        entriesByType: {
+          RED: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+          BLACK: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+          GREEN: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+          BAIT: Array<{ userId: string; userLabel: string; stakeAtomic: string }>;
+        };
+        totalStakedAtomic: string;
+      };
+    }
+  | {
+      type: "roulette.settlementSummary";
+      data: {
+        roundId: string;
+        roundNumber: number;
+        currency: Currency;
+        winningNumber: number;
+        winningColor: string;
+        outcomes: Array<{
+          userId: string;
+          userLabel: string;
+          netAtomic: string;
+        }>;
+      };
+    }
+  | {
+      type: "chat.message";
+      data: {
+        id: string;
+        userId: string;
+        userPublicId: number | null;
+        userLabel: string;
+        level: number;
+        avatarUrl: string | null;
+        message: string;
+        createdAt: string;
+      };
+    }
+  | {
+      type: "chat.cleared";
+      data: {
+        clearedByUserId?: string;
+        reason: "ADMIN_COMMAND" | "HOURLY_RESET";
+        clearedAt: string;
+      };
+    }
+  | {
+      type: "rain.state";
+      data: {
+        roundId: string;
+        startsAt: string;
+        endsAt: string;
+        baseAmountAtomic: string;
+        tippedAmountAtomic: string;
+        totalAmountAtomic: string;
+        joinedCount: number;
+      };
+    }
+  | {
+      type: "rain.joined";
+      data: {
+        roundId: string;
+        userId: string;
+        joinedCount: number;
+      };
+    }
+  | {
+      type: "rain.tipped";
+      data: {
+        roundId: string;
+        userId: string;
+        amountAtomic: string;
+        tippedAmountAtomic: string;
+        totalAmountAtomic: string;
+      };
+    }
+  | {
+      type: "rain.payout";
+      data: {
+        roundId: string;
+        userId: string;
+        payoutAtomic: string;
+      };
+    }
+  | {
+      type: "chat.userTip";
+      data: {
+        id: string;
+        fromUserId: string;
+        fromUserPublicId: number | null;
+        fromUserLabel: string;
+        toUserId: string;
+        toUserPublicId: number | null;
+        toUserLabel: string;
+        amountAtomic: string;
+        message: string | null;
+        createdAt: string;
+      };
+    }
+  | {
+      type: "rain.settled";
+      data: {
+        roundId: string;
+        startsAt: string;
+        endsAt: string;
+        totalAmountAtomic: string;
+        givenAmountAtomic: string;
+        givenAmountCoins: string;
+        winnerCount: number;
+        winners: Array<{
+          userId: string;
+          userPublicId: number | null;
+          userLabel: string;
+        }>;
+      };
+    }
+  | {
+      type: "chat.presence";
+      data: {
+        onlineCount: number;
+      };
+    };
+
+type ClientConnection = {
+  id: string;
+  socket: WebSocket;
+  currency?: Currency;
+  isAlive: boolean;
+};
+
+const WS_PING_INTERVAL_MS = 15_000;
+
+const parseCurrencyFilter = (value: string | undefined): Currency | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value === PLATFORM_INTERNAL_CURRENCY) {
+    return value;
+  }
+
+  return undefined;
+};
+
+export class RouletteWebsocketHub {
+  private readonly clients = new Map<string, ClientConnection>();
+  private heartbeat?: NodeJS.Timeout;
+
+  public getConnectedClientsCount(): number {
+    return this.clients.size;
+  }
+
+  public start(): void {
+    if (this.heartbeat) {
+      return;
+    }
+
+    this.heartbeat = setInterval(() => {
+      this.clients.forEach((client) => {
+        if (!client.isAlive) {
+          client.socket.terminate();
+          this.clients.delete(client.id);
+          this.broadcastOnlineCount();
+          return;
+        }
+
+        client.isAlive = false;
+        try {
+          client.socket.ping();
+        } catch {
+          client.socket.terminate();
+          this.clients.delete(client.id);
+        }
+      });
+    }, WS_PING_INTERVAL_MS);
+
+    this.heartbeat.unref();
+  }
+
+  public stop(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
+    }
+
+    this.clients.forEach((client) => {
+      client.socket.close();
+    });
+    this.clients.clear();
+  }
+
+  public attachClient(socket: WebSocket, queryCurrency?: string): void {
+    const id = randomUUID();
+    const currency = parseCurrencyFilter(queryCurrency);
+
+    const client: ClientConnection = {
+      id,
+      socket,
+      currency,
+      isAlive: true
+    };
+
+    this.clients.set(id, client);
+    this.broadcastOnlineCount();
+
+    socket.on("pong", () => {
+      client.isAlive = true;
+    });
+
+    socket.on("message", (data: RawData) => {
+      this.onMessage(client, data);
+    });
+
+    socket.on("close", () => {
+      this.clients.delete(id);
+      this.broadcastOnlineCount();
+    });
+
+    socket.on("error", () => {
+      this.clients.delete(id);
+      this.broadcastOnlineCount();
+      socket.terminate();
+    });
+  }
+
+  public broadcast(event: RouletteRealtimeEvent): void {
+    const payload = JSON.stringify(event);
+    const dataWithCurrency = event.data as { currency?: Currency };
+    const hasCurrency = typeof dataWithCurrency.currency !== "undefined";
+    const currency = dataWithCurrency.currency;
+
+    this.clients.forEach((client) => {
+      if (hasCurrency && client.currency && client.currency !== currency) {
+        return;
+      }
+
+      if (client.socket.readyState !== WebSocket.OPEN) {
+        this.clients.delete(client.id);
+        this.broadcastOnlineCount();
+        return;
+      }
+
+      try {
+        client.socket.send(payload);
+      } catch {
+        this.clients.delete(client.id);
+        this.broadcastOnlineCount();
+        client.socket.terminate();
+      }
+    });
+  }
+
+  public broadcastOnlineCount(): void {
+    const payload = JSON.stringify({
+      type: "chat.presence",
+      data: {
+        onlineCount: this.getConnectedClientsCount()
+      }
+    });
+
+    this.clients.forEach((client) => {
+      if (client.socket.readyState !== WebSocket.OPEN) {
+        this.clients.delete(client.id);
+        return;
+      }
+
+      try {
+        client.socket.send(payload);
+      } catch {
+        this.clients.delete(client.id);
+        client.socket.terminate();
+      }
+    });
+  }
+
+  private onMessage(client: ClientConnection, raw: RawData): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "type" in parsed &&
+      (parsed as { type?: string }).type === "ping"
+    ) {
+      const response = JSON.stringify({
+        type: "pong",
+        ts: new Date().toISOString()
+      });
+
+      if (client.socket.readyState === WebSocket.OPEN) {
+        client.socket.send(response);
+      }
+    }
+  }
+}
+
+export type { RouletteRealtimeEvent };
