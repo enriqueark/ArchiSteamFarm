@@ -51,8 +51,7 @@ export default function Footer() {
       <div style={{ display: "flex", gap: 40 }}>
         <div style={{ width: 280, flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <img src="/assets/8f21dcea07664a217d7d054711bb7e6a.svg" alt="logo" style={{ height: 28 }} />
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#fff", fontStyle: "italic" }}>REDWATER</span>
+            <img src="/assets/dinoskins-logo.png" alt="DinoSkins logo" style={{ height: 28, width: "auto" }} />
           </div>
           <p style={{ fontSize: 12, color: "#828282", marginBottom: 12 }}>&copy; All rights reserved 2026</p>
           <p style={{ fontSize: 11, color: "#828282", lineHeight: "18px", marginBottom: 16 }}>

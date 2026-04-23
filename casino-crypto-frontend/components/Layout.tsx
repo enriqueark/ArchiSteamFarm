@@ -404,8 +404,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 40, height: 40, opacity: 0.76 }} />
             </div>
             <Link href="/" className="flex items-center gap-2">
-              <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
-              <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
+              <img src="/assets/dinoskins-logo.png" alt="DINOSKINS logo" className="h-9 w-auto object-contain" />
             </Link>
           </div>
 
