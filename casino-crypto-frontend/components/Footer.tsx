@@ -51,21 +51,7 @@ export default function Footer() {
       <div style={{ display: "flex", gap: 40 }}>
         <div style={{ width: 280, flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ position: "relative", display: "block", width: 150, height: 28, overflow: "hidden" }}>
-              <img
-                src="/assets/dinoskins-logo.png"
-                alt="DinoSkins logo"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  objectPosition: "left center",
-                  transform: "scale(1.28)",
-                  transformOrigin: "left center",
-                  display: "block",
-                }}
-              />
-            </span>
+            <img src="/assets/dinoskins-logo.png" alt="DinoSkins logo" style={{ height: 30, width: "auto", display: "block" }} />
           </div>
           <p style={{ fontSize: 12, color: "#828282", marginBottom: 12 }}>&copy; All rights reserved 2026</p>
           <p style={{ fontSize: 11, color: "#828282", lineHeight: "18px", marginBottom: 16 }}>

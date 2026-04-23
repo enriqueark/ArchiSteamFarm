@@ -38,12 +38,11 @@ export default function AuthGate({ onAuth }: Props) {
       <div className="w-full max-w-[380px]">
         <div className="text-center mb-8">
           <div className="mb-2 flex items-center justify-center">
-            <span className="relative block h-[30px] w-[188px] overflow-hidden">
+            <span className="relative block h-[30px] w-[176px] overflow-hidden">
               <img
                 src="/assets/dinoskins-logo.png"
                 alt="DinoSkins logo"
-                className="h-full w-full object-cover object-left"
-                style={{ transform: "scale(1.16) translateY(0px)", transformOrigin: "left center" }}
+                className="h-full w-full object-contain object-left"
               />
             </span>
           </div>
