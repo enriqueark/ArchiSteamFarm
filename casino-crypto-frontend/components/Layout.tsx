@@ -403,8 +403,15 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             >
               <img src="/assets/a1a1cf32be7cd9a4ce48bf4bde0c8d0e.svg" alt="menu" style={{ width: 40, height: 40, opacity: 0.76 }} />
             </div>
-            <Link href="/" className="flex items-center gap-2">
-              <img src="/assets/dinoskins-logo.png" alt="DINOSKINS logo" className="h-9 w-auto object-contain" />
+            <Link href="/" className="flex items-center">
+              <span className="relative block h-[34px] w-[164px] overflow-hidden">
+                <img
+                  src="/assets/dinoskins-logo.png"
+                  alt="DINOSKINS logo"
+                  className="h-full w-full object-cover object-left"
+                  style={{ transform: "scale(1.75) translateY(1px)", transformOrigin: "left center" }}
+                />
+              </span>
             </Link>
           </div>
 

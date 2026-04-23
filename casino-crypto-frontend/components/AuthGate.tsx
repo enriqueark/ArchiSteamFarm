@@ -37,9 +37,15 @@ export default function AuthGate({ onAuth }: Props) {
     <div className="min-h-screen flex items-center justify-center bg-page">
       <div className="w-full max-w-[380px]">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-8" />
-            <span className="text-2xl font-bold text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
+          <div className="mb-2 flex items-center justify-center">
+            <span className="relative block h-[30px] w-[150px] overflow-hidden">
+              <img
+                src="/assets/dinoskins-logo.png"
+                alt="DinoSkins logo"
+                className="h-full w-full object-cover object-left"
+                style={{ transform: "scale(1.7) translateY(1px)", transformOrigin: "left center" }}
+              />
+            </span>
           </div>
           <p className="text-sm text-muted">Crypto Casino</p>
         </div>
