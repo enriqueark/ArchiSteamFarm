@@ -350,8 +350,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         <header className="bg-chrome px-5 py-3 flex items-center shrink-0">
           <div className="flex items-center gap-4 flex-1">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/assets/7099b46c6cd5928db5dde5a0c11f93e0.svg" alt="logo" className="h-7" />
-              <span className="text-lg font-bold tracking-wide text-white" style={{ fontStyle: "italic" }}>REDWATER</span>
+              <img src="/assets/dinoskins-logo.png" alt="DINOSKINS logo" className="h-9 w-auto object-contain" />
             </Link>
           </div>
 
