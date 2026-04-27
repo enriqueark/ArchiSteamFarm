@@ -520,75 +520,28 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               </button>
               {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => { setHasNewNotif(false); localStorage.setItem("notifSeen", "true"); }} />}
               {profileMenuOpen && (
-                <div className="absolute right-0 top-[44px] z-50 w-[260px] rounded-[14px] border border-[#1f2a38] bg-[#0b1622] shadow-[0_10px_32px_rgba(0,0,0,0.55)] p-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void router.push("/profile");
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    PROFILE
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void openVaultModal();
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    VAULT
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void router.push("/affiliates");
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    AFFILIATES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void router.push("/transactions");
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    TRANSACTIONS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void router.push("/game-history");
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    GAME HISTORY
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void router.push("/support");
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#dce7f7] hover:bg-[#102234] transition-colors"
-                  >
-                    SUPPORT
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      onLogout?.();
-                    }}
-                    className="w-full rounded-[10px] px-3 py-2.5 text-left text-[14px] font-semibold text-[#ff8d93] hover:bg-[#2a1720] transition-colors"
-                  >
-                    LOGOUT
+                <div style={{ position: "absolute", right: 0, top: 44, width: 240, background: "#111", borderRadius: 16, padding: 8, boxShadow: "0 8px 30px rgba(0,0,0,.5)", border: "1px solid #1e1e1e", zIndex: 200 }}>
+                  {[
+                    { icon: "👤", label: "Profile", action: () => { setProfileMenuOpen(false); void router.push("/profile"); } },
+                    { icon: "🏦", label: "Vault", action: () => { void openVaultModal(); } },
+                    { icon: "👥", label: "Affilates", action: () => { setProfileMenuOpen(false); void router.push("/affiliates"); } },
+                    { icon: "📊", label: "Transactions", action: () => { setProfileMenuOpen(false); void router.push("/transactions"); } },
+                    { icon: "🕐", label: "Game History", action: () => { setProfileMenuOpen(false); void router.push("/game-history"); } },
+                    { icon: "🎧", label: "Support", action: () => { setProfileMenuOpen(false); void router.push("/support"); } },
+                  ].map((item) => (
+                    <button key={item.label} type="button" onClick={item.action}
+                      className="group w-full flex items-center gap-3 px-4 py-3 rounded-[10px] transition-colors hover:bg-[#1a1a1a]"
+                      style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
+                      <span style={{ color: "#f34950", fontSize: 16 }}>{item.icon}</span>
+                      <span className="group-hover:text-[#f34950] transition-colors" style={{ color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: '"DM Sans",sans-serif' }}>{item.label}</span>
+                    </button>
+                  ))}
+                  <hr style={{ border: "none", borderTop: "1px solid #1e1e1e", margin: "4px 0" }} />
+                  <button type="button" onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
+                    className="group w-full flex items-center gap-3 px-4 py-3 rounded-[10px] transition-colors hover:bg-[#1a1a1a]"
+                    style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
+                    <span style={{ color: "#f34950", fontSize: 16 }}>🚪</span>
+                    <span className="group-hover:text-[#f34950] transition-colors" style={{ color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: '"DM Sans",sans-serif' }}>Log out</span>
                   </button>
 
                   <div className="mt-2 rounded-[10px] border border-[#223447] bg-[#0c1b2a] p-3">
