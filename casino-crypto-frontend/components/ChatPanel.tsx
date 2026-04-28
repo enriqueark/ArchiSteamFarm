@@ -779,8 +779,23 @@ export default function ChatPanel({ onClose }: Props) {
       {/* Context menu */}
       {contextUser && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setContextUser(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "40%", right: 20, background: "#1a1a1a", borderRadius: 12, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,.5)", border: "1px solid #2a2a2a", minWidth: 160 }}>
-            <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: "40%",
+              right: 20,
+              width: 200,
+              background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)",
+              borderRadius: 12,
+              boxShadow: "0 11px 43.4px 0 rgba(0, 0, 0, 0.34), inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424",
+              border: "1px solid #222222",
+              padding: "6px 0",
+              overflow: "hidden",
+            }}
+          >
+            <button
+              type="button"
               onClick={() => {
                 const target =
                   contextUser.userPublicId && contextUser.userPublicId > 0
@@ -788,20 +803,53 @@ export default function ChatPanel({ onClose }: Props) {
                     : `/profile/user/${contextUser.userId}`;
                 window.open(target, "_blank");
                 setContextUser(null);
-              }}>
-              <span style={{ fontSize: 14 }}>👤</span>
-              <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>View Profile</span>
-            </div>
-            <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
-              onClick={() => { navigator.clipboard.writeText(String(contextUser.userPublicId ?? contextUser.userId)); setContextUser(null); }}>
-              <span style={{ fontSize: 14 }}>📋</span>
-              <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>Copy UID</span>
-            </div>
-            <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: 8 }} className="hover:bg-[#252525]"
-              onClick={() => { setTipModal(contextUser); setContextUser(null); setTipAmount(""); setTipError(null); }}>
-              <span style={{ fontSize: 14 }}>💰</span>
-              <span style={{ color: "#fff", fontSize: 13, fontFamily: '"DM Sans",sans-serif' }}>Tip</span>
-            </div>
+              }}
+              className="flex w-full items-center gap-3 px-[18px] py-3 text-left transition-colors duration-150 hover:bg-[#1f1f1f]"
+              style={{ color: "#ffffff", textDecoration: "none", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21V19C20 17.3431 18.6569 16 17 16H7C5.34315 16 4 17.3431 4 19V21" />
+                <path d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z" />
+              </svg>
+              <span style={{ fontSize: 15, fontWeight: 500 }}>View Profile</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(String(contextUser.userPublicId ?? contextUser.userId));
+                setContextUser(null);
+              }}
+              className="flex w-full items-center gap-3 px-[18px] py-3 text-left transition-colors duration-150 hover:bg-[#1f1f1f]"
+              style={{ color: "#ffffff", textDecoration: "none", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+              </svg>
+              <span style={{ fontSize: 15, fontWeight: 500 }}>Copy ID</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTipModal(contextUser);
+                setContextUser(null);
+                setTipAmount("");
+                setTipError(null);
+              }}
+              className="flex w-full items-center gap-3 px-[18px] py-3 text-left transition-colors duration-150 hover:bg-[#1f1f1f]"
+              style={{ color: "#ffffff", textDecoration: "none", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 12v10H4V12" />
+                <path d="M2 7h20v5H2z" />
+                <path d="M12 22V7" />
+                <path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" />
+                <path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" />
+              </svg>
+              <span style={{ fontSize: 15, fontWeight: 500 }}>Tip</span>
+            </button>
           </div>
         </div>
       )}
