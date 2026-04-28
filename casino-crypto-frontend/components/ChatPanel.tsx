@@ -99,6 +99,9 @@ export default function ChatPanel({ onClose }: Props) {
   const [sending, setSending] = useState(false);
   const [joiningRain, setJoiningRain] = useState(false);
   const [tippingRain, setTippingRain] = useState(false);
+  const [tipRainModalOpen, setTipRainModalOpen] = useState(false);
+  const [tipRainAmountInput, setTipRainAmountInput] = useState("1");
+  const [tipRainModalError, setTipRainModalError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contextUser, setContextUser] = useState<ChatMessage | null>(null);
   const [tipModal, setTipModal] = useState<ChatMessage | null>(null);
@@ -359,22 +362,34 @@ export default function ChatPanel({ onClose }: Props) {
     }
   };
 
+  const openTipRainModal = () => {
+    if (tippingRain) return;
+    setTipRainAmountInput("1");
+    setTipRainModalError(null);
+    setTipRainModalOpen(true);
+  };
+
+  const closeTipRainModal = () => {
+    if (tippingRain) return;
+    setTipRainModalOpen(false);
+    setTipRainModalError(null);
+  };
+
   const handleTipRain = async () => {
     if (tippingRain) return;
-    const raw = window.prompt("Tip amount (coins, min 1)", "1");
-    if (!raw) return;
-    const amountCoins = Number(raw);
+    const amountCoins = Number(tipRainAmountInput);
     if (!Number.isFinite(amountCoins) || amountCoins < 1) {
-      setError("Tip amount must be at least 1 coin");
+      setTipRainModalError("Tip amount must be at least 1 coin");
       return;
     }
     setTippingRain(true);
-    setError(null);
+    setTipRainModalError(null);
     try {
       const result = await tipRain(amountCoins);
       setRain(result.rain);
+      setTipRainModalOpen(false);
     } catch (e: unknown) {
-      setError(toUserFacingError(e, "Failed to tip rain"));
+      setTipRainModalError(toUserFacingError(e, "Failed to tip rain"));
     } finally {
       setTippingRain(false);
     }
@@ -464,7 +479,7 @@ export default function ChatPanel({ onClose }: Props) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void handleTipRain();
+                  openTipRainModal();
                 }}
                 disabled={tippingRain}
                 className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
@@ -569,6 +584,93 @@ export default function ChatPanel({ onClose }: Props) {
         </div>
         {error && <p className="mt-2 text-[11px] text-accent-red">{error}</p>}
       </div>
+
+      {tipRainModalOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Close tip rain modal"
+            className="absolute inset-0 bg-black/75 backdrop-blur-[1px]"
+            onClick={closeTipRainModal}
+          />
+          <div className="relative z-10 w-full max-w-[360px] rounded-[14px] border border-[#323232] bg-[#111111] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.65)]">
+            <button
+              type="button"
+              onClick={closeTipRainModal}
+              className="absolute right-3 top-2 text-[18px] text-[#7f7f7f] transition-colors hover:text-white"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <p className="m-0 text-[18px] font-semibold text-white">Tip Rain</p>
+            <p className="mt-1 text-[12px] leading-[16px] text-[#9f9f9f]">
+              Add coins to the live rain pool. This amount is distributed in the next rain.
+            </p>
+
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {[1, 5, 10, 25].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    setTipRainAmountInput(String(preset));
+                    setTipRainModalError(null);
+                  }}
+                  className="h-[34px] rounded-[8px] border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-white transition-colors hover:border-[#ffc353] hover:text-[#ffc353]"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-[#8b8b8b]">
+              Amount (coins)
+            </label>
+            <div className="mt-1 flex items-center gap-2 rounded-[10px] border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2">
+              <input
+                value={tipRainAmountInput}
+                onChange={(event) => {
+                  setTipRainAmountInput(event.target.value);
+                  if (tipRainModalError) setTipRainModalError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleTipRain();
+                  }
+                }}
+                inputMode="decimal"
+                className="w-full bg-transparent text-[15px] font-medium text-white outline-none placeholder:text-[#666]"
+                placeholder="1.00"
+                disabled={tippingRain}
+              />
+              <span className="text-[12px] font-medium text-[#8f8f8f]">coins</span>
+            </div>
+
+            {tipRainModalError && <p className="mt-2 text-[11px] text-accent-red">{tipRainModalError}</p>}
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={closeTipRainModal}
+                disabled={tippingRain}
+                className="h-[40px] rounded-[9px] border border-[#353535] bg-[#171717] text-[13px] font-semibold text-white transition-colors hover:border-[#5a5a5a] disabled:opacity-65"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleTipRain()}
+                disabled={tippingRain}
+                className="h-[40px] rounded-[9px] border border-[rgba(255,95,99,0.7)] text-[13px] font-bold text-white shadow-[0_0_16px_rgba(242,79,81,0.3),inset_0_1px_0_rgba(255,175,175,0.32),inset_0_-1px_0_rgba(128,19,20,0.82)] transition-[filter,transform] duration-150 hover:brightness-105 active:translate-y-[1px] disabled:opacity-70"
+                style={{ background: "linear-gradient(180deg, #8f2526 0%, #d94547 56%, #f24f51 100%)" }}
+              >
+                {tippingRain ? "Sending..." : "Tip Rain"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <style jsx>{`
         .chat-red-icon-btn {
           display: inline-flex;
