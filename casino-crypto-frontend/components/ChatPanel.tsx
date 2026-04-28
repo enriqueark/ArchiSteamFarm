@@ -536,7 +536,11 @@ export default function ChatPanel({ onClose }: Props) {
                 </span>
                 <LevelBadge level={m.userLevel || 1} />
               </div>
-              <div className="rounded-[8px] bg-[#161616] px-3 py-2">
+              <div
+                className="rounded-[8px] bg-[#161616] px-3 py-2"
+                onClick={(event) => openContextMenu(event, m)}
+                style={{ cursor: "pointer" }}
+              >
                 <p className="text-[13px] leading-[17px] text-white">{m.message}</p>
               </div>
             </div>
