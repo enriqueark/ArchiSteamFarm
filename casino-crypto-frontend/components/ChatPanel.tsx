@@ -364,7 +364,7 @@ export default function ChatPanel({ onClose }: Props) {
 
   const openTipRainModal = () => {
     if (tippingRain) return;
-    setTipRainAmountInput("1");
+    setTipRainAmountInput("");
     setTipRainModalError(null);
     setTipRainModalOpen(true);
   };
@@ -586,47 +586,32 @@ export default function ChatPanel({ onClose }: Props) {
       </div>
 
       {tipRainModalOpen && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="Close tip rain modal"
-            className="absolute inset-0 bg-black/75 backdrop-blur-[1px]"
-            onClick={closeTipRainModal}
-          />
-          <div className="relative z-10 w-full max-w-[360px] rounded-[14px] border border-[#323232] bg-[#111111] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.65)]">
-            <button
-              type="button"
-              onClick={closeTipRainModal}
-              className="absolute right-3 top-2 text-[18px] text-[#7f7f7f] transition-colors hover:text-white"
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <p className="m-0 text-[18px] font-semibold text-white">Tip Rain</p>
-            <p className="mt-1 text-[12px] leading-[16px] text-[#9f9f9f]">
-              Add coins to the live rain pool. This amount is distributed in the next rain.
-            </p>
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={closeTipRainModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#111", borderRadius: 16, padding: 24, width: 340, border: "1px solid #2a2a2a", boxShadow: "0 0 30px rgba(247,81,84,.15)" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ color: "#f75154", fontSize: 18, fontWeight: 700, margin: 0, fontFamily: '"DM Sans",sans-serif' }}>Tip User</h3>
+              <span onClick={closeTipRainModal} style={{ color: "#828282", cursor: "pointer", fontSize: 18 }}>✕</span>
+            </div>
+            <hr style={{ border: "none", borderTop: "1px solid #f7515430", marginBottom: 16 }} />
 
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              {[1, 5, 10, 25].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => {
-                    setTipRainAmountInput(String(preset));
-                    setTipRainModalError(null);
-                  }}
-                  className="h-[34px] rounded-[8px] border border-[#2a2a2a] bg-[#1a1a1a] text-[13px] font-semibold text-white transition-colors hover:border-[#ffc353] hover:text-[#ffc353]"
-                >
-                  {preset}
-                </button>
-              ))}
+            <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>User</p>
+            <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+              <img src="/figma-main/assets/cd5bcd223ad039502b06fe463c0a7508.png" alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+              <span style={{ color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }}>
+                Rain (live rain pool)
+              </span>
             </div>
 
-            <label className="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-[#8b8b8b]">
-              Amount (coins)
-            </label>
-            <div className="mt-1 flex items-center gap-2 rounded-[10px] border border-[#2a2a2a] bg-[#0e0e0e] px-3 py-2">
+            <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 4px", fontFamily: '"DM Sans",sans-serif' }}>Tip Amount</p>
+            <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>Minimum tip amount is 1 COIN</p>
+            <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "0 14px", height: 42, display: "flex", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ color: "#828282", fontSize: 14, marginRight: 6 }}>🪙</span>
               <input
                 value={tipRainAmountInput}
                 onChange={(event) => {
@@ -640,34 +625,27 @@ export default function ChatPanel({ onClose }: Props) {
                   }
                 }}
                 inputMode="decimal"
-                className="w-full bg-transparent text-[15px] font-medium text-white outline-none placeholder:text-[#666]"
-                placeholder="1.00"
+                placeholder="0"
                 disabled={tippingRain}
+                style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }}
               />
-              <span className="text-[12px] font-medium text-[#8f8f8f]">coins</span>
             </div>
 
-            {tipRainModalError && <p className="mt-2 text-[11px] text-accent-red">{tipRainModalError}</p>}
+            {tipRainModalError && <p style={{ color: "#f75154", fontSize: 12, margin: "0 0 8px" }}>{tipRainModalError}</p>}
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={closeTipRainModal}
-                disabled={tippingRain}
-                className="h-[40px] rounded-[9px] border border-[#353535] bg-[#171717] text-[13px] font-semibold text-white transition-colors hover:border-[#5a5a5a] disabled:opacity-65"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleTipRain()}
-                disabled={tippingRain}
-                className="h-[40px] rounded-[9px] border border-[rgba(255,95,99,0.7)] text-[13px] font-bold text-white shadow-[0_0_16px_rgba(242,79,81,0.3),inset_0_1px_0_rgba(255,175,175,0.32),inset_0_-1px_0_rgba(128,19,20,0.82)] transition-[filter,transform] duration-150 hover:brightness-105 active:translate-y-[1px] disabled:opacity-70"
-                style={{ background: "linear-gradient(180deg, #8f2526 0%, #d94547 56%, #f24f51 100%)" }}
-              >
-                {tippingRain ? "Sending..." : "Tip Rain"}
-              </button>
-            </div>
+            <button
+              onClick={() => void handleTipRain()}
+              disabled={tippingRain}
+              style={{
+                width: "100%", height: 44, borderRadius: 12, border: "none", cursor: "pointer",
+                background: "linear-gradient(180deg, #f75154, #ac2e30)",
+                boxShadow: "inset 0 1px 0 #f24f51, inset 0 -1px 0 #ff7476, 0 0 20px rgba(247,81,84,.2)",
+                color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: '"DM Sans",sans-serif',
+                opacity: tippingRain ? 0.5 : 1,
+              }}
+            >
+              {tippingRain ? "Sending..." : "Send tip"}
+            </button>
           </div>
         </div>
       )}
