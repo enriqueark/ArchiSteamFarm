@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   getChatMessages,
   getRainState,
@@ -92,6 +92,8 @@ function toUserFacingError(err: unknown, fallback: string): string {
 }
 
 export default function ChatPanel({ onClose }: Props) {
+  const CONTEXT_MENU_WIDTH = 200;
+  const CONTEXT_MENU_ESTIMATED_HEIGHT = 166;
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [rain, setRain] = useState<RainState | null>(null);
@@ -103,7 +105,7 @@ export default function ChatPanel({ onClose }: Props) {
   const [tipRainAmountInput, setTipRainAmountInput] = useState("1");
   const [tipRainModalError, setTipRainModalError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [contextUser, setContextUser] = useState<ChatMessage | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ user: ChatMessage; x: number; y: number } | null>(null);
   const [tipModal, setTipModal] = useState<ChatMessage | null>(null);
   const [tipAmount, setTipAmount] = useState("");
   const [tipSending, setTipSending] = useState(false);
@@ -395,6 +397,15 @@ export default function ChatPanel({ onClose }: Props) {
     }
   };
 
+  const openContextMenu = (event: ReactMouseEvent<HTMLElement>, user: ChatMessage) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - CONTEXT_MENU_WIDTH - 8));
+    const top = Math.max(8, Math.min(rect.bottom + 4, viewportHeight - CONTEXT_MENU_ESTIMATED_HEIGHT - 8));
+    setContextMenu({ user, x: left, y: top });
+  };
+
   return (
     <aside
       className="w-[297px] shrink-0 rounded-[16px] flex flex-col overflow-hidden"
@@ -509,7 +520,7 @@ export default function ChatPanel({ onClose }: Props) {
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-2 space-y-2">
         {messages.map((m, i) => (
           <div key={m.id || i} className="flex items-start gap-3 py-1">
-            <div className="shrink-0 mt-5" onClick={() => setContextUser(m)} style={{ cursor: "pointer" }}>
+            <div className="shrink-0 mt-5" onClick={(event) => openContextMenu(event, m)} style={{ cursor: "pointer" }}>
               {m.avatarUrl ? (
                 <img src={m.avatarUrl} alt={m.username} className="w-8 h-8 rounded-full object-cover" />
               ) : (
@@ -519,7 +530,7 @@ export default function ChatPanel({ onClose }: Props) {
               )}
             </div>
             <div className="min-w-0 flex-1 max-w-[213px]">
-              <div className="flex items-center gap-1.5 mb-1" onClick={() => setContextUser(m)} style={{ cursor: "pointer" }}>
+              <div className="flex items-center gap-1.5 mb-1" onClick={(event) => openContextMenu(event, m)} style={{ cursor: "pointer" }}>
                 <span className="text-[13px] font-medium" style={{ color: getTierColor(m.userLevel || 1) }}>
                   {m.username || "Player"}
                 </span>
@@ -777,14 +788,14 @@ export default function ChatPanel({ onClose }: Props) {
       `}</style>
 
       {/* Context menu */}
-      {contextUser && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setContextUser(null)}>
+      {contextMenu && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100 }} onClick={() => setContextMenu(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               position: "absolute",
-              top: "40%",
-              right: 20,
+              top: contextMenu.y,
+              left: contextMenu.x,
               width: 200,
               background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)",
               borderRadius: 12,
@@ -798,11 +809,11 @@ export default function ChatPanel({ onClose }: Props) {
               type="button"
               onClick={() => {
                 const target =
-                  contextUser.userPublicId && contextUser.userPublicId > 0
-                    ? `/profile/${contextUser.userPublicId}`
-                    : `/profile/user/${contextUser.userId}`;
+                  contextMenu.user.userPublicId && contextMenu.user.userPublicId > 0
+                    ? `/profile/${contextMenu.user.userPublicId}`
+                    : `/profile/user/${contextMenu.user.userId}`;
                 window.open(target, "_blank");
-                setContextUser(null);
+                setContextMenu(null);
               }}
               className="flex w-full items-center gap-3 px-[18px] py-3 text-left transition-colors duration-150 hover:bg-[#1f1f1f]"
               style={{ color: "#ffffff", textDecoration: "none", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
@@ -817,8 +828,8 @@ export default function ChatPanel({ onClose }: Props) {
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard.writeText(String(contextUser.userPublicId ?? contextUser.userId));
-                setContextUser(null);
+                void navigator.clipboard.writeText(String(contextMenu.user.userPublicId ?? contextMenu.user.userId));
+                setContextMenu(null);
               }}
               className="flex w-full items-center gap-3 px-[18px] py-3 text-left transition-colors duration-150 hover:bg-[#1f1f1f]"
               style={{ color: "#ffffff", textDecoration: "none", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
@@ -833,8 +844,8 @@ export default function ChatPanel({ onClose }: Props) {
             <button
               type="button"
               onClick={() => {
-                setTipModal(contextUser);
-                setContextUser(null);
+                setTipModal(contextMenu.user);
+                setContextMenu(null);
                 setTipAmount("");
                 setTipError(null);
               }}
