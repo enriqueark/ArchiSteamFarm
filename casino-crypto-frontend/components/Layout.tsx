@@ -11,7 +11,6 @@ import {
   getMyCashierNotifications,
   getVaultState,
   getWallets,
-  updateMyAvatar,
   type LiveWinTickerItem,
   type VaultLockDuration,
   type VaultState,
@@ -91,12 +90,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   });
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
-  const [avatarUrlState, setAvatarUrlState] = useState<string | null>(userAvatarUrl ?? null);
-  const [avatarInputValue, setAvatarInputValue] = useState("");
-  const [avatarSaving, setAvatarSaving] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [avatarInfo, setAvatarInfo] = useState<string | null>(null);
-  const [avatarSourceLabel, setAvatarSourceLabel] = useState<"CUSTOM" | "PROVIDER" | "INITIAL">("INITIAL");
   const [cachedUsername, setCachedUsername] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("lastKnownUsername");
@@ -209,11 +202,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   }, [router.pathname]);
 
   useEffect(() => {
-    setAvatarUrlState(userAvatarUrl ?? null);
-    setAvatarSourceLabel(userAvatarUrl ? "PROVIDER" : "INITIAL");
-  }, [userAvatarUrl]);
-
-  useEffect(() => {
     const normalized = (userEmail?.split("@")[0] || "").trim();
     if (!normalized) return;
     setCachedUsername(normalized);
@@ -257,25 +245,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || cachedUsername || "").slice(0, 20).trim();
   const avatarInitial = getInitialFromLabel(displayUsername);
-
-  const submitAvatarUpdate = async (value: string | null) => {
-    setAvatarSaving(true);
-    setAvatarError(null);
-    setAvatarInfo(null);
-    try {
-      const result = await updateMyAvatar(value);
-      setAvatarUrlState(result.avatarUrl ?? null);
-      setAvatarSourceLabel(result.avatarSource ?? (result.avatarUrl ? "CUSTOM" : "INITIAL"));
-      setAvatarInfo(value ? "Avatar updated successfully" : "Custom avatar removed");
-      setAvatarInputValue("");
-      // Keep top-right balance/avatar block updated without full reload.
-      window.dispatchEvent(new Event("refreshBalance"));
-    } catch (error) {
-      setAvatarError(error instanceof Error ? error.message : "Failed to update avatar");
-    } finally {
-      setAvatarSaving(false);
-    }
-  };
 
   const refreshCashierNotifications = useCallback(async () => {
     try {
@@ -472,15 +441,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 type="button"
                 onClick={() => {
                   setProfileMenuOpen((prev) => !prev);
-                  setAvatarError(null);
-                  setAvatarInfo(null);
                 }}
                 className="relative h-[32px] w-[32px] shrink-0 rounded-full"
                 title="Open profile options"
               >
                 <div className="h-full w-full overflow-hidden rounded-full bg-[#1b1b1b] border border-[#f2cb6a]/45 shadow-[0_0_8px_rgba(242,203,106,0.26)]">
-                  {avatarUrlState ? (
-                    <img src={avatarUrlState} alt="avatar" className="h-full w-full object-cover" />
+                  {userAvatarUrl ? (
+                    <img src={userAvatarUrl} alt="avatar" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#202020] text-[13px] font-bold text-white">
                       {avatarInitial}
@@ -492,8 +459,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 type="button"
                 onClick={() => {
                   setProfileMenuOpen((prev) => !prev);
-                  setAvatarError(null);
-                  setAvatarInfo(null);
                 }}
                 title="Open profile options"
                 style={{ background: "none", border: "none", padding: "0 4px", cursor: "pointer", display: "flex", alignItems: "center" }}
@@ -520,78 +485,116 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               </button>
               {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onClearBadge={() => { setHasNewNotif(false); localStorage.setItem("notifSeen", "true"); }} />}
               {profileMenuOpen && (
-                <div style={{ position: "absolute", right: 0, top: 44, width: 240, background: "#111", borderRadius: 16, padding: 8, boxShadow: "0 8px 30px rgba(0,0,0,.5)", border: "1px solid #1e1e1e", zIndex: 200 }}>
-                  {[
-                    { icon: "👤", label: "Profile", action: () => { setProfileMenuOpen(false); void router.push("/profile"); } },
-                    { icon: "🏦", label: "Vault", action: () => { void openVaultModal(); } },
-                    { icon: "👥", label: "Affilates", action: () => { setProfileMenuOpen(false); void router.push("/affiliates"); } },
-                    { icon: "📊", label: "Transactions", action: () => { setProfileMenuOpen(false); void router.push("/transactions"); } },
-                    { icon: "🕐", label: "Game History", action: () => { setProfileMenuOpen(false); void router.push("/game-history"); } },
-                    { icon: "🎧", label: "Support", action: () => { setProfileMenuOpen(false); void router.push("/support"); } },
-                  ].map((item) => (
-                    <button key={item.label} type="button" onClick={item.action}
-                      className="group w-full flex items-center gap-3 px-4 py-3 rounded-[10px] transition-colors hover:bg-[#1a1a1a]"
-                      style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
-                      <span style={{ color: "#f34950", fontSize: 16 }}>{item.icon}</span>
-                      <span className="group-hover:text-[#f34950] transition-colors" style={{ color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: '"DM Sans",sans-serif' }}>{item.label}</span>
-                    </button>
-                  ))}
-                  <hr style={{ border: "none", borderTop: "1px solid #1e1e1e", margin: "4px 0" }} />
-                  <button type="button" onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
-                    className="group w-full flex items-center gap-3 px-4 py-3 rounded-[10px] transition-colors hover:bg-[#1a1a1a]"
-                    style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
-                    <span style={{ color: "#f34950", fontSize: 16 }}>🚪</span>
-                    <span className="group-hover:text-[#f34950] transition-colors" style={{ color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: '"DM Sans",sans-serif' }}>Log out</span>
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: 44,
+                    width: 200,
+                    background: "linear-gradient(180deg, #161616 0%, #0d0d0d 100%)",
+                    borderRadius: 12,
+                    boxShadow: "0 11px 43.4px 0 rgba(0, 0, 0, 0.34), inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424",
+                    border: "1px solid #222222",
+                    padding: "6px 0",
+                    overflow: "hidden",
+                    zIndex: 200
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/profile"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 10C14.2091 10 16 8.20914 16 6C16 3.79086 14.2091 2 12 2C9.79086 2 8 3.79086 8 6C8 8.20914 9.79086 10 12 10Z" fill="#ff4d6d"/>
+                      <path d="M20 17.5C20 19.9853 20 22 12 22C4 22 4 19.9853 4 17.5C4 15.0147 7.58172 13 12 13C16.4183 13 20 15.0147 20 17.5Z" fill="#ff4d6d"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Profile</span>
                   </button>
 
-                  <div className="mt-2 rounded-[10px] border border-[#223447] bg-[#0c1b2a] p-3">
-                    <p className="m-0 text-[11px] uppercase tracking-wide text-[#8ea5bd]">Avatar</p>
-                    <p className="m-0 mt-1 text-[11px] text-[#7f95ac]">
-                      Set custom avatar URL. If empty, we fallback to provider photo (Google/Steam) or your initial.
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="h-[30px] w-[30px] overflow-hidden rounded-full border border-[#dcb35c]/45 bg-[#1b1b1b]">
-                        {avatarUrlState ? (
-                          <img src={avatarUrlState} alt="avatar preview" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[12px] font-bold text-white">
-                            {avatarInitial}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-[#9cb4cb]">
-                        {avatarUrlState ? "Current: image avatar" : `Current: initial (${avatarInitial})`}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        value={avatarInputValue}
-                        onChange={(event) => setAvatarInputValue(event.target.value)}
-                        placeholder="https://..."
-                        className="h-[34px] w-full rounded-[8px] border border-[#2a4258] bg-[#091522] px-2 text-[12px] text-white outline-none"
-                      />
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={avatarSaving}
-                        onClick={() => void submitAvatarUpdate(avatarInputValue.trim().length > 0 ? avatarInputValue.trim() : null)}
-                        className="rounded-[8px] border border-[#f2686a] bg-gradient-to-b from-[#f75a5d] to-[#b73437] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
-                      >
-                        {avatarSaving ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={avatarSaving}
-                        onClick={() => void submitAvatarUpdate(null)}
-                        className="rounded-[8px] border border-[#35516d] bg-[#0d2234] px-3 py-1.5 text-[12px] font-semibold text-[#c9d7e5] disabled:opacity-60"
-                      >
-                        Remove custom
-                      </button>
-                    </div>
-                    {avatarError ? <p className="m-0 mt-2 text-[11px] text-[#ff8d93]">{avatarError}</p> : null}
-                    {avatarInfo ? <p className="m-0 mt-2 text-[11px] text-[#8df3a1]">{avatarInfo}</p> : null}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { void openVaultModal(); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M7 19V21M17 19V21M17 11C17.5523 11 18 10.5523 18 10C18 9.44772 17.5523 9 17 9C16.4477 9 16 9.44772 16 10C16 10.5523 16.4477 11 17 11ZM17 11V14M17 10H17.01M9.5 11.5H9.51M13 11.5C13 13.433 11.433 15 9.5 15C7.567 15 6 13.433 6 11.5C6 9.567 7.567 8 9.5 8C11.433 8 13 9.567 13 11.5ZM7.8 19H16.2C17.8802 19 18.7202 19 19.362 18.673C19.9265 18.3854 20.3854 17.9265 20.673 17.362C21 16.7202 21 15.8802 21 14.2V8.8C21 7.11984 21 6.27976 20.673 5.63803C20.3854 5.07354 19.9265 4.6146 19.362 4.32698C18.7202 4 17.8802 4 16.2 4H7.8C6.11984 4 5.27976 4 4.63803 4.32698C4.07354 4.6146 3.6146 5.07354 3.32698 5.63803C3 6.27976 3 7.11984 3 8.8V14.2C3 15.8802 3 16.7202 3.32698 17.362C3.6146 17.9265 4.07354 18.3854 4.63803 18.673C5.27976 19 6.11984 19 7.8 19Z" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Vault</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/affiliates"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <g clipPath="url(#layout-affiliates-clip)">
+                        <path d="M17.615 9.3905C18.7455 8.6835 19.5 7.4315 19.5 6C19.5 3.791 17.709 2 15.5 2C13.291 2 11.5 3.791 11.5 6C11.5 7.4315 12.2545 8.6835 13.385 9.3905C12.6735 9.659 12.028 10.0575 11.4745 10.559C11.255 8.5575 9.56 7 7.5 7C5.291 7 3.5 8.791 3.5 11C3.5 12.4315 4.2545 13.6835 5.385 14.3905C3.116 15.246 1.5 17.431 1.5 20H13.5C13.5 17.9115 12.433 16.0745 10.815 15H21.5C21.5 12.431 19.884 10.246 17.615 9.3905ZM15.5 10C16.09 10 16.648 9.869 17.152 9.64L15.5 12L13.848 9.64C14.352 9.869 14.91 10 15.5 10ZM7.5 15C8.09 15 8.648 14.869 9.152 14.64L7.5 17L5.848 14.64C6.352 14.869 6.91 15 7.5 15Z" fill="#ff4d6d"/>
+                      </g>
+                      <defs>
+                        <clipPath id="layout-affiliates-clip">
+                          <rect width="24" height="24" fill="white"/>
+                        </clipPath>
+                      </defs>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Affiliates</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/transactions"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M15.2929 3.29289C15.6834 2.90237 16.3166 2.90237 16.7071 3.29289L22.3657 8.95147C23.1216 9.70743 22.5862 11 21.5172 11H2C1.44772 11 1 10.5523 1 10C1 9.44772 1.44772 9 2 9H19.5858L15.2929 4.70711C14.9024 4.31658 14.9024 3.68342 15.2929 3.29289ZM4.41421 15H22C22.5523 15 23 14.5523 23 14C23 13.4477 22.5523 13 22 13H2.48284C1.41376 13 0.878355 14.2926 1.63431 15.0485L7.29289 20.7071C7.68342 21.0976 8.31658 21.0976 8.70711 20.7071C9.09763 20.3166 9.09763 19.6834 8.70711 19.2929L4.41421 15Z" fill="#ff4d6d"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Transactions</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/game-history"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M5.5277 16.7023C6.66004 18.2608 8.31673 19.3584 10.1934 19.7934C12.0701 20.2284 14.0407 19.9716 15.7432 19.0701C17.4458 18.1687 18.7658 16.6832 19.4609 14.8865C20.156 13.0898 20.1794 11.1027 19.5268 9.29011C18.8743 7.47756 17.5896 5.96135 15.9088 5.02005C14.228 4.07875 12.2639 3.77558 10.3775 4.16623C8.49112 4.55689 6.80903 5.61514 5.64029 7.14656C4.47154 8.67797 3.89465 10.5797 4.01562 12.5023M4.01562 12.5023L2.51562 11.0023M4.01562 12.5023L5.51562 11.0023" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 8V12L15 15" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Game History</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/support"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M5.60005 14.2C5.60005 14.6418 5.24188 15 4.80005 15C4.35822 15 4.00005 14.6418 4.00005 14.2V12.8C4.00005 12.5142 4.15253 12.2501 4.40005 12.1072C4.64757 11.9643 4.95253 11.9643 5.20005 12.1072C5.44757 12.2501 5.60005 12.5142 5.60005 12.8V14.2ZM18 12.8C18 12.3582 18.3582 12 18.8 12C19.2419 12 19.6 12.3582 19.6 12.8V14.2C19.6 14.6418 19.2419 15 18.8 15C18.3582 15 18 14.6418 18 14.2V12.8Z" fill="#ff4d6d"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M19.8 10.18C19.49 7 17.61 2 11.8 2C5.99005 2 4.11005 7 3.80005 10.18C2.71256 10.5927 1.99524 11.6368 2.00002 12.8V14.2C2.00002 15.7464 3.25365 17 4.80005 17C6.34644 17 7.60005 15.7464 7.60005 14.2V12.8C7.59502 11.6619 6.90404 10.6393 5.85005 10.21C6.05005 8.37 7.03005 4 11.8 4C16.57 4 17.54 8.37 17.74 10.21C16.6882 10.6402 16.0007 11.6636 16 12.8V14.2C16.0044 15.275 16.6217 16.2533 17.59 16.72C17.17 17.51 16.1 18.58 13.47 18.9C12.9443 18.1017 11.9272 17.787 11.0425 18.1489C10.1578 18.5108 9.65283 19.4481 9.83733 20.386C10.0218 21.3239 10.8442 22 11.8 22C12.5554 21.9958 13.2439 21.5664 13.58 20.89C17.87 20.4 19.24 18.19 19.67 16.89C20.8334 16.5132 21.6157 15.4227 21.6 14.2V12.8C21.6049 11.6368 20.8875 10.5927 19.8 10.18Z" fill="#ff4d6d"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Support</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9"/>
+                      <path d="M16 17L21 12L16 7"/>
+                      <path d="M21 12H9"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Log out</span>
+                  </button>
                 </div>
               )}
             </div>
