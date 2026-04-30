@@ -48,27 +48,11 @@ const isBlackjackRevealLocked = (): boolean => {
 };
 
 const RedTokenIcon = () => (
-  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full">
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <defs>
-        <radialGradient id="rain-token-core" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#fecaca" />
-          <stop offset="45%" stopColor="#ef4444" />
-          <stop offset="100%" stopColor="#7f1d1d" />
-        </radialGradient>
-      </defs>
-      <circle cx="12" cy="12" r="10" fill="url(#rain-token-core)" />
-      <circle cx="12" cy="12" r="8.2" fill="none" stroke="#450a0a" strokeWidth="1.2" opacity="0.65" />
-      <path
-        d="M9 8.7h4.25a2.2 2.2 0 0 1 0 4.4H9m0 0h4.6a2.25 2.25 0 1 1 0 4.5H9m0-8.9v8.9"
-        fill="none"
-        stroke="#fff1f2"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  </span>
+  <img
+    src="/assets/69a77514d4212f89fc13bd58f30d7dcf.png"
+    alt="coin"
+    className="h-[14px] w-[14px] rounded-full object-cover"
+  />
 );
 
 export default function BalanceControl() {
