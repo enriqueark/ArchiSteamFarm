@@ -27,7 +27,7 @@ const sideLinks = [
   { href: "/mines", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Mines" },
   { href: "/blackjack", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
-const COIN_ICON_SRC = "/assets/dino-coin-gold-v2.png";
+const COIN_ICON_SRC = "/assets/coin-dino-original.png";
 
 function formatAtomic(val: string, decimals = 8): string {
   const n = Number(val) / Math.pow(10, decimals);
