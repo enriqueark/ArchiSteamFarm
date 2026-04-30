@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 
 import Card from "@/components/Card";
+import CoinAmount from "@/components/CoinAmount";
 import {
   getChatProfileByPublicId,
   getChatProfileByUserId,
@@ -77,7 +78,13 @@ export default function UserPublicProfilePage() {
             </div>
             <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
               <p className="m-0 text-gray-400">Rewards redeemed</p>
-              <p className="m-0 mt-1 text-white font-semibold">{data.stats.rewardsRedeemedCoins} COINS</p>
+              <div className="mt-1">
+                <CoinAmount
+                  amount={data.stats.rewardsRedeemedCoins}
+                  iconSize={16}
+                  textClassName="text-white font-semibold"
+                />
+              </div>
             </div>
 
             {!data.user.profileVisible ? (
@@ -88,33 +95,75 @@ export default function UserPublicProfilePage() {
               <>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3 md:col-span-2">
                   <p className="m-0 text-gray-400">Total wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{data.stats.wageredTotalCoins} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={data.stats.wageredTotalCoins}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Case battles wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{atomicToCoins(data.stats.wageredByMode.caseBattlesAtomic)} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={atomicToCoins(data.stats.wageredByMode.caseBattlesAtomic)}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Case opening wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{atomicToCoins(data.stats.wageredByMode.caseOpeningAtomic)} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={atomicToCoins(data.stats.wageredByMode.caseOpeningAtomic)}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Mines wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{atomicToCoins(data.stats.wageredByMode.minesAtomic)} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={atomicToCoins(data.stats.wageredByMode.minesAtomic)}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Blackjack wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{atomicToCoins(data.stats.wageredByMode.blackjackAtomic)} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={atomicToCoins(data.stats.wageredByMode.blackjackAtomic)}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3 md:col-span-2">
                   <p className="m-0 text-gray-400">Roulette wagered</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{atomicToCoins(data.stats.wageredByMode.rouletteAtomic)} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={atomicToCoins(data.stats.wageredByMode.rouletteAtomic)}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Highest single win</p>
-                  <p className="m-0 mt-1 text-white font-semibold">{data.stats.maxSingleWinCoins} COINS</p>
+                  <div className="mt-1">
+                    <CoinAmount
+                      amount={data.stats.maxSingleWinCoins}
+                      iconSize={16}
+                      textClassName="text-white font-semibold"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
                   <p className="m-0 text-gray-400">Highest multiplier</p>

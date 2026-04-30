@@ -3,6 +3,8 @@ import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByA
 import { refreshBalance } from "@/lib/refreshBalance";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { getGameVolume } from "@/lib/gameAudio";
+import CoinAmount from "@/components/CoinAmount";
+import CoinIcon from "@/components/CoinIcon";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -267,7 +269,7 @@ export default function MinesPage() {
       const deltaAtomic = Number.isFinite(previousPotentialAtomic) && Number.isFinite(nextPotentialAtomic)
         ? Math.max(0, nextPotentialAtomic - previousPotentialAtomic)
         : 0;
-      const deltaLabel = `+$${(deltaAtomic / COIN_DECIMALS).toFixed(2)}`;
+      const deltaLabel = `+${(deltaAtomic / COIN_DECIMALS).toFixed(2)}`;
       if (newlySafe.length > 0) {
         setSafeCellGainByIndex((prev) => {
           const copy = { ...prev };
@@ -333,7 +335,7 @@ export default function MinesPage() {
             <p style={{ color: "#828282", fontSize: 14, fontFamily: G, fontWeight: 400, margin: 0 }}>Bet amount</p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 48, borderRadius: 14, padding: 6, background: "#090909", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "center", padding: "0 12px", flex: 1 }}>
-                <span style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500 }}>$</span>
+                <CoinIcon size={17} style={{ marginRight: 6 }} />
                 <input value={act ? f(game?.betAtomic) : bet}
                   onChange={(e) => { if (!act) setBet(e.target.value); }}
                   disabled={act}
@@ -461,7 +463,7 @@ export default function MinesPage() {
                 />
               )}
             </div>
-            <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 6, position: "relative", zIndex: 1 }}>
+              <div style={{ minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, marginTop: 6, position: "relative", zIndex: 1 }}>
               <p style={{ color: "#fff", fontSize: 14, fontFamily: G, fontWeight: 500, margin: 0, whiteSpace: "nowrap" }}>x{fm(game?.currentMultiplier)}</p>
             </div>
           </div>
@@ -476,7 +478,12 @@ export default function MinesPage() {
                   <p style={{ color: "#828282", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>Pick random tile</p>
                 </div>
                 <div onClick={cashout} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
-                  <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>Cashout {pay}</p>
+                  <CoinAmount
+                    amount={pay.replace(" COINS", "")}
+                    prefix="Cashout "
+                    iconSize={18}
+                    textStyle={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}
+                  />
                 </div>
               </>
             ) : (
@@ -506,7 +513,12 @@ export default function MinesPage() {
             if (st === "safe") return (
               <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
-                <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{safeCellGainByIndex[i] ?? "+$0.00"}</p>
+                <CoinAmount
+                  amount={(safeCellGainByIndex[i] ?? "+0.00").replace("+", "")}
+                  prefix="+"
+                  iconSize={15}
+                  textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
+                />
               </div>
             );
             return (

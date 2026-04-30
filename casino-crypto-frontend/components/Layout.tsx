@@ -2,6 +2,8 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
+import CoinAmount from "./CoinAmount";
+import CoinIcon from "./CoinIcon";
 import Footer from "./Footer";
 import LevelBadge from "./LevelBadge";
 import NotificationsPanel, { type Notification as HeaderNotification } from "./NotificationsPanel";
@@ -27,7 +29,6 @@ const sideLinks = [
   { href: "/mines", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Mines" },
   { href: "/blackjack", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
-const COIN_ICON_SRC = "/assets/coin-dino-original.png";
 
 function formatAtomic(val: string, decimals = 8): string {
   const n = Number(val) / Math.pow(10, decimals);
@@ -403,7 +404,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             {primaryWallet && (
               <>
                 <div className="inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#1a1a1a] px-4" style={{ transition: "box-shadow 0.3s", boxShadow: balanceFlash === "up" ? "0 0 12px rgba(34,197,94,0.4)" : balanceFlash === "down" ? "0 0 12px rgba(239,68,68,0.4)" : "none" }}>
-                  <img src={COIN_ICON_SRC} alt="" className="h-[14px] w-[14px] shrink-0 object-contain" />
+                  <CoinIcon size={18} />
                   <span style={{
                     fontSize: 14, fontWeight: 600, fontFamily: '"DM Sans","Gotham",sans-serif',
                     color: balanceFlash === "up" ? "#22c55e" : balanceFlash === "down" ? "#ef4444" : "#ffffff",
@@ -787,21 +788,33 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
                       <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Vault Total</p>
-                      <p className="m-0 mt-1 text-[18px] font-bold text-white">
-                        {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
-                      </p>
+                      <div className="mt-1">
+                        <CoinAmount
+                          amount={vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
+                          iconSize={16}
+                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}
+                        />
+                      </div>
                     </div>
                     <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
                       <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Available</p>
-                      <p className="m-0 mt-1 text-[18px] font-bold text-[#7de88f]">
-                        {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
-                      </p>
+                      <div className="mt-1">
+                        <CoinAmount
+                          amount={vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
+                          iconSize={16}
+                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#7de88f" }}
+                        />
+                      </div>
                     </div>
                     <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
                       <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Locked</p>
-                      <p className="m-0 mt-1 text-[18px] font-bold text-[#ffd28d]">
-                        {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
-                      </p>
+                      <div className="mt-1">
+                        <CoinAmount
+                          amount={vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
+                          iconSize={16}
+                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffd28d" }}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -865,7 +878,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       <div className="space-y-2">
                         {vaultState.locks.map((lock) => (
                           <div key={lock.id} className="flex items-center justify-between rounded-[8px] bg-[#0d2134] px-3 py-2">
-                            <span className="text-sm font-semibold text-white">{atomicToCoinsString(lock.amountAtomic)} COINS</span>
+                            <CoinAmount
+                              amount={atomicToCoinsString(lock.amountAtomic)}
+                              iconSize={14}
+                              textStyle={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}
+                            />
                             <span className="text-xs text-[#90a8c1]">Unlocks at {new Date(lock.unlockAt).toLocaleString()}</span>
                           </div>
                         ))}

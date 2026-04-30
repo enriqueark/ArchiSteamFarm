@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getMyRouletteBets, type RouletteBet } from "@/lib/api";
+import CoinAmount from "@/components/CoinAmount";
 
 const games = [
   { name: "CASES", href: "/cases", img: "/assets/c92374a7485d20ac9bbef2d35ed1a789.png", icon: "/assets/098fe17d7ecd701c12a38a0cadfb52c7.svg" },
@@ -122,21 +123,21 @@ export default function HomePage() {
                   <span className="text-sm text-white">Roulette</span>
                 </div>
                 <span className="text-sm text-white">{b.betType}</span>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-full bg-[#ffae50]/20" />
-                  <span className="text-sm text-white">{formatAtomic(b.stakeAtomic)}</span>
-                </div>
+                <CoinAmount
+                  amount={formatAtomic(b.stakeAtomic)}
+                  iconSize={16}
+                  textClassName="text-sm text-white"
+                />
                 <span className={`text-sm font-medium ${
                   b.status === "WON" ? "text-accent-green" : b.status === "LOST" ? "text-red-400" : "text-muted"
                 }`}>
                   {b.status}
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-full bg-[#ffae50]/20" />
-                  <span className={`text-sm ${b.status === "WON" ? "text-accent-green" : "text-white"}`}>
-                    {b.payoutAtomic ? formatAtomic(b.payoutAtomic) : "0.00"}
-                  </span>
-                </div>
+                <CoinAmount
+                  amount={b.payoutAtomic ? formatAtomic(b.payoutAtomic) : "0.00"}
+                  iconSize={16}
+                  textClassName={`text-sm ${b.status === "WON" ? "text-accent-green" : "text-white"}`}
+                />
               </div>
             ))
           )}

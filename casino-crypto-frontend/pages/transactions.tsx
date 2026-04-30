@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Card from "@/components/Card";
+import CoinAmount from "@/components/CoinAmount";
 import { getMyTransactions, type PaginatedResponse, type UserTransactionItem } from "@/lib/api";
 
 const PAGE_SIZE = 50;
@@ -102,7 +103,13 @@ export default function TransactionsPage() {
                   <td className={`px-2 py-2 ${item.direction === "CREDIT" ? "text-emerald-300" : "text-red-300"}`}>
                     {item.direction}
                   </td>
-                  <td className="px-2 py-2 text-white">{item.amountCoins}</td>
+                  <td className="px-2 py-2 text-white">
+                    <CoinAmount
+                      amount={item.amountCoins}
+                      iconSize={14}
+                      textStyle={{ fontSize: 14, color: "#ffffff" }}
+                    />
+                  </td>
                   <td className="px-2 py-2 text-gray-300">{item.reason}</td>
                   <td className="px-2 py-2 text-gray-500">{item.referenceId || "-"}</td>
                 </tr>

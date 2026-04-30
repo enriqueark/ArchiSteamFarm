@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import CoinAmount from "@/components/CoinAmount";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import {
   callBattleBot,
@@ -360,8 +361,10 @@ export default function BattlesPage() {
                     <span className="text-sm font-semibold text-white">{battle.template.replaceAll("_", " ")}</span>
                     <span className="text-xs text-slate-300">{battle.status}</span>
                   </div>
-                  <div className="mt-1 text-xs text-slate-300">
-                    Cost {fmtCoins(battle.totalCostAtomic)} • Cases {battle.cases.length}
+                  <div className="mt-1 text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                    <span>Cost</span>
+                    <CoinAmount amount={fmtCoins(battle.totalCostAtomic)} iconSize={14} textClassName="text-slate-300" />
+                    <span>• Cases {battle.cases.length}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-slate-400">
                     {battle.modePrivate ? "Private" : "Public"} • {battle.modeGroup ? "Group" : "Winner takes"}
@@ -451,8 +454,9 @@ export default function BattlesPage() {
                 </div>
               ) : null}
 
-              <p className="text-xs text-slate-400">
-                Selected: {draft.caseIds.length}/50 • Cost per player: {fmtCoins(battleCaseCostAtomic)} COINS
+              <p className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+                <span>Selected: {draft.caseIds.length}/50 • Cost per player:</span>
+                <CoinAmount amount={fmtCoins(battleCaseCostAtomic)} iconSize={14} textClassName="text-slate-400" />
               </p>
 
               <div className="max-h-48 space-y-1 overflow-y-auto rounded border border-slate-700 bg-slate-900 p-2">
@@ -461,8 +465,9 @@ export default function BattlesPage() {
                   if (!c) return null;
                   return (
                     <div key={`${caseId}-${idx}`} className="flex items-center justify-between rounded border border-slate-800 bg-slate-950 px-2 py-1 text-xs">
-                      <span className="text-slate-200">
-                        #{idx + 1} {c.title} • {fmtCoins(c.priceAtomic)}
+                      <span className="text-slate-200 inline-flex items-center gap-2 flex-wrap">
+                        <span>#{idx + 1} {c.title} •</span>
+                        <CoinAmount amount={fmtCoins(c.priceAtomic)} iconSize={14} textClassName="text-slate-200" />
                       </span>
                       <button
                         type="button"
@@ -498,7 +503,10 @@ export default function BattlesPage() {
                     onClick={() => addCaseToDraft(c.id)}
                     className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-left text-xs text-slate-200 hover:border-slate-500"
                   >
-                    + {c.title} • {fmtCoins(c.priceAtomic)}
+                    <span className="inline-flex items-center gap-2">
+                      <span>+ {c.title} •</span>
+                      <CoinAmount amount={fmtCoins(c.priceAtomic)} iconSize={14} textClassName="text-slate-200" />
+                    </span>
                   </button>
                 ))}
                 {!cases.length ? <p className="text-xs text-slate-400">No cases available.</p> : null}
@@ -538,8 +546,11 @@ export default function BattlesPage() {
                     <span className="text-[11px] text-slate-400">{slot.state}</span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-white">{slot.displayName}</div>
-                  <div className="mt-1 text-xs text-slate-300">
-                    Paid {fmtCoins(slot.paidAmountAtomic)} • Payout {fmtCoins(slot.payoutAtomic)}
+                  <div className="mt-1 text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                    <span>Paid</span>
+                    <CoinAmount amount={fmtCoins(slot.paidAmountAtomic)} iconSize={14} textClassName="text-slate-300" />
+                    <span>• Payout</span>
+                    <CoinAmount amount={fmtCoins(slot.payoutAtomic)} iconSize={14} textClassName="text-slate-300" />
                   </div>
                   {selectedBattle.status === "OPEN" && slot.state === "OPEN" ? (
                     <Button
@@ -663,7 +674,9 @@ export default function BattlesPage() {
                         <div>
                           Round {drop.roundIndex + 1} • Seat {drop.orderIndex + 1} • {drop.caseItemName}
                         </div>
-                        <div className="text-[11px] text-slate-300">{fmtCoins(drop.valueAtomic)} COINS</div>
+                        <div className="text-[11px] text-slate-300">
+                          <CoinAmount amount={fmtCoins(drop.valueAtomic)} iconSize={13} textClassName="text-slate-300" />
+                        </div>
                       </div>
                     </div>
                   ))}

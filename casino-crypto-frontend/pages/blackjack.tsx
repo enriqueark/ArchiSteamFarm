@@ -3,6 +3,8 @@ import { startBlackjackGame, actBlackjack, getActiveBlackjackGame, type Blackjac
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { playDealSound, playWinSound, playLoseSound } from "@/lib/sounds";
 import { refreshBalance } from "@/lib/refreshBalance";
+import CoinAmount from "@/components/CoinAmount";
+import CoinIcon from "@/components/CoinIcon";
 
 const A = "/assets/";
 const TABLE_IDLE = `${A}4d4f0838d8d221ce04032bc55f2eb265.png`;
@@ -122,9 +124,7 @@ function Chip({ val, label }: { val: string; label: string }) {
           boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424"
         }}
       >
-        <div style={{ width: 22, height: 22, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-          <span style={{ color: "#fff", fontSize: 10, fontWeight: 700, fontFamily: G }}>$</span>
-        </div>
+        <CoinIcon size={20} />
         <span style={{ color: "#fff", fontSize: 18, fontWeight: 700, fontFamily: G }}>{val}</span>
       </div>
       <p style={{ color: "#ffffff", fontSize: 15, margin: "8px 0 0", fontFamily: G, fontWeight: 600 }}>{label}</p>
@@ -358,7 +358,16 @@ export default function BlackjackPage() {
             <div style={{ fontSize: 15, fontWeight: 700, fontFamily: G, padding: "5px 16px", borderRadius: 10, color: "#fff", background: won ? "rgba(34,197,94,.85)" : lost ? "rgba(239,68,68,.85)" : "rgba(100,100,100,.8)" }}>
               {won ? "YOU WIN!" : lost ? "LOSE" : "PUSH"}
             </div>
-            {game?.payoutAtomic && <p style={{ color: "#55ff60", fontSize: 12, fontWeight: 700, marginTop: 3, fontFamily: G }}>+{fmtCoins(game.payoutAtomic)} COINS</p>}
+            {game?.payoutAtomic && (
+              <div style={{ marginTop: 3 }}>
+                <CoinAmount
+                  amount={fmtCoins(game.payoutAtomic)}
+                  prefix="+"
+                  iconSize={13}
+                  textStyle={{ color: "#55ff60", fontSize: 12, fontWeight: 700, fontFamily: G }}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -383,9 +392,7 @@ export default function BlackjackPage() {
               ].map((inp) => (
                 <div key={inp.label} style={{ minWidth: 0, textAlign: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, border: "1px solid #2a2d32", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.55)", padding: "0 4px 0 0", height: 42 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "radial-gradient(circle,#bd0926,#570411)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 6px", flexShrink: 0, boxShadow: "inset 0 1px 0 #ad0822, inset 0 -1px 0 #3d1415" }}>
-                      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: G }}>$</span>
-                    </div>
+                    <CoinIcon size={20} style={{ margin: "0 6px", flexShrink: 0 }} />
                     <input value={inp.val} onChange={(e) => inp.set(e.target.value)}
                       style={{ flex: 1, height: "100%", border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, padding: 0, minWidth: 0 }} />
                   </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import Card from "@/components/Card";
+import CoinAmount from "@/components/CoinAmount";
 import {
   getMyGameHistory,
   type PaginatedResponse,
@@ -10,6 +11,12 @@ import {
 const PAGE_SIZE = 50;
 
 type GameMode = "ALL" | "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES";
+
+function normalizeCoins(value: string): string {
+  const parsed = Number((value || "0").replace(/,/g, ""));
+  if (!Number.isFinite(parsed)) return "0.00";
+  return Math.abs(parsed).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function GameHistoryPage() {
   const [mode, setMode] = useState<GameMode>("ALL");
@@ -108,17 +115,22 @@ export default function GameHistoryPage() {
                       {item.status}
                     </td>
                     <td className="border-b border-[#161616] px-3 py-2 text-gray-200">
-                      {item.wagerCoins}
+                      <CoinAmount amount={normalizeCoins(item.wagerCoins)} iconSize={16} />
                     </td>
                     <td className="border-b border-[#161616] px-3 py-2 text-gray-200">
-                      {item.payoutCoins}
+                      <CoinAmount amount={normalizeCoins(item.payoutCoins)} iconSize={16} />
                     </td>
                     <td
                       className={`border-b border-[#161616] px-3 py-2 font-semibold ${
                         positiveProfit ? "text-emerald-400" : "text-red-400"
                       }`}
                     >
-                      {item.profitCoins}
+                      <CoinAmount
+                        amount={normalizeCoins(item.profitCoins)}
+                        iconSize={16}
+                        prefix={positiveProfit ? "+" : "-"}
+                        textStyle={{ color: positiveProfit ? "#34d399" : "#f87171", fontWeight: 700 }}
+                      />
                     </td>
                     <td className="border-b border-[#161616] px-3 py-2 font-mono text-xs text-gray-500">
                       {item.reference ?? "-"}

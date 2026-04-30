@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
+import CoinAmount from "@/components/CoinAmount";
 import { getWallets, type Wallet } from "@/lib/api";
 
 function atomicToCoins(atomic: string): string {
@@ -79,20 +80,32 @@ export default function WalletPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-400">Balance (coins)</span>
-                <span className="font-mono">{w.balanceCoins ?? atomicToCoins(w.balanceAtomic)}</span>
+                <CoinAmount
+                  amount={w.balanceCoins ?? atomicToCoins(w.balanceAtomic)}
+                  iconSize={16}
+                  textClassName="font-mono"
+                />
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Locked (coins)</span>
-                <span className="font-mono">{w.lockedCoins ?? atomicToCoins(w.lockedAtomic)}</span>
+                <CoinAmount
+                  amount={w.lockedCoins ?? atomicToCoins(w.lockedAtomic)}
+                  iconSize={16}
+                  textClassName="font-mono"
+                />
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Available (coins)</span>
-                <span className="font-mono">
-                  {w.availableCoins ??
+                <CoinAmount
+                  amount={
+                    w.availableCoins ??
                     atomicToCoins(
                       w.availableAtomic ?? String(BigInt(w.balanceAtomic) - BigInt(w.lockedAtomic))
-                    )}
-                </span>
+                    )
+                  }
+                  iconSize={16}
+                  textClassName="font-mono"
+                />
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">ID</span>

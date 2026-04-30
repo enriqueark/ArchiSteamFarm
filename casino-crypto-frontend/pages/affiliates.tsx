@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import CoinAmount from "@/components/CoinAmount";
 import Card from "@/components/Card";
 import {
   getAffiliateDashboard,
@@ -49,9 +50,30 @@ export default function AffiliatesPage() {
           <Card title="Affiliate stats">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
               <p className="text-gray-300">Referrals: <span className="text-white font-semibold">{dashboard.stats.referralCount}</span></p>
-              <p className="text-gray-300">Total wagered: <span className="text-white font-semibold">{dashboard.stats.totalWageredCoins}</span></p>
-              <p className="text-gray-300">Total commission: <span className="text-white font-semibold">{dashboard.stats.totalCommissionCoins}</span></p>
-              <p className="text-gray-300">Claimable: <span className="text-white font-semibold">{dashboard.stats.claimableCommissionCoins}</span></p>
+              <p className="text-gray-300">
+                Total wagered:{" "}
+                <CoinAmount
+                  amount={dashboard.stats.totalWageredCoins}
+                  iconSize={16}
+                  textClassName="text-white font-semibold"
+                />
+              </p>
+              <p className="text-gray-300">
+                Total commission:{" "}
+                <CoinAmount
+                  amount={dashboard.stats.totalCommissionCoins}
+                  iconSize={16}
+                  textClassName="text-white font-semibold"
+                />
+              </p>
+              <p className="text-gray-300">
+                Claimable:{" "}
+                <CoinAmount
+                  amount={dashboard.stats.claimableCommissionCoins}
+                  iconSize={16}
+                  textClassName="text-white font-semibold"
+                />
+              </p>
             </div>
           </Card>
         </>

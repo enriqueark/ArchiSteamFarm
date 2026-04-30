@@ -555,11 +555,26 @@ function forceStatValue(doc: Document, id: string, text: string) {
     container.innerHTML = "";
     container.appendChild(paragraph);
   }
-  paragraph.textContent = text;
+  paragraph.innerHTML = "";
   paragraph.setAttribute(
     "style",
-    "margin:0;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;"
+    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
   );
+
+  const coin = doc.createElement("img");
+  coin.setAttribute("src", "/assets/coin-dino-original.png");
+  coin.setAttribute("alt", "");
+  coin.setAttribute(
+    "style",
+    "width:18px;height:18px;object-fit:contain;flex-shrink:0;"
+  );
+
+  const value = doc.createElement("span");
+  value.textContent = text;
+  value.setAttribute("style", "display:inline-block;");
+
+  paragraph.appendChild(coin);
+  paragraph.appendChild(value);
 }
 
 function replaceElementWithDiv(doc: Document, id: string): HTMLDivElement | null {

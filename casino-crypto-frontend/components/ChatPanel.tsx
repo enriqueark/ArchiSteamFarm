@@ -10,6 +10,8 @@ import {
   type RainState
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
+import CoinAmount from "./CoinAmount";
+import CoinIcon from "./CoinIcon";
 import LevelBadge, { getTierColor } from "./LevelBadge";
 
 interface Props {
@@ -35,8 +37,8 @@ function fromAtomicToCoins(atomic: string): string {
 }
 
 function formatRainAmountFromCoins(coins: number): string {
-  if (!Number.isFinite(coins)) return "$0.00";
-  return `$${coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (!Number.isFinite(coins)) return "0.00";
+  return coins.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function getMsUntilNextHalfHourBoundaryCET(now = new Date()): number {
@@ -482,9 +484,11 @@ export default function ChatPanel({ onClose }: Props) {
 
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
               <div className="rounded-[8px] bg-[#111111] px-[8px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
-                <p className="m-0 text-left text-[18px] font-medium leading-[18px] text-white">
-                  {rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "$0.00"}
-                </p>
+                <CoinAmount
+                  amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
+                  iconSize={16}
+                  textStyle={{ fontSize: 18, fontWeight: 500, color: "#ffffff", lineHeight: "18px" }}
+                />
               </div>
               <button
                 type="button"
@@ -626,7 +630,7 @@ export default function ChatPanel({ onClose }: Props) {
             <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 4px", fontFamily: '"DM Sans",sans-serif' }}>Tip Amount</p>
             <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>Minimum tip amount is 1 COIN</p>
             <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "0 14px", height: 42, display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <span style={{ color: "#828282", fontSize: 14, marginRight: 6 }}>🪙</span>
+              <CoinIcon size={18} style={{ marginRight: 6 }} />
               <input
                 value={tipRainAmountInput}
                 onChange={(event) => {
@@ -896,7 +900,7 @@ export default function ChatPanel({ onClose }: Props) {
             <p style={{ color: "#f75154", fontSize: 13, margin: "0 0 4px", fontFamily: '"DM Sans",sans-serif' }}>Tip Amount</p>
             <p style={{ color: "#828282", fontSize: 11, margin: "0 0 6px", fontFamily: '"DM Sans",sans-serif' }}>Minimum tip amount is 1 COIN</p>
             <div style={{ background: "#1a1a1a", borderRadius: 10, padding: "0 14px", height: 42, display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <span style={{ color: "#828282", fontSize: 14, marginRight: 6 }}>🪙</span>
+              <CoinIcon size={18} style={{ marginRight: 6 }} />
               <input value={tipAmount} onChange={(e) => setTipAmount(e.target.value)} placeholder="0"
                 style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: '"DM Sans",sans-serif' }} />
             </div>

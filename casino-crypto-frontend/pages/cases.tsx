@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import CoinAmount from "@/components/CoinAmount";
 import {
   getCases,
   getCaseDetails,
@@ -83,7 +84,9 @@ function TopTierReveal({ opening, onClose }: TopTierRevealProps) {
                   />
                 ) : null}
                 <div className="font-semibold">{item.name}</div>
-                <div className="opacity-80">{fmtCoins(item.valueAtomic)} COINS</div>
+                <div className="opacity-80">
+                  <CoinAmount amount={fmtCoins(item.valueAtomic)} iconSize={14} />
+                </div>
               </div>
             );
           })}
@@ -92,9 +95,10 @@ function TopTierReveal({ opening, onClose }: TopTierRevealProps) {
         {phase === "reveal" ? (
           <div className="mt-4 rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
             <p className="text-sm text-emerald-200">You won:</p>
-            <p className="text-lg font-bold text-emerald-100">
-              {opening.item.name} • {fmtCoins(opening.item.valueAtomic)} COINS
-            </p>
+            <div className="text-lg font-bold text-emerald-100">
+              <span>{opening.item.name} • </span>
+              <CoinAmount amount={fmtCoins(opening.item.valueAtomic)} iconSize={15} />
+            </div>
           </div>
         ) : (
           <p className="mt-4 text-sm text-slate-300">Rerolling...</p>
@@ -233,7 +237,9 @@ export default function CasesPage() {
             }`}
           >
             <div className="text-sm font-semibold text-white">{c.title}</div>
-            <div className="text-xs text-slate-300">{fmtCoins(c.priceAtomic)} COINS</div>
+            <div className="text-xs text-slate-300">
+              <CoinAmount amount={fmtCoins(c.priceAtomic)} iconSize={13} />
+            </div>
             <div className="text-[11px] text-slate-400">
               VOL {c.volatilityTier} ({c.volatilityIndex})
             </div>
@@ -252,9 +258,14 @@ export default function CasesPage() {
             />
           ) : null}
           <p className="text-sm text-slate-300">{selectedCase.description || "No description."}</p>
-          <p className="mt-2 text-sm text-slate-200">
-            Price: <span className="font-semibold">{fmtCoins(selectedCase.priceAtomic)} COINS</span>
-          </p>
+          <div className="mt-2 text-sm text-slate-200 inline-flex items-center gap-1">
+            <span>Price:</span>
+            <CoinAmount
+              amount={fmtCoins(selectedCase.priceAtomic)}
+              iconSize={14}
+              textClassName="font-semibold"
+            />
+          </div>
           <p className="mt-1 text-xs text-slate-400">
             Volatility: {selectedCase.volatilityTier} ({selectedCase.volatilityIndex})
           </p>
@@ -271,8 +282,9 @@ export default function CasesPage() {
                   />
                 ) : null}
                 <div className="font-semibold text-white">{item.name}</div>
-                <div className="text-slate-300">
-                  {fmtCoins(item.valueAtomic)} COINS • {Number(item.dropRate).toFixed(2)}%
+                <div className="text-slate-300 inline-flex items-center gap-1">
+                  <CoinAmount amount={fmtCoins(item.valueAtomic)} iconSize={14} />
+                  <span>• {Number(item.dropRate).toFixed(2)}%</span>
                 </div>
               </div>
             ))}
@@ -286,7 +298,13 @@ export default function CasesPage() {
               disabled={opening}
               className="bg-lime-500 text-black hover:bg-lime-400"
             >
-              {opening ? "Opening..." : `Open for ${fmtCoins(selectedCase.priceAtomic)} COINS`}
+              {opening ? "Opening..." : ""}
+              {!opening ? (
+                <span className="inline-flex items-center gap-1">
+                  <span>Open for</span>
+                  <CoinAmount amount={fmtCoins(selectedCase.priceAtomic)} iconSize={14} />
+                </span>
+              ) : null}
             </Button>
           </div>
         </Card>
@@ -308,8 +326,13 @@ export default function CasesPage() {
                 <div className="font-semibold text-white">
                   {row.caseTitle} → {row.item.name}
                 </div>
-                <div className="text-slate-300">
-                  Paid {fmtCoins(row.priceAtomic)} / Won {fmtCoins(row.payoutAtomic)} / Profit {fmtCoins(row.profitAtomic)}
+                <div className="text-slate-300 flex flex-wrap items-center gap-1">
+                  <span>Paid</span>
+                  <CoinAmount amount={fmtCoins(row.priceAtomic)} iconSize={13} />
+                  <span>/ Won</span>
+                  <CoinAmount amount={fmtCoins(row.payoutAtomic)} iconSize={13} />
+                  <span>/ Profit</span>
+                  <CoinAmount amount={fmtCoins(row.profitAtomic)} iconSize={13} />
                 </div>
               </div>
             ))
