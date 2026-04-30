@@ -27,6 +27,7 @@ const sideLinks = [
   { href: "/mines", src: "/assets/8ffba4817b8664c5480ee873923615b0.svg", label: "Mines" },
   { href: "/blackjack", src: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg", label: "Blackjack" },
 ];
+const COIN_ICON_SRC = "/assets/69a77514d4212f89fc13bd58f30d7dcf.png";
 
 function formatAtomic(val: string, decimals = 8): string {
   const n = Number(val) / Math.pow(10, decimals);
@@ -402,7 +403,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             {primaryWallet && (
               <>
                 <div className="inline-flex h-[36px] items-center gap-2 rounded-[10px] bg-[#1a1a1a] px-4" style={{ transition: "box-shadow 0.3s", boxShadow: balanceFlash === "up" ? "0 0 12px rgba(34,197,94,0.4)" : balanceFlash === "down" ? "0 0 12px rgba(239,68,68,0.4)" : "none" }}>
-                  <span className="inline-flex h-[10px] w-[10px] rounded-full bg-[#f6c453] shadow-[0_0_6px_rgba(246,196,83,0.5)]" />
+                  <img src={COIN_ICON_SRC} alt="" className="h-[14px] w-[14px] shrink-0 object-contain" />
                   <span style={{
                     fontSize: 14, fontWeight: 600, fontFamily: '"DM Sans","Gotham",sans-serif',
                     color: balanceFlash === "up" ? "#22c55e" : balanceFlash === "down" ? "#ef4444" : "#ffffff",
