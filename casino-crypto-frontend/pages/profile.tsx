@@ -152,6 +152,14 @@ const LEVEL_BADGE_TIERS = [
 
 const USERNAME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SELF_EXCLUSION_DURATIONS = [1, 3, 7, 14, 30] as const;
+const PROFILE_STATS_MODE_ICON_ROWS = [
+  { wrapperId: "n20731361", iconId: "n20731362", labelId: "n20731367", iconSrc: "/assets/73acd855750c13d5a2d86f87a7dd6581.svg" },
+  { wrapperId: "n20731373", iconId: "n20731374", labelId: "n20731376", iconSrc: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg" },
+  { wrapperId: "n20731382", iconId: "n20731383", labelId: "n20731385", iconSrc: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg" },
+  { wrapperId: "n20731391", iconId: "n20731392", labelId: "n20731394", iconSrc: "/assets/e2aff152f333aa01b1f9280bef464454.svg" },
+  { wrapperId: "n20731400", iconId: "n20731401", labelId: "n20731403", iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg" },
+  { wrapperId: "n20731409", iconId: "n20731410", labelId: "n20731412", iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg" }
+] as const;
 
 function isValidSteamTradeUrl(value: string): boolean {
   try {
@@ -558,7 +566,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   paragraph.innerHTML = "";
   paragraph.setAttribute(
     "style",
-    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+    "margin:0;display:inline-flex;align-items:center;gap:8px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
   );
 
   const coin = doc.createElement("img");
@@ -566,7 +574,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:28px;height:28px;object-fit:contain;flex-shrink:0;"
+    "width:32px;height:32px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
@@ -575,6 +583,49 @@ function forceStatValue(doc: Document, id: string, text: string) {
 
   paragraph.appendChild(coin);
   paragraph.appendChild(value);
+}
+
+function normalizeProfileStatsModeRows(doc: Document) {
+  PROFILE_STATS_MODE_ICON_ROWS.forEach(({ wrapperId, iconId, labelId, iconSrc }) => {
+    const wrapper = doc.getElementById(wrapperId) as HTMLElement | null;
+    if (wrapper) {
+      wrapper.style.display = "flex";
+      wrapper.style.alignItems = "center";
+      wrapper.style.justifyContent = "flex-start";
+      wrapper.style.gap = "10px";
+    }
+
+    const icon = doc.getElementById(iconId) as HTMLImageElement | null;
+    if (icon) {
+      icon.src = iconSrc;
+      icon.style.width = "20px";
+      icon.style.height = "20px";
+      icon.style.minWidth = "20px";
+      icon.style.maxWidth = "20px";
+      icon.style.objectFit = "contain";
+      icon.style.background = "transparent";
+      icon.style.boxShadow = "none";
+      icon.style.borderRadius = "0";
+      icon.style.filter =
+        "brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(2020%) hue-rotate(326deg) brightness(96%) contrast(96%)";
+    }
+
+    const labelContainer = doc.getElementById(labelId) as HTMLElement | null;
+    if (labelContainer) {
+      labelContainer.style.width = "auto";
+      labelContainer.style.maxWidth = "none";
+      labelContainer.style.margin = "0";
+      labelContainer.style.display = "flex";
+      labelContainer.style.alignItems = "center";
+      const label = labelContainer.querySelector("p");
+      if (label) {
+        label.setAttribute(
+          "style",
+          "margin:0;color:#b2b2b2;font-size:28px;font-weight:500;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+        );
+      }
+    }
+  });
 }
 
 function replaceElementWithDiv(doc: Document, id: string): HTMLDivElement | null {
@@ -1420,10 +1471,16 @@ export default function ProfilePage() {
         const holder = doc.getElementById(holderId);
         if (!holder) return;
         holder.style.marginLeft = "0";
+        holder.style.display = "flex";
+        holder.style.alignItems = "center";
+        holder.style.gap = "8px";
         holder.style.flexShrink = "0";
         holder.style.minWidth = "88px";
         holder.style.justifyContent = "flex-end";
+        const staleCircle = holder.querySelector("img");
+        staleCircle?.remove();
       });
+      normalizeProfileStatsModeRows(doc);
 
       const selfExclusionOptions: Array<{ days: 1 | 3 | 7 | 14 | 30; id: string }> = [
         { days: 1, id: "n20731468" },
