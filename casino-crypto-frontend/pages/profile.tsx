@@ -160,6 +160,14 @@ const PROFILE_STATS_MODE_ICON_ROWS = [
   { wrapperId: "n20731400", iconId: "n20731401", labelId: "n20731403", iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg" },
   { wrapperId: "n20731409", iconId: "n20731410", labelId: "n20731412", iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg" }
 ] as const;
+const PROFILE_STATS_LEGACY_CIRCLE_IDS = [
+  "n20731369",
+  "n20731378",
+  "n20731387",
+  "n20731396",
+  "n20731405",
+  "n20731414"
+] as const;
 
 function isValidSteamTradeUrl(value: string): boolean {
   try {
@@ -566,7 +574,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   paragraph.innerHTML = "";
   paragraph.setAttribute(
     "style",
-    "margin:0;display:inline-flex;align-items:center;gap:8px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
   );
 
   const coin = doc.createElement("img");
@@ -574,7 +582,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:32px;height:32px;object-fit:contain;flex-shrink:0;"
+    "width:26px;height:26px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
@@ -598,16 +606,15 @@ function normalizeProfileStatsModeRows(doc: Document) {
     const icon = doc.getElementById(iconId) as HTMLImageElement | null;
     if (icon) {
       icon.src = iconSrc;
-      icon.style.width = "20px";
-      icon.style.height = "20px";
-      icon.style.minWidth = "20px";
-      icon.style.maxWidth = "20px";
+      icon.style.width = "24px";
+      icon.style.height = "24px";
+      icon.style.minWidth = "24px";
+      icon.style.maxWidth = "24px";
       icon.style.objectFit = "contain";
       icon.style.background = "transparent";
       icon.style.boxShadow = "none";
       icon.style.borderRadius = "0";
-      icon.style.filter =
-        "brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(2020%) hue-rotate(326deg) brightness(96%) contrast(96%)";
+      icon.style.filter = "none";
     }
 
     const labelContainer = doc.getElementById(labelId) as HTMLElement | null;
@@ -621,7 +628,7 @@ function normalizeProfileStatsModeRows(doc: Document) {
       if (label) {
         label.setAttribute(
           "style",
-          "margin:0;color:#b2b2b2;font-size:28px;font-weight:500;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+          "margin:0;color:#b2b2b2;font-size:18px;font-weight:500;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
         );
       }
     }
@@ -1477,8 +1484,9 @@ export default function ProfilePage() {
         holder.style.flexShrink = "0";
         holder.style.minWidth = "88px";
         holder.style.justifyContent = "flex-end";
-        const staleCircle = holder.querySelector("img");
-        staleCircle?.remove();
+      });
+      PROFILE_STATS_LEGACY_CIRCLE_IDS.forEach((id) => {
+        doc.getElementById(id)?.remove();
       });
       normalizeProfileStatsModeRows(doc);
 
