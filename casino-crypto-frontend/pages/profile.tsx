@@ -618,7 +618,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:32px;height:32px;object-fit:contain;flex-shrink:0;"
+    "width:34px;height:34px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
