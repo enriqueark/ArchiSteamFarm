@@ -483,12 +483,12 @@ export default function ChatPanel({ onClose }: Props) {
             </div>
 
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
-              <div className="rounded-[7px] bg-[#111111] px-[7px] py-[4px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
+              <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] px-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={13}
-                  gap={5}
-                  textStyle={{ fontSize: 17, fontWeight: 600, color: "#ffffff", lineHeight: "16px" }}
+                  iconSize={12}
+                  gap={4}
+                  textStyle={{ fontSize: 18, fontWeight: 600, color: "#ffffff", lineHeight: "18px" }}
                 />
               </div>
               <button
@@ -498,11 +498,11 @@ export default function ChatPanel({ onClose }: Props) {
                   openTipRainModal();
                 }}
                 disabled={tippingRain}
-                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-none text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[19px] font-semibold leading-none text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
                 style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                 title="Tip rain"
               >
-                <span style={{ transform: "translateY(-1px)" }}>+</span>
+                <span style={{ display: "block", lineHeight: 1, transform: "translateY(-0.5px)" }}>+</span>
               </button>
             </div>
           </div>
