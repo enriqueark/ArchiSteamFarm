@@ -486,7 +486,7 @@ export default function ChatPanel({ onClose }: Props) {
               <div className="rounded-[8px] bg-[#111111] px-[8px] py-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={16}
+                  iconSize={11}
                   textStyle={{ fontSize: 18, fontWeight: 500, color: "#ffffff", lineHeight: "18px" }}
                 />
               </div>
