@@ -18,7 +18,7 @@ const startGameSchema = z.object({
     .string()
     .regex(/^\d+$/, "betAtomic must be an integer string")
     .transform((value) => BigInt(value))
-    .refine((value) => value > 0n, "betAtomic must be greater than 0"),
+    .refine((value) => value >= 20_000_000n, "betAtomic must be at least 0.2"),
   sideBetPairsAtomic: z
     .string()
     .regex(/^\d+$/, "sideBetPairsAtomic must be an integer string")

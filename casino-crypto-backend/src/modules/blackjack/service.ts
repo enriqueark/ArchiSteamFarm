@@ -25,6 +25,7 @@ const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 
 const INSURANCE_PAYOUT = 2n;
 const STANDARD_PAYOUT = 2n;
+const MIN_BLACKJACK_BET_ATOMIC = 20_000_000n; // 0.2 coins (1e8 atomic precision)
 type CardRank = (typeof RANKS)[number];
 type CardSuit = (typeof SUITS)[number];
 type CardCode = `${CardRank}${CardSuit}`;
@@ -185,6 +186,12 @@ const ensureBetWithinLimit = (betAtomic: bigint): void => {
   const maxAtomic = MAX_GAME_BET_ATOMIC;
   if (betAtomic > maxAtomic) {
     throw new AppError("You can't bet more than 5000 per game", 400, "BET_LIMIT_EXCEEDED");
+  }
+};
+
+const ensureMainBetMinimum = (betAtomic: bigint): void => {
+  if (betAtomic < MIN_BLACKJACK_BET_ATOMIC) {
+    throw new AppError("Blackjack minimum bet is 0.2", 400, "BET_MINIMUM_NOT_MET");
   }
 };
 
@@ -691,6 +698,7 @@ export const startBlackjackGame = async (input: StartBlackjackInput): Promise<St
   if (input.betAtomic <= 0n) {
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET");
   }
+  ensureMainBetMinimum(input.betAtomic);
   ensureBetWithinLimit(input.betAtomic);
 
   const pairsBet = input.sideBetPairsAtomic ?? 0n;
@@ -929,6 +937,7 @@ export const getOrCreateActiveBlackjackGame = async (
   if (input.betAtomic <= 0n) {
     throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET");
   }
+  ensureMainBetMinimum(input.betAtomic);
   ensureBetWithinLimit(input.betAtomic);
 
   const pairsBet = input.sideBetPairsAtomic ?? 0n;

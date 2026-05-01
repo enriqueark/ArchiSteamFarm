@@ -14,6 +14,7 @@ const TABLE_LOSE = `${A}5ce16f3d9d067da2efb6a5fb48314eb1.png`;
 const PLAY_ICON = `${A}2d7f2642f861986711d393c7536da7fc.svg`;
 
 const G = '"DM Sans","Gotham",sans-serif';
+const BLACKJACK_MIN_BET_COINS = 0.2;
 const SUIT_SYM: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const SUIT_CLR: Record<string, string> = { S: "#1a1919", H: "#bd0926", D: "#bd0926", C: "#1a1919" };
 const SUIT_SMALL: Record<string, string> = {
@@ -182,7 +183,11 @@ export default function BlackjackPage() {
     if (ended) { setGame(null); setShowResult(false); setRevealedDealerCount(0); }
     setErr(null); setLd(true);
     try {
-      const ba = String(Math.round(parseFloat(bet) * 1e8));
+      const mainBet = Number.parseFloat(bet);
+      if (!Number.isFinite(mainBet) || mainBet < BLACKJACK_MIN_BET_COINS) {
+        throw new Error(`Minimum blackjack bet is ${BLACKJACK_MIN_BET_COINS.toFixed(2)}`);
+      }
+      const ba = String(Math.round(mainBet * 1e8));
       const pv = parseFloat(sidePairs); const tv = parseFloat(side21);
       const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) }); refreshBalance();
       setGame(g);
