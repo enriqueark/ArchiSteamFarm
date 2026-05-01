@@ -153,12 +153,42 @@ const LEVEL_BADGE_TIERS = [
 const USERNAME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SELF_EXCLUSION_DURATIONS = [1, 3, 7, 14, 30] as const;
 const PROFILE_STATS_MODE_ICON_ROWS = [
-  { wrapperId: "n20731361", iconId: "n20731362", labelId: "n20731367", iconSrc: "/assets/73acd855750c13d5a2d86f87a7dd6581.svg" },
-  { wrapperId: "n20731373", iconId: "n20731374", labelId: "n20731376", iconSrc: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg" },
-  { wrapperId: "n20731382", iconId: "n20731383", labelId: "n20731385", iconSrc: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg" },
-  { wrapperId: "n20731391", iconId: "n20731392", labelId: "n20731394", iconSrc: "/assets/e2aff152f333aa01b1f9280bef464454.svg" },
-  { wrapperId: "n20731400", iconId: "n20731401", labelId: "n20731403", iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg" },
-  { wrapperId: "n20731409", iconId: "n20731410", labelId: "n20731412", iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg" }
+  {
+    wrapperId: "n20731361",
+    iconId: "n20731362",
+    labelId: "n20731367",
+    iconSrc: "/profile-content/assets/defd613977a95cf065b4b6c4f87da488.svg"
+  },
+  {
+    wrapperId: "n20731373",
+    iconId: "n20731374",
+    labelId: "n20731376",
+    iconSrc: "/profile-content/assets/2bfc111c597714ce7435a68293c569a0.svg"
+  },
+  {
+    wrapperId: "n20731382",
+    iconId: "n20731383",
+    labelId: "n20731385",
+    iconSrc: "/profile-content/assets/d1b11a37544f2e6cd4bff36565795ead.svg"
+  },
+  {
+    wrapperId: "n20731391",
+    iconId: "n20731392",
+    labelId: "n20731394",
+    iconSrc: "/profile-content/assets/feb2e94d3940c5f7426e385cdf1614e8.svg"
+  },
+  {
+    wrapperId: "n20731400",
+    iconId: "n20731401",
+    labelId: "n20731403",
+    iconSrc: "/profile-content/assets/e2f607776092f61588a0fc4b580616c4.svg"
+  },
+  {
+    wrapperId: "n20731409",
+    iconId: "n20731410",
+    labelId: "n20731412",
+    iconSrc: "/profile-content/assets/2f9dd92020e93ce4abe45a134c13765d.svg"
+  }
 ] as const;
 const PROFILE_STATS_LEGACY_CIRCLE_IDS = [
   "n20731369",
@@ -574,7 +604,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   paragraph.innerHTML = "";
   paragraph.setAttribute(
     "style",
-    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:16px;font-weight:700;line-height:16px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
   );
 
   const coin = doc.createElement("img");
@@ -582,7 +612,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:26px;height:26px;object-fit:contain;flex-shrink:0;"
+    "width:24px;height:24px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
@@ -600,16 +630,16 @@ function normalizeProfileStatsModeRows(doc: Document) {
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.justifyContent = "flex-start";
-      wrapper.style.gap = "10px";
+      wrapper.style.gap = "11px";
     }
 
     const icon = doc.getElementById(iconId) as HTMLImageElement | null;
     if (icon) {
       icon.src = iconSrc;
-      icon.style.width = "24px";
-      icon.style.height = "24px";
-      icon.style.minWidth = "24px";
-      icon.style.maxWidth = "24px";
+      icon.style.width = "32px";
+      icon.style.height = "32px";
+      icon.style.minWidth = "32px";
+      icon.style.maxWidth = "32px";
       icon.style.objectFit = "contain";
       icon.style.background = "transparent";
       icon.style.boxShadow = "none";
@@ -628,7 +658,7 @@ function normalizeProfileStatsModeRows(doc: Document) {
       if (label) {
         label.setAttribute(
           "style",
-          "margin:0;color:#b2b2b2;font-size:18px;font-weight:500;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+          "margin:0;color:#b2b2b2;font-size:16px;font-weight:500;line-height:16px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
         );
       }
     }
