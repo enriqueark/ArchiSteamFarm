@@ -475,8 +475,8 @@ export default function ChatPanel({ onClose }: Props) {
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
               <div className="min-w-0 pt-[8px]">
-                <p className="m-0 translate-y-[10px] text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[22px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="m-0 whitespace-nowrap text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
+                <p className="mt-[14px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
@@ -486,8 +486,8 @@ export default function ChatPanel({ onClose }: Props) {
               <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] px-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={12}
-                  gap={4}
+                  iconSize={14}
+                  gap={3}
                   textStyle={{ fontSize: 18, fontWeight: 600, color: "#ffffff", lineHeight: "18px" }}
                 />
               </div>
@@ -502,7 +502,7 @@ export default function ChatPanel({ onClose }: Props) {
                 style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                 title="Tip rain"
               >
-                <span style={{ display: "block", lineHeight: 1, transform: "translateY(-0.5px)" }}>+</span>
+                <span style={{ display: "block", lineHeight: 1, transform: "translateY(-0.2px)" }}>+</span>
               </button>
             </div>
           </div>
