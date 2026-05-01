@@ -16,16 +16,30 @@ function getTier(level: number) {
   return TIERS.find((t) => level <= t.max) || TIERS[TIERS.length - 1];
 }
 
-export default function LevelBadge({ level }: { level: number }) {
+type LevelBadgeSize = "default" | "header";
+
+export default function LevelBadge({ level, size = "default" }: { level: number; size?: LevelBadgeSize }) {
   const tier = getTier(level);
   const isRainbow = level >= 100;
+  const isHeader = size === "header";
 
   if (isRainbow) {
     return (
-      <span style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 26, height: 20, padding: "0 7px", borderRadius: 6 }}>
+      <span
+        style={{
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: isHeader ? 30 : 26,
+          height: isHeader ? 22 : 20,
+          padding: isHeader ? "0 8px" : "0 7px",
+          borderRadius: isHeader ? 7 : 6
+        }}
+      >
         {/* Animated gradient border */}
         <span style={{
-          position: "absolute", inset: 0, borderRadius: 6, padding: 1,
+          position: "absolute", inset: 0, borderRadius: isHeader ? 7 : 6, padding: 1,
           background: "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)",
           backgroundSize: "300% 100%",
           animation: "rainbowBorder 4s linear infinite",
@@ -35,7 +49,7 @@ export default function LevelBadge({ level }: { level: number }) {
         }} />
         {/* Inner fill */}
         <span style={{
-          position: "absolute", inset: 1, borderRadius: 5,
+          position: "absolute", inset: 1, borderRadius: isHeader ? 6 : 5,
           background: "linear-gradient(90deg, #ff535325, #ffb75325, #53ff8725, #53a3ff25, #c053ff25, #ff53a325, #ff535325)",
           backgroundSize: "300% 100%",
           animation: "rainbowBorder 4s linear infinite",
@@ -43,7 +57,7 @@ export default function LevelBadge({ level }: { level: number }) {
         {/* Text */}
         <span style={{
           position: "relative", zIndex: 1,
-          fontSize: 10, fontWeight: 700, fontFamily: '"DM Sans","Gotham",sans-serif',
+          fontSize: isHeader ? 11 : 10, fontWeight: 700, fontFamily: '"DM Sans","Gotham",sans-serif',
           lineHeight: "1",
           background: "linear-gradient(90deg, #ff5353, #ffb753, #53ff87, #53a3ff, #c053ff, #ff53a3, #ff5353)",
           backgroundSize: "300% 100%",
@@ -65,13 +79,13 @@ export default function LevelBadge({ level }: { level: number }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        minWidth: 24,
-        height: 18,
-        padding: "0 6px",
-        borderRadius: 5,
+        minWidth: isHeader ? 27 : 24,
+        height: isHeader ? 20 : 18,
+        padding: isHeader ? "0 7px" : "0 6px",
+        borderRadius: isHeader ? 6 : 5,
         border: `1px solid ${tier.color}`,
         background: tier.bg,
-        fontSize: 10,
+        fontSize: isHeader ? 11 : 10,
         fontWeight: 700,
         fontFamily: '"DM Sans","Gotham",sans-serif',
         color: tier.color,

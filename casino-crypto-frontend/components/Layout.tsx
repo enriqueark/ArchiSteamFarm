@@ -438,9 +438,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
               </>
             )}
             <div ref={profileMenuRef} className="relative flex items-center gap-3.5">
-              <div className="flex flex-col items-end gap-0.5">
+              <div className="flex flex-col items-end gap-1.5">
                 <span style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", fontFamily: '"DM Sans","Gotham",sans-serif', lineHeight: "1" }}>{displayUsername}</span>
-                <LevelBadge level={Math.max(1, userLevel || 100)} />
+                <LevelBadge level={Math.max(1, userLevel || 100)} size="header" />
               </div>
               <button
                 type="button"
