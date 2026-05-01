@@ -157,37 +157,43 @@ const PROFILE_STATS_MODE_ICON_ROWS = [
     wrapperId: "n20731361",
     iconId: "n20731362",
     labelId: "n20731367",
-    iconSrc: "/profile-content/assets/defd613977a95cf065b4b6c4f87da488.svg"
+    iconSrc: "/assets/profile-total-played-flat-red.svg",
+    tintRed: false
   },
   {
     wrapperId: "n20731373",
     iconId: "n20731374",
     labelId: "n20731376",
-    iconSrc: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg"
+    iconSrc: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg",
+    tintRed: true
   },
   {
     wrapperId: "n20731382",
     iconId: "n20731383",
     labelId: "n20731385",
-    iconSrc: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg"
+    iconSrc: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg",
+    tintRed: true
   },
   {
     wrapperId: "n20731391",
     iconId: "n20731392",
     labelId: "n20731394",
-    iconSrc: "/assets/e2aff152f333aa01b1f9280bef464454.svg"
+    iconSrc: "/assets/e2aff152f333aa01b1f9280bef464454.svg",
+    tintRed: true
   },
   {
     wrapperId: "n20731400",
     iconId: "n20731401",
     labelId: "n20731403",
-    iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg"
+    iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg",
+    tintRed: true
   },
   {
     wrapperId: "n20731409",
     iconId: "n20731410",
     labelId: "n20731412",
-    iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg"
+    iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg",
+    tintRed: true
   }
 ] as const;
 const PROFILE_STATS_LEGACY_CIRCLE_IDS = [
@@ -604,7 +610,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   paragraph.innerHTML = "";
   paragraph.setAttribute(
     "style",
-    "margin:0;display:inline-flex;align-items:center;gap:6px;color:#ffc353;font-size:16px;font-weight:700;line-height:16px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
+    "margin:0;display:inline-flex;align-items:center;gap:7px;color:#ffc353;font-size:18px;font-weight:700;line-height:18px;font-family:'Gotham',sans-serif;text-align:left;white-space:nowrap;"
   );
 
   const coin = doc.createElement("img");
@@ -612,7 +618,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:28px;height:28px;object-fit:contain;flex-shrink:0;"
+    "width:32px;height:32px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
@@ -624,7 +630,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
 }
 
 function normalizeProfileStatsModeRows(doc: Document) {
-  PROFILE_STATS_MODE_ICON_ROWS.forEach(({ wrapperId, iconId, labelId, iconSrc }) => {
+  PROFILE_STATS_MODE_ICON_ROWS.forEach(({ wrapperId, iconId, labelId, iconSrc, tintRed }) => {
     const wrapper = doc.getElementById(wrapperId) as HTMLElement | null;
     if (wrapper) {
       wrapper.style.display = "flex";
@@ -644,7 +650,9 @@ function normalizeProfileStatsModeRows(doc: Document) {
       icon.style.background = "transparent";
       icon.style.boxShadow = "none";
       icon.style.borderRadius = "0";
-      icon.style.filter = "none";
+      icon.style.filter = tintRed
+        ? "brightness(0) saturate(100%) invert(33%) sepia(97%) saturate(1732%) hue-rotate(332deg) brightness(104%) contrast(94%)"
+        : "none";
     }
 
     const labelContainer = doc.getElementById(labelId) as HTMLElement | null;
