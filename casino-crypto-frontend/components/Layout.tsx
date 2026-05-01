@@ -403,10 +403,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           <div className="flex items-center gap-3.5 flex-1 justify-end min-w-0">
             {primaryWallet && (
               <>
-                <div className="inline-flex h-[40px] items-center gap-2.5 rounded-[10px] bg-[#1a1a1a] px-4" style={{ transition: "box-shadow 0.3s", boxShadow: balanceFlash === "up" ? "0 0 12px rgba(34,197,94,0.4)" : balanceFlash === "down" ? "0 0 12px rgba(239,68,68,0.4)" : "none" }}>
-                  <CoinIcon size={16} />
+                <div className="inline-flex h-[36px] items-center gap-2.5 rounded-[10px] bg-[#1a1a1a] px-4" style={{ transition: "box-shadow 0.3s", boxShadow: balanceFlash === "up" ? "0 0 12px rgba(34,197,94,0.4)" : balanceFlash === "down" ? "0 0 12px rgba(239,68,68,0.4)" : "none" }}>
+                  <CoinIcon size={17} />
                   <span style={{
-                    fontSize: 18, fontWeight: 700, fontFamily: '"DM Sans","Gotham",sans-serif',
+                    fontSize: 16, fontWeight: 700, fontFamily: '"DM Sans","Gotham",sans-serif',
                     color: balanceFlash === "up" ? "#22c55e" : balanceFlash === "down" ? "#ef4444" : "#ffffff",
                     transition: "color 0.3s",
                     fontVariantNumeric: "tabular-nums",
