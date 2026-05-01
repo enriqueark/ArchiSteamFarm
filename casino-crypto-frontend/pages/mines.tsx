@@ -66,7 +66,7 @@ export default function MinesPage() {
   const [ld, setLd] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [, setLR] = useState<MinesRevealResponse["reveal"] | null>(null);
-  const [maxBal, setMaxBal] = useState(5000);
+  const [maxBal, setMaxBal] = useState(0);
   const [skinUrl, setSkinUrl] = useState<string | null>(null);
   const [draggingBet, setDraggingBet] = useState(false);
   const [skinAnimTick, setSkinAnimTick] = useState(0);
@@ -76,10 +76,21 @@ export default function MinesPage() {
   const cellAnimTimeoutsRef = useRef<number[]>([]);
 
   useEffect(() => {
-    getWallets().then((w) => {
-      const wallet = w.find((x) => x.currency === "USDT");
-      if (wallet) setMaxBal(Math.min(Number(wallet.balanceAtomic) / COIN_DECIMALS, 5000));
-    }).catch(() => {});
+    getWallets()
+      .then((w) => {
+        const wallet = w.find((x) => x.currency === "USDT") ?? w.find((x) => x.currency === "COINS") ?? w[0];
+        if (!wallet) {
+          setMaxBal(0);
+          return;
+        }
+        const balanceFromCoins = Number(wallet.balanceCoins);
+        const balanceFromAtomic = Number(wallet.balanceAtomic) / COIN_DECIMALS;
+        const resolvedBalance = Number.isFinite(balanceFromCoins) ? balanceFromCoins : balanceFromAtomic;
+        setMaxBal(Math.max(0, resolvedBalance));
+      })
+      .catch(() => {
+        setMaxBal(0);
+      });
   }, []);
 
   const act = game?.status === "ACTIVE";
