@@ -163,31 +163,31 @@ const PROFILE_STATS_MODE_ICON_ROWS = [
     wrapperId: "n20731373",
     iconId: "n20731374",
     labelId: "n20731376",
-    iconSrc: "/profile-content/assets/2bfc111c597714ce7435a68293c569a0.svg"
+    iconSrc: "/assets/7739c95aea952fc2e80b31e6dd1cf73d.svg"
   },
   {
     wrapperId: "n20731382",
     iconId: "n20731383",
     labelId: "n20731385",
-    iconSrc: "/profile-content/assets/d1b11a37544f2e6cd4bff36565795ead.svg"
+    iconSrc: "/assets/35ad40f1a702c98648f4437ed2fd02b6.svg"
   },
   {
     wrapperId: "n20731391",
     iconId: "n20731392",
     labelId: "n20731394",
-    iconSrc: "/profile-content/assets/feb2e94d3940c5f7426e385cdf1614e8.svg"
+    iconSrc: "/assets/e2aff152f333aa01b1f9280bef464454.svg"
   },
   {
     wrapperId: "n20731400",
     iconId: "n20731401",
     labelId: "n20731403",
-    iconSrc: "/profile-content/assets/e2f607776092f61588a0fc4b580616c4.svg"
+    iconSrc: "/assets/90cdff650ad513d6be72c3f0d3a9eea3.svg"
   },
   {
     wrapperId: "n20731409",
     iconId: "n20731410",
     labelId: "n20731412",
-    iconSrc: "/profile-content/assets/2f9dd92020e93ce4abe45a134c13765d.svg"
+    iconSrc: "/assets/8ffba4817b8664c5480ee873923615b0.svg"
   }
 ] as const;
 const PROFILE_STATS_LEGACY_CIRCLE_IDS = [
@@ -612,7 +612,7 @@ function forceStatValue(doc: Document, id: string, text: string) {
   coin.setAttribute("alt", "");
   coin.setAttribute(
     "style",
-    "width:24px;height:24px;object-fit:contain;flex-shrink:0;"
+    "width:28px;height:28px;object-fit:contain;flex-shrink:0;"
   );
 
   const value = doc.createElement("span");
