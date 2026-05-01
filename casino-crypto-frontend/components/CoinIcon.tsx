@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 const COIN_ICON_SRC = "/assets/coin-dino-original.png";
-const COIN_ICON_SCALE = 1.75;
+const COIN_ICON_SCALE = 2.1;
 
 type CoinIconProps = {
   size?: number;
