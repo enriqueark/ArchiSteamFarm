@@ -312,7 +312,7 @@ export default function MinesPage() {
     if (h.length) reveal(h[Math.floor(Math.random() * h.length)]);
   };
 
-  const pay = f(game?.potentialPayoutAtomic) + " COINS";
+  const pay = f(game?.potentialPayoutAtomic);
 
   return (
     <div style={{ display: "flex", gap: 16, height: "100%" }}>
@@ -477,13 +477,11 @@ export default function MinesPage() {
                 <div onClick={pickR} style={{ padding: "14px 24px", borderRadius: 12, background: "#1a1a1a", boxShadow: SD, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
                   <p style={{ color: "#828282", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>Pick random tile</p>
                 </div>
-                <div onClick={cashout} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
-                  <CoinAmount
-                    amount={pay.replace(" COINS", "")}
-                    prefix="Cashout "
-                    iconSize={18}
-                    textStyle={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}
-                  />
+                <div onClick={cashout} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", opacity: ld ? 0.5 : 1 }}>
+                  <span style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>
+                    Cashout {pay}
+                  </span>
+                  <CoinIcon size={18} style={{ marginLeft: 6 }} />
                 </div>
               </>
             ) : (
@@ -511,14 +509,17 @@ export default function MinesPage() {
               </div>
             );
             if (st === "safe") return (
-              <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
-                <CoinAmount
-                  amount={(safeCellGainByIndex[i] ?? "+0.00").replace("+", "")}
-                  prefix="+"
-                  iconSize={15}
-                  textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
-                />
+              <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", position: "relative" }}>
+                <img src={GEM} alt="" style={{ width: "55%", height: "auto", position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -56%)" }} />
+                <div style={{ position: "absolute", left: "50%", bottom: 14, transform: "translateX(-50%)" }}>
+                  <CoinAmount
+                    amount={(safeCellGainByIndex[i] ?? "+0.00").replace("+", "")}
+                    prefix="+"
+                    iconSize={15}
+                    gap={2}
+                    textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
+                  />
+                </div>
               </div>
             );
             return (
