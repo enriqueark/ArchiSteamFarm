@@ -474,20 +474,21 @@ export default function ChatPanel({ onClose }: Props) {
                 alt="Live rain"
                 className="h-[52px] w-[52px] shrink-0 object-cover"
               />
-              <div className="min-w-0 pt-[8px]">
+              <div className="min-w-0 pt-[12px]">
                 <p className="m-0 whitespace-nowrap text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[16px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[18px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
             </div>
 
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
-              <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] pl-[5px] pr-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
+              <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] pl-[3px] pr-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={15}
+                  iconSize={16}
                   gap={3}
+                  style={{ transform: "translateX(-1px)" }}
                   textStyle={{ fontSize: 18, fontWeight: 600, color: "#ffffff", lineHeight: "18px" }}
                 />
               </div>
