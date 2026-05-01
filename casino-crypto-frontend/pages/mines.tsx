@@ -25,6 +25,38 @@ const f = (v: string | null | undefined, d = 8) => { if (!v) return "0.00"; cons
 const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
 const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
 const SR = "inset 0 1px 0 0 #f24f51, inset 0 -1px 0 0 #ff7476";
+const MINES_GAINS_STORAGE_KEY = "minesSafeCellGainByGameId";
+
+type SafeCellGainByIndex = Record<number, string>;
+type SafeCellGainStore = Record<string, SafeCellGainByIndex>;
+
+const readSafeCellGainStore = (): SafeCellGainStore => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(MINES_GAINS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Record<string, string>>;
+    const normalized: SafeCellGainStore = {};
+    Object.entries(parsed).forEach(([gameId, gains]) => {
+      const byIndex: SafeCellGainByIndex = {};
+      Object.entries(gains || {}).forEach(([idx, value]) => {
+        const key = Number(idx);
+        if (Number.isInteger(key) && typeof value === "string") {
+          byIndex[key] = value;
+        }
+      });
+      normalized[gameId] = byIndex;
+    });
+    return normalized;
+  } catch {
+    return {};
+  }
+};
+
+const writeSafeCellGainStore = (store: SafeCellGainStore) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(MINES_GAINS_STORAGE_KEY, JSON.stringify(store));
+};
 
 export default function MinesPage() {
   const [bet, setBet] = useState("0");
@@ -39,7 +71,7 @@ export default function MinesPage() {
   const [draggingBet, setDraggingBet] = useState(false);
   const [skinAnimTick, setSkinAnimTick] = useState(0);
   const [cellAnim, setCellAnim] = useState<Record<number, "safe" | "mine">>({});
-  const [safeCellGainByIndex, setSafeCellGainByIndex] = useState<Record<number, string>>({});
+  const [safeCellGainByIndex, setSafeCellGainByIndex] = useState<SafeCellGainByIndex>({});
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cellAnimTimeoutsRef = useRef<number[]>([]);
 
@@ -187,6 +219,33 @@ export default function MinesPage() {
     } catch { setSkinUrl(null); }
   }, []);
 
+  const persistSafeCellGains = useCallback((gameId: string | null | undefined, gains: SafeCellGainByIndex) => {
+    if (!gameId || typeof window === "undefined") return;
+    const store = readSafeCellGainStore();
+    if (Object.keys(gains).length === 0) {
+      delete store[gameId];
+    } else {
+      store[gameId] = gains;
+    }
+    writeSafeCellGainStore(store);
+  }, []);
+
+  const restoreSafeCellGains = useCallback((gameId: string | null | undefined, revealedCells: number[]) => {
+    if (!gameId || typeof window === "undefined") return {};
+    const store = readSafeCellGainStore();
+    const saved = store[gameId] || {};
+    if (!revealedCells.length) return saved;
+    const allowed = new Set(revealedCells);
+    const filtered: SafeCellGainByIndex = {};
+    Object.entries(saved).forEach(([rawIndex, value]) => {
+      const idx = Number(rawIndex);
+      if (allowed.has(idx)) {
+        filtered[idx] = value;
+      }
+    });
+    return filtered;
+  }, []);
+
   useEffect(() => {
     if (skinUrl) {
       setSkinAnimTick((prev) => prev + 1);
@@ -212,7 +271,8 @@ export default function MinesPage() {
           }
         });
         setCells(next);
-        setSafeCellGainByIndex({});
+        const restoredGains = restoreSafeCellGains(activeGame.gameId, activeGame.revealedCells ?? []);
+        setSafeCellGainByIndex(restoredGains);
         await fetchSkin(activeGame.potentialPayoutAtomic);
       } catch {
         // Ignore restore errors to allow a normal fresh game.
@@ -226,9 +286,12 @@ export default function MinesPage() {
     return () => {
       cancelled = true;
     };
-  }, [fetchSkin]);
+  }, [fetchSkin, restoreSafeCellGains]);
 
   const reset = () => {
+    if (game?.gameId) {
+      persistSafeCellGains(game.gameId, {});
+    }
     setCells(Array(BOARD).fill("hidden"));
     setLR(null);
     setSkinUrl(null);
@@ -278,6 +341,7 @@ export default function MinesPage() {
               copy[safeIdx] = deltaLabel;
             }
           });
+          persistSafeCellGains(r.gameId, copy);
           return copy;
         });
       }
@@ -511,7 +575,7 @@ export default function MinesPage() {
             if (st === "safe") return (
               <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", position: "relative" }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto", position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -56%)" }} />
-                <div style={{ position: "absolute", left: "50%", bottom: 14, transform: "translateX(-50%)" }}>
+                <div style={{ position: "absolute", left: "50%", bottom: 4, transform: "translateX(-50%)" }}>
                   <CoinAmount
                     amount={(safeCellGainByIndex[i] ?? "+0.00").replace("+", "")}
                     prefix="+"
