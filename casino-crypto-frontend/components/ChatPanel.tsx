@@ -486,8 +486,9 @@ export default function ChatPanel({ onClose }: Props) {
               <div className="rounded-[7px] bg-[#111111] px-[7px] py-[4px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={11}
-                  textStyle={{ fontSize: 16, fontWeight: 500, color: "#ffffff", lineHeight: "16px" }}
+                  iconSize={13}
+                  gap={5}
+                  textStyle={{ fontSize: 17, fontWeight: 600, color: "#ffffff", lineHeight: "16px" }}
                 />
               </div>
               <button
@@ -497,11 +498,11 @@ export default function ChatPanel({ onClose }: Props) {
                   openTipRainModal();
                 }}
                 disabled={tippingRain}
-                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-[18px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[18px] font-medium leading-none text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
                 style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                 title="Tip rain"
               >
-                +
+                <span style={{ transform: "translateY(-1px)" }}>+</span>
               </button>
             </div>
           </div>
