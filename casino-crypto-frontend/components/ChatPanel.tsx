@@ -476,17 +476,17 @@ export default function ChatPanel({ onClose }: Props) {
               />
               <div className="min-w-0 pt-[8px]">
                 <p className="m-0 whitespace-nowrap text-left text-[18px] font-medium leading-[18px] text-white">Live Rain</p>
-                <p className="mt-[14px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
+                <p className="mt-[16px] whitespace-nowrap text-left text-[14px] font-normal leading-[14px] text-[#828282]">
                   {nextRainLabel}
                 </p>
               </div>
             </div>
 
             <div className="ml-2 flex shrink-0 items-center gap-[6px]">
-              <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] px-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
+              <div className="flex h-[32px] items-center rounded-[7px] bg-[#111111] pl-[5px] pr-[7px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_0_rgba(0,0,0,0.55)]">
                 <CoinAmount
                   amount={rain ? formatRainAmountFromCoins(animatedRainAmountCoins) : "0.00"}
-                  iconSize={14}
+                  iconSize={15}
                   gap={3}
                   textStyle={{ fontSize: 18, fontWeight: 600, color: "#ffffff", lineHeight: "18px" }}
                 />
@@ -498,11 +498,13 @@ export default function ChatPanel({ onClose }: Props) {
                   openTipRainModal();
                 }}
                 disabled={tippingRain}
-                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[19px] font-semibold leading-none text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
+                className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[#090909] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] disabled:opacity-60"
                 style={{ background: "linear-gradient(180deg, #b57601 0%, #ffc353 100%)" }}
                 title="Tip rain"
               >
-                <span style={{ display: "block", lineHeight: 1, transform: "translateY(-0.2px)" }}>+</span>
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ display: "block" }}>
+                  <path d="M6 2.1V9.9M2.1 6H9.9" stroke="#090909" strokeWidth="2.05" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
           </div>
