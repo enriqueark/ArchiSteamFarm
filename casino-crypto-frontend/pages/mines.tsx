@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
+import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, getMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
 
 const BOARD = 25;
 const PRESETS = [1, 3, 5, 10, 24];
@@ -280,9 +280,21 @@ export default function MinesPage() {
           newlySafe.push(i);
         }
       });
-      if (r.reveal.gameResolved && r.resolvedBoard?.length === BOARD) {
+      if (r.reveal.gameResolved) {
         const clickedCells = r.reveal.hitMine ? [...(r.revealedCells ?? []), idx] : (r.revealedCells ?? []);
-        applyResolvedBoard(r.resolvedBoard, clickedCells);
+        if (r.resolvedBoard?.length === BOARD) {
+          applyResolvedBoard(r.resolvedBoard, clickedCells);
+        } else {
+          const refreshed = await getMinesGame(r.gameId);
+          setGame(refreshed);
+          if (refreshed.resolvedBoard?.length === BOARD) {
+            applyResolvedBoard(refreshed.resolvedBoard, clickedCells);
+          } else {
+            setCells(n);
+            setPlayerRevealedCells(r.revealedCells ?? []);
+            setAutoRevealedCells([]);
+          }
+        }
       } else {
         setCells(n);
         setPlayerRevealedCells(r.revealedCells ?? []);
@@ -322,6 +334,12 @@ export default function MinesPage() {
       setGame(finished);
       if (finished.resolvedBoard?.length === BOARD) {
         applyResolvedBoard(finished.resolvedBoard, finished.revealedCells ?? []);
+      } else {
+        const refreshed = await getMinesGame(finished.gameId);
+        setGame(refreshed);
+        if (refreshed.resolvedBoard?.length === BOARD) {
+          applyResolvedBoard(refreshed.resolvedBoard, refreshed.revealedCells ?? []);
+        }
       }
       setSkinUrl(null);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
@@ -521,7 +539,15 @@ export default function MinesPage() {
               <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden", position: "relative" }}>
                 <img src={MINE_TILE} alt="mine" style={{ width: "100%", height: "100%", borderRadius: 12, display: "block" }} />
                 {isAutoRevealed ? (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(9, 11, 14, 0.42)", pointerEvents: "none" }} />
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(247, 81, 84, 0.28)",
+                      boxShadow: "inset 0 0 0 1px rgba(247,81,84,0.55)",
+                      pointerEvents: "none"
+                    }}
+                  />
                 ) : null}
               </div>
             );
@@ -530,7 +556,7 @@ export default function MinesPage() {
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
                 <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{safeCellGainByIndex[i] ?? "+$0.00"}</p>
                 {isAutoRevealed ? (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(8, 15, 9, 0.38)", pointerEvents: "none" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(12, 12, 12, 0.45)", pointerEvents: "none" }} />
                 ) : null}
               </div>
             );
