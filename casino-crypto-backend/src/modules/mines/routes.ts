@@ -23,7 +23,7 @@ const startGameSchema = z.object({
     .string()
     .regex(/^\d+$/, "betAtomic must be an integer string")
     .transform((value) => BigInt(value))
-    .refine((value) => value > 0n, "betAtomic must be greater than 0"),
+    .refine((value) => value >= 10_000_000n, "betAtomic must be at least 0.1"),
   mineCount: z.number().int().min(1).max(24),
   clientSeed: z.string().min(8).max(128).optional()
 });
@@ -50,6 +50,7 @@ const toGameResponse = (result: MinesGameState) => ({
   boardSize: result.boardSize,
   safeReveals: result.safeReveals,
   revealedCells: result.revealedCells,
+  resolvedBoard: result.resolvedBoard,
   currentMultiplier: result.currentMultiplier.toFixed(8),
   potentialPayoutAtomic: result.potentialPayoutAtomic.toString(),
   potentialPayoutCoins: (Number(result.potentialPayoutAtomic) / 1e8).toFixed(2),

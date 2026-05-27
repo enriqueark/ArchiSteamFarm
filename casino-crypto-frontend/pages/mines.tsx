@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { startMinesGame, revealMine, cashoutMines, getWallets, getSkinPreviewByAmountAtomic, getActiveMinesGame, type MinesGame, type MinesRevealResponse } from "@/lib/api";
+import {
+  startMinesGame,
+  revealMine,
+  cashoutMines,
+  getWallets,
+  getSkinPreviewByAmountAtomic,
+  getActiveMinesGame,
+  getMinesGame,
+  type MinesGame,
+  type MinesRevealResponse
+} from "@/lib/api";
 import { refreshBalance } from "@/lib/refreshBalance";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { getGameVolume } from "@/lib/gameAudio";
@@ -21,6 +31,7 @@ const P3 = `${A}48299ac45bc8c79776e03a90ed321ed3.svg`;
 type Cell = "hidden" | "safe" | "mine";
 const G = '"DM Sans","Gotham",sans-serif';
 const COIN_DECIMALS = 1e8;
+const MIN_MINES_BET_COINS = 0.1;
 const f = (v: string | null | undefined, d = 8) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
 const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
 const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
@@ -72,6 +83,8 @@ export default function MinesPage() {
   const [skinAnimTick, setSkinAnimTick] = useState(0);
   const [cellAnim, setCellAnim] = useState<Record<number, "safe" | "mine">>({});
   const [safeCellGainByIndex, setSafeCellGainByIndex] = useState<SafeCellGainByIndex>({});
+  const [, setPlayerRevealedCells] = useState<number[]>([]);
+  const [autoRevealedCells, setAutoRevealedCells] = useState<number[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cellAnimTimeoutsRef = useRef<number[]>([]);
 
@@ -202,6 +215,19 @@ export default function MinesPage() {
     boom.stop(now + 0.35);
   }, [getAudioContext]);
 
+  const applyResolvedBoard = useCallback((resolvedBoard: Array<"safe" | "mine">, clickedCells: number[]) => {
+    if (resolvedBoard.length !== BOARD) return;
+    const normalizedClicked = Array.from(
+      new Set(clickedCells.filter((index) => Number.isInteger(index) && index >= 0 && index < BOARD))
+    );
+    const clickedSet = new Set(normalizedClicked);
+    const nextCells = resolvedBoard.map((cell) => (cell === "mine" ? "mine" : "safe")) as Cell[];
+    const auto = nextCells.map((_, index) => index).filter((index) => !clickedSet.has(index));
+    setCells(nextCells);
+    setPlayerRevealedCells(normalizedClicked);
+    setAutoRevealedCells(auto);
+  }, []);
+
   const triggerCellAnimation = useCallback((safeIndices: number[], mineIndex: number | null) => {
     const nextKeys = [...safeIndices];
     if (mineIndex !== null) nextKeys.push(mineIndex);
@@ -284,6 +310,8 @@ export default function MinesPage() {
         setCells(next);
         const restoredGains = restoreSafeCellGains(activeGame.gameId, activeGame.revealedCells ?? []);
         setSafeCellGainByIndex(restoredGains);
+        setPlayerRevealedCells(activeGame.revealedCells ?? []);
+        setAutoRevealedCells([]);
         await fetchSkin(activeGame.potentialPayoutAtomic);
       } catch {
         // Ignore restore errors to allow a normal fresh game.
@@ -307,12 +335,21 @@ export default function MinesPage() {
     setLR(null);
     setSkinUrl(null);
     setSafeCellGainByIndex({});
+    setPlayerRevealedCells([]);
+    setAutoRevealedCells([]);
   };
   const start = async () => {
     setErr(null); setLd(true); reset();
+    if (betNum < MIN_MINES_BET_COINS) {
+      setErr(`Minimum bet is ${MIN_MINES_BET_COINS.toFixed(2)}`);
+      setLd(false);
+      return;
+    }
     try {
       const g = await startMinesGame("USDT", ba, mc); setGame(g); refreshBalance();
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
+      setPlayerRevealedCells(g.revealedCells ?? []);
+      setAutoRevealedCells([]);
       fetchSkin(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
@@ -338,7 +375,24 @@ export default function MinesPage() {
           newlySafe.push(i);
         }
       });
-      setCells(n);
+      let resolvedBoard = r.resolvedBoard;
+      if (r.reveal.gameResolved && (!resolvedBoard || resolvedBoard.length !== BOARD)) {
+        try {
+          const fullGame = await getMinesGame(r.gameId);
+          resolvedBoard = fullGame.resolvedBoard;
+          setGame(fullGame);
+        } catch {
+          // Keep best-effort rendering from reveal payload when fallback request fails.
+        }
+      }
+      if (r.reveal.gameResolved && resolvedBoard?.length === BOARD) {
+        const clickedCells = r.reveal.hitMine ? Array.from(new Set([...(r.revealedCells ?? []), idx])) : (r.revealedCells ?? []);
+        applyResolvedBoard(resolvedBoard, clickedCells);
+      } else {
+        setCells(n);
+        setPlayerRevealedCells(r.revealedCells ?? []);
+        setAutoRevealedCells([]);
+      }
       const nextPotentialAtomic = Number(r.potentialPayoutAtomic ?? "0");
       const deltaAtomic = Number.isFinite(previousPotentialAtomic) && Number.isFinite(nextPotentialAtomic)
         ? Math.max(0, nextPotentialAtomic - previousPotentialAtomic)
@@ -372,6 +426,22 @@ export default function MinesPage() {
     try {
       const finished = await cashoutMines(game.gameId);
       setGame(finished);
+      let resolvedBoard = finished.resolvedBoard;
+      if (!resolvedBoard || resolvedBoard.length !== BOARD) {
+        try {
+          const fullGame = await getMinesGame(finished.gameId);
+          resolvedBoard = fullGame.resolvedBoard;
+          setGame(fullGame);
+        } catch {
+          // Ignore fallback errors and keep direct response state.
+        }
+      }
+      if (resolvedBoard?.length === BOARD) {
+        applyResolvedBoard(resolvedBoard, finished.revealedCells ?? []);
+      } else {
+        setPlayerRevealedCells(finished.revealedCells ?? []);
+        setAutoRevealedCells([]);
+      }
       if (finished.status === "CASHED_OUT") {
         await fetchSkin(finished.payoutAtomic ?? finished.potentialPayoutAtomic ?? game.potentialPayoutAtomic);
         requestLiveWinsRefresh();
@@ -560,7 +630,7 @@ export default function MinesPage() {
                 </div>
               </>
             ) : (
-              <div onClick={() => !ld && betNum > 0 && start()} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld || betNum <= 0 ? 0.5 : 1 }}>
+              <div onClick={() => !ld && betNum >= MIN_MINES_BET_COINS && start()} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld || betNum < MIN_MINES_BET_COINS ? 0.5 : 1 }}>
                 <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>{ld ? "Starting..." : "Start game"}</p>
               </div>
             )}
@@ -578,9 +648,13 @@ export default function MinesPage() {
       }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, width: "100%", maxWidth: 600 }}>
           {cells.map((st, i) => {
+            const isAutoRevealed = autoRevealedCells.includes(i);
             if (st === "mine") return (
-              <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden" }}>
+              <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden", position: "relative" }}>
                 <img src={MINE_TILE} alt="mine" style={{ width: "100%", height: "100%", borderRadius: 12, display: "block" }} />
+                {isAutoRevealed ? (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(9, 11, 14, 0.42)", border: "1px solid rgba(247, 81, 84, 0.4)", pointerEvents: "none" }} />
+                ) : null}
               </div>
             );
             if (st === "safe") return (
@@ -595,6 +669,9 @@ export default function MinesPage() {
                     textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
                   />
                 </div>
+                {isAutoRevealed ? (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(8, 15, 9, 0.38)", pointerEvents: "none" }} />
+                ) : null}
               </div>
             );
             return (
