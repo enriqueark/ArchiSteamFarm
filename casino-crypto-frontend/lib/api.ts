@@ -667,6 +667,7 @@ export interface MinesGame {
   boardSize: number;
   safeReveals: number;
   revealedCells: number[];
+  resolvedBoard: Array<"safe" | "mine"> | null;
   currentMultiplier: string;
   potentialPayoutAtomic: string;
   payoutAtomic: string | null;

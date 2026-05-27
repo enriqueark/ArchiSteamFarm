@@ -33,6 +33,8 @@ type WalletSnapshot = {
   lockedAtomic: bigint;
 };
 
+type ResolvedBoardCell = "safe" | "mine";
+
 type GameWithRelations = MinesGame & {
   betReservation: {
     id: string;
@@ -50,6 +52,7 @@ export type MinesGameState = {
   boardSize: number;
   safeReveals: number;
   revealedCells: number[];
+  resolvedBoard: ResolvedBoardCell[] | null;
   currentMultiplier: number;
   potentialPayoutAtomic: bigint;
   payoutAtomic: bigint | null;
@@ -131,6 +134,8 @@ const ensureMineCount = (mineCount: number): void => {
   }
 };
 
+const MIN_MINES_BET_ATOMIC = 100_000n; // 0.1 with 1e6 atomic precision
+
 const ensureWalletSnapshot = (row?: WalletUpdateRow): WalletSnapshot => {
   if (!row) {
     throw new AppError("Wallet not found", 404, "WALLET_NOT_FOUND");
@@ -160,7 +165,11 @@ const getWalletSnapshotById = async (walletId: string): Promise<WalletSnapshot> 
   };
 };
 
-const toMinesGameState = (game: MinesGame, wallet: WalletSnapshot): MinesGameState => {
+const toMinesGameState = (
+  game: MinesGame,
+  wallet: WalletSnapshot,
+  resolvedBoard: ResolvedBoardCell[] | null = null
+): MinesGameState => {
   const revealedCells = parseRevealedCells(game.revealedCells);
   const currentMultiplier = Number(game.currentMultiplier.toString());
   const potentialPayoutAtomic =
@@ -175,6 +184,7 @@ const toMinesGameState = (game: MinesGame, wallet: WalletSnapshot): MinesGameSta
     boardSize: game.boardSize,
     safeReveals: game.safeReveals,
     revealedCells,
+    resolvedBoard,
     currentMultiplier,
     potentialPayoutAtomic,
     payoutAtomic: game.payoutAtomic ?? null,
@@ -187,6 +197,16 @@ const toMinesGameState = (game: MinesGame, wallet: WalletSnapshot): MinesGameSta
     },
     wallet
   };
+};
+
+const buildResolvedBoard = (mineIndexes: number[], boardSize: number): ResolvedBoardCell[] => {
+  const board: ResolvedBoardCell[] = Array.from({ length: boardSize }, () => "safe");
+  mineIndexes.forEach((index) => {
+    if (index >= 0 && index < boardSize) {
+      board[index] = "mine";
+    }
+  });
+  return board;
 };
 
 const ensureProvablyFairContext = async (
@@ -585,8 +605,8 @@ export const rotateProvablyFairServerSeed = async (userId: string) => {
 export const startMinesGame = async (input: StartMinesGameInput): Promise<MinesGameState> => {
   ensureMineCount(input.mineCount);
 
-  if (input.betAtomic <= 0n) {
-    throw new AppError("betAtomic must be greater than 0", 400, "INVALID_BET_AMOUNT");
+  if (input.betAtomic < MIN_MINES_BET_ATOMIC) {
+    throw new AppError("Mines minimum bet is 0.1", 400, "BET_MINIMUM_NOT_MET");
   }
 
   const existing = await resolveExistingStartRequest(input.userId, input.idempotencyKey);
@@ -773,7 +793,15 @@ export const getMinesGameById = async (userId: string, gameId: string): Promise<
   }
 
   const wallet = await getWalletSnapshotById(game.betReservation.walletId);
-  return toMinesGameState(game, wallet);
+  if (game.status === MinesGameStatus.ACTIVE) {
+    return toMinesGameState(game, wallet);
+  }
+  const seed = await prisma.provablyFairSeed.findUnique({ where: { id: game.serverSeedId } });
+  if (!seed) {
+    return toMinesGameState(game, wallet);
+  }
+  const mineIndexes = buildMineIndexes(seed.serverSeed, game.clientSeed, game.nonce, game.mineCount, game.boardSize);
+  return toMinesGameState(game, wallet, buildResolvedBoard(mineIndexes, game.boardSize));
 };
 
 export const revealMinesTile = async (input: RevealTileInput): Promise<MinesRevealResult> => {
@@ -783,12 +811,28 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
 
   const result = await prisma.$transaction(async (tx) => {
     const game = await lockGameForUpdate(tx, input.gameId, input.userId);
+    const resolveBoardForGame = async (targetGame: MinesGame): Promise<ResolvedBoardCell[] | null> => {
+      if (targetGame.status === MinesGameStatus.ACTIVE) return null;
+      const seedForBoard = await tx.provablyFairSeed.findUnique({
+        where: { id: targetGame.serverSeedId }
+      });
+      if (!seedForBoard) return null;
+      const mineIndexes = buildMineIndexes(
+        seedForBoard.serverSeed,
+        targetGame.clientSeed,
+        targetGame.nonce,
+        targetGame.mineCount,
+        targetGame.boardSize
+      );
+      return buildResolvedBoard(mineIndexes, targetGame.boardSize);
+    };
 
     if (game.status !== MinesGameStatus.ACTIVE) {
       const wallet = await tx.wallet.findUnique({
         where: { id: game.betReservation.walletId },
         select: { id: true, balanceAtomic: true, lockedAtomic: true }
       });
+      const resolvedBoard = await resolveBoardForGame(game);
 
       return {
         state: toMinesGameState(
@@ -797,7 +841,8 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
             wallet
               ? { id: wallet.id, balanceAtomic: wallet.balanceAtomic, lockedAtomic: wallet.lockedAtomic }
               : undefined
-          )
+          ),
+          resolvedBoard
         ),
         hitMine: game.status === MinesGameStatus.LOST,
         revealedNow: false,
@@ -811,6 +856,7 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
         where: { id: game.betReservation.walletId },
         select: { id: true, balanceAtomic: true, lockedAtomic: true }
       });
+      const resolvedBoard = await resolveBoardForGame(game);
 
       return {
         state: toMinesGameState(
@@ -819,7 +865,8 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
             wallet
               ? { id: wallet.id, balanceAtomic: wallet.balanceAtomic, lockedAtomic: wallet.lockedAtomic }
               : undefined
-          )
+          ),
+          resolvedBoard
         ),
         hitMine: false,
         revealedNow: false,
@@ -869,7 +916,7 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
       });
 
       return {
-        state: toMinesGameState(updatedGame, wallet),
+        state: toMinesGameState(updatedGame, wallet, buildResolvedBoard(mines, game.boardSize)),
         hitMine: true,
         revealedNow: true,
         gameResolved: true
@@ -951,7 +998,7 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
     });
 
     return {
-      state: toMinesGameState(finalizedGame, paidWallet),
+      state: toMinesGameState(finalizedGame, paidWallet, buildResolvedBoard(mines, game.boardSize)),
       hitMine: false,
       revealedNow: true,
       gameResolved: true
@@ -986,6 +1033,14 @@ export const revealMinesTile = async (input: RevealTileInput): Promise<MinesReve
 export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameState> => {
   const result = await prisma.$transaction(async (tx) => {
     const game = await lockGameForUpdate(tx, input.gameId, input.userId);
+    const seed = await tx.provablyFairSeed.findUnique({
+      where: { id: game.serverSeedId }
+    });
+    if (!seed) {
+      throw new AppError("Server seed not found for game", 500, "SERVER_SEED_NOT_FOUND");
+    }
+    const mineIndexes = buildMineIndexes(seed.serverSeed, game.clientSeed, game.nonce, game.mineCount, game.boardSize);
+    const resolvedBoard = buildResolvedBoard(mineIndexes, game.boardSize);
 
     if (game.status === MinesGameStatus.CASHED_OUT) {
       const wallet = await tx.wallet.findUnique({
@@ -997,7 +1052,8 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
         game,
         ensureWalletSnapshot(
           wallet ? { id: wallet.id, balanceAtomic: wallet.balanceAtomic, lockedAtomic: wallet.lockedAtomic } : undefined
-        )
+        ),
+        resolvedBoard
       );
     }
 
@@ -1040,7 +1096,7 @@ export const cashoutMinesGame = async (input: CashoutInput): Promise<MinesGameSt
       }
     });
 
-    return toMinesGameState(updatedGame, paidWallet);
+    return toMinesGameState(updatedGame, paidWallet, resolvedBoard);
   });
 
   void enqueueAuditEvent({

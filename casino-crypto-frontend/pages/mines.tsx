@@ -15,6 +15,7 @@ const P3 = `${A}48299ac45bc8c79776e03a90ed321ed3.svg`;
 
 type Cell = "hidden" | "safe" | "mine";
 const G = '"DM Sans","Gotham",sans-serif';
+const MIN_MINES_BET_COINS = 0.1;
 const f = (v: string | null | undefined, d = 6) => { if (!v) return "0.00"; const n = Number(v) / 10 ** d; return isNaN(n) ? "0.00" : n.toFixed(2); };
 const fm = (v: string | null | undefined) => { if (!v) return "0.00"; const n = parseFloat(v); return isNaN(n) ? "0.00" : n.toFixed(2); };
 const SD = "inset 0 1px 0 0 #252525, inset 0 -1px 0 0 #242424";
@@ -34,6 +35,8 @@ export default function MinesPage() {
   const [skinAnimTick, setSkinAnimTick] = useState(0);
   const [cellAnim, setCellAnim] = useState<Record<number, "safe" | "mine">>({});
   const [safeCellGainByIndex, setSafeCellGainByIndex] = useState<Record<number, string>>({});
+  const [, setPlayerRevealedCells] = useState<number[]>([]);
+  const [autoRevealedCells, setAutoRevealedCells] = useState<number[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cellAnimTimeoutsRef = useRef<number[]>([]);
 
@@ -148,6 +151,19 @@ export default function MinesPage() {
     boom.stop(now + 0.35);
   }, [getAudioContext]);
 
+  const applyResolvedBoard = useCallback((resolvedBoard: Array<"safe" | "mine">, clickedCells: number[]) => {
+    if (resolvedBoard.length !== BOARD) return;
+    const normalizedClicked = Array.from(
+      new Set(clickedCells.filter((index) => Number.isInteger(index) && index >= 0 && index < BOARD))
+    );
+    const clickedSet = new Set(normalizedClicked);
+    const nextCells = resolvedBoard.map((cell) => (cell === "mine" ? "mine" : "safe")) as Cell[];
+    const auto = nextCells.map((_, index) => index).filter((index) => !clickedSet.has(index));
+    setCells(nextCells);
+    setPlayerRevealedCells(normalizedClicked);
+    setAutoRevealedCells(auto);
+  }, []);
+
   const triggerCellAnimation = useCallback((safeIndices: number[], mineIndex: number | null) => {
     const nextKeys = [...safeIndices];
     if (mineIndex !== null) nextKeys.push(mineIndex);
@@ -201,6 +217,8 @@ export default function MinesPage() {
           }
         });
         setCells(next);
+        setPlayerRevealedCells(activeGame.revealedCells ?? []);
+        setAutoRevealedCells([]);
         setSafeCellGainByIndex({});
         await fetchSkin(activeGame.potentialPayoutAtomic);
       } catch {
@@ -222,12 +240,21 @@ export default function MinesPage() {
     setLR(null);
     setSkinUrl(null);
     setSafeCellGainByIndex({});
+    setPlayerRevealedCells([]);
+    setAutoRevealedCells([]);
   };
   const start = async () => {
     setErr(null); setLd(true); reset();
+    if (betNum < MIN_MINES_BET_COINS) {
+      setErr(`Minimum bet is ${MIN_MINES_BET_COINS.toFixed(2)}`);
+      setLd(false);
+      return;
+    }
     try {
       const g = await startMinesGame("USDT", ba, mc); setGame(g);
       if (g.revealedCells?.length) { const n = Array(BOARD).fill("hidden") as Cell[]; g.revealedCells.forEach((i) => (n[i] = "safe")); setCells(n); }
+      setPlayerRevealedCells(g.revealedCells ?? []);
+      setAutoRevealedCells([]);
       fetchSkin(g.potentialPayoutAtomic);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
@@ -253,7 +280,14 @@ export default function MinesPage() {
           newlySafe.push(i);
         }
       });
-      setCells(n);
+      if (r.reveal.gameResolved && r.resolvedBoard?.length === BOARD) {
+        const clickedCells = r.reveal.hitMine ? [...(r.revealedCells ?? []), idx] : (r.revealedCells ?? []);
+        applyResolvedBoard(r.resolvedBoard, clickedCells);
+      } else {
+        setCells(n);
+        setPlayerRevealedCells(r.revealedCells ?? []);
+        setAutoRevealedCells([]);
+      }
       const nextPotentialAtomic = Number(r.potentialPayoutAtomic ?? "0");
       const deltaAtomic = Number.isFinite(previousPotentialAtomic) && Number.isFinite(nextPotentialAtomic)
         ? Math.max(0, nextPotentialAtomic - previousPotentialAtomic)
@@ -283,7 +317,14 @@ export default function MinesPage() {
   };
   const cashout = async () => {
     if (!game) return; setErr(null); setLd(true);
-    try { setGame(await cashoutMines(game.gameId)); setSkinUrl(null); } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
+    try {
+      const finished = await cashoutMines(game.gameId);
+      setGame(finished);
+      if (finished.resolvedBoard?.length === BOARD) {
+        applyResolvedBoard(finished.resolvedBoard, finished.revealedCells ?? []);
+      }
+      setSkinUrl(null);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); } finally { setLd(false); }
   };
   const pickR = () => {
     if (!act) return;
@@ -457,7 +498,7 @@ export default function MinesPage() {
                 </div>
               </>
             ) : (
-              <div onClick={() => !ld && betNum > 0 && start()} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld || betNum <= 0 ? 0.5 : 1 }}>
+              <div onClick={() => !ld && betNum >= MIN_MINES_BET_COINS && start()} style={{ padding: "14px 24px", borderRadius: 12, background: "linear-gradient(180deg,#ac2e30,#f75154)", boxShadow: SR, display: "flex", justifyContent: "center", cursor: "pointer", opacity: ld || betNum < MIN_MINES_BET_COINS ? 0.5 : 1 }}>
                 <p style={{ color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, margin: 0 }}>{ld ? "Starting..." : "Start game"}</p>
               </div>
             )}
@@ -475,15 +516,22 @@ export default function MinesPage() {
       }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, width: "100%", maxWidth: 600 }}>
           {cells.map((st, i) => {
+            const isAutoRevealed = autoRevealedCells.includes(i);
             if (st === "mine") return (
-              <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden" }}>
+              <div key={i} className={`mines-cell-mine ${cellAnim[i] === "mine" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "107/109", borderRadius: 12, overflow: "hidden", position: "relative" }}>
                 <img src={MINE_TILE} alt="mine" style={{ width: "100%", height: "100%", borderRadius: 12, display: "block" }} />
+                {isAutoRevealed ? (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(9, 11, 14, 0.42)", pointerEvents: "none" }} />
+                ) : null}
               </div>
             );
             if (st === "safe") return (
-              <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, position: "relative" }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto" }} />
                 <p style={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}>{safeCellGainByIndex[i] ?? "+$0.00"}</p>
+                {isAutoRevealed ? (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(8, 15, 9, 0.38)", pointerEvents: "none" }} />
+                ) : null}
               </div>
             );
             return (
