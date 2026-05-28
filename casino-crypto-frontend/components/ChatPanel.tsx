@@ -330,8 +330,8 @@ export default function ChatPanel({ onClose }: Props) {
     try {
       await tipUser(tipModal.userPublicId, amount, undefined, tipHide);
       toast.showSuccess({
-        title: "Tip exitoso",
-        description: `Has enviado ${amount.toFixed(2)} USDT a ${tipModal.username}.`
+        title: "Tip successful",
+        description: `You sent ${amount.toFixed(2)} USDT to ${tipModal.username}.`
       });
       setTipModal(null); setTipAmount(""); setTipError(null);
     } catch (e: unknown) { setTipError(e instanceof Error ? e.message : "Tip failed"); }
@@ -398,8 +398,8 @@ export default function ChatPanel({ onClose }: Props) {
       const result = await tipRain(amountCoins);
       setRain(result.rain);
       toast.showSuccess({
-        title: "Tip Rain exitoso",
-        description: `Has añadido ${amountCoins.toFixed(2)} USDT al Rain.`
+        title: "Rain tip successful",
+        description: `You added ${amountCoins.toFixed(2)} USDT to Rain.`
       });
       setTipRainModalOpen(false);
     } catch (e: unknown) {

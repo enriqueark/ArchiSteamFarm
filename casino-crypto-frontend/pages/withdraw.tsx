@@ -40,8 +40,8 @@ export default function WithdrawPage() {
       });
       setMessage(`Withdrawal requested: ${response.status} (${response.id})`);
       toast.showSuccess({
-        title: "Retiro exitoso",
-        description: `Tu retiro de ${amountCoins.toFixed(2)} USDT fue solicitado correctamente.`
+        title: "Withdrawal successful",
+        description: `Your withdrawal of ${amountCoins.toFixed(2)} USDT was requested successfully.`
       });
       setAddress("");
     } catch (error) {

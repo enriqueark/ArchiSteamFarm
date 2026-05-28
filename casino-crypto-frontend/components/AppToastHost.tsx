@@ -10,6 +10,33 @@ const SUCCESS_ICON_SRC = "/assets/success-toast-dino.svg";
 
 const AMOUNT_REGEX = /\d[\d.,]*\s*[A-Z]{2,10}/;
 
+function toEnglishToast(detail: AppToastDetail): AppToastDetail {
+  const titleMap: Record<string, string> = {
+    "Operación exitosa": "Operation successful",
+    "Tip exitoso": "Tip successful",
+    "Tip Rain exitoso": "Rain tip successful",
+    "Retiro exitoso": "Withdrawal successful",
+    "Depósito exitoso": "Deposit successful"
+  };
+
+  const translateText = (value: string | undefined): string | undefined => {
+    if (!value) return value;
+    let next = value;
+    next = titleMap[next] ?? next;
+    next = next
+      .replace(/^Tu depósito de (.+?) ha sido detectado y procesado exitosamente\.?$/i, "Your deposit of $1 has been detected and processed successfully.")
+      .replace(/^Tu retiro de (.+?) fue solicitado correctamente\.?$/i, "Your withdrawal of $1 was requested successfully.")
+      .replace(/^Has añadido (.+?) al Rain\.?$/i, "You added $1 to Rain.");
+    return next;
+  };
+
+  return {
+    ...detail,
+    title: translateText(detail.title),
+    description: translateText(detail.description) ?? detail.description
+  };
+}
+
 function splitDescription(description: string, explicitAmount?: string): {
   before: string;
   amount: string | null;
@@ -86,12 +113,10 @@ export default function AppToastHost() {
   const showToast = useCallback(
     (detail: AppToastDetail) => {
       clearTimers();
-      const durationMs =
-        typeof detail.durationMs === "number" && Number.isFinite(detail.durationMs) && detail.durationMs >= 1_000
-          ? Math.round(detail.durationMs)
-          : DEFAULT_DURATION_MS;
+      const durationMs = DEFAULT_DURATION_MS;
+      const normalizedDetail = toEnglishToast(detail);
 
-      setToast(detail);
+      setToast(normalizedDetail);
       setVisible(true);
       setProgressTransition("none");
       setProgressWidth("100%");
@@ -134,7 +159,7 @@ export default function AppToastHost() {
   const title = useMemo(() => {
     if (toast?.title?.trim()) return toast.title.trim();
     if (toast?.variant === "error") return "Error";
-    return "Operación exitosa";
+    return "Operation successful";
   }, [toast?.title, toast?.variant]);
   const descriptionParts = useMemo(
     () => splitDescription(toast?.description ?? "", toast?.amountText),
