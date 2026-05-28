@@ -13,6 +13,7 @@ import {
   type CaseOpeningResult
 } from "@/lib/api";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
+import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
   const n = Number(atomic);
@@ -119,18 +120,10 @@ function TopTierReveal({ opening, onClose }: TopTierRevealProps) {
 }
 
 export default function CasesPage() {
+  const { showError, showSuccess } = useToast();
   const authed = true;
   const openAuth = (_mode: "login" | "register") => {
     // auth handled globally in this frontend branch
-  };
-  const showError = (message: string) => {
-    // keep UX feedback without extra providers
-    // eslint-disable-next-line no-alert
-    window.alert(message);
-  };
-  const showSuccess = (message: string) => {
-    // eslint-disable-next-line no-alert
-    window.alert(message);
   };
 
   const [cases, setCases] = useState<CaseListItem[]>([]);

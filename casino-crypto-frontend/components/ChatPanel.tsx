@@ -10,6 +10,7 @@ import {
   type RainState
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
+import { useToast } from "@/lib/toast";
 import CoinAmount from "./CoinAmount";
 import CoinIcon from "./CoinIcon";
 import LevelBadge, { getTierColor } from "./LevelBadge";
@@ -94,6 +95,7 @@ function toUserFacingError(err: unknown, fallback: string): string {
 }
 
 export default function ChatPanel({ onClose }: Props) {
+  const toast = useToast();
   const CONTEXT_MENU_WIDTH = 200;
   const CONTEXT_MENU_ESTIMATED_HEIGHT = 166;
   const [message, setMessage] = useState("");
@@ -327,6 +329,10 @@ export default function ChatPanel({ onClose }: Props) {
     setTipSending(true); setTipError(null);
     try {
       await tipUser(tipModal.userPublicId, amount, undefined, tipHide);
+      toast.showSuccess({
+        title: "Tip exitoso",
+        description: `Has enviado ${amount.toFixed(2)} USDT a ${tipModal.username}.`
+      });
       setTipModal(null); setTipAmount(""); setTipError(null);
     } catch (e: unknown) { setTipError(e instanceof Error ? e.message : "Tip failed"); }
     finally { setTipSending(false); }
@@ -391,6 +397,10 @@ export default function ChatPanel({ onClose }: Props) {
     try {
       const result = await tipRain(amountCoins);
       setRain(result.rain);
+      toast.showSuccess({
+        title: "Tip Rain exitoso",
+        description: `Has añadido ${amountCoins.toFixed(2)} USDT al Rain.`
+      });
       setTipRainModalOpen(false);
     } catch (e: unknown) {
       setTipRainModalError(toUserFacingError(e, "Failed to tip rain"));

@@ -7,6 +7,7 @@ import CoinIcon from "./CoinIcon";
 import Footer from "./Footer";
 import LevelBadge from "./LevelBadge";
 import NotificationsPanel, { type Notification as HeaderNotification } from "./NotificationsPanel";
+import AppToastHost from "./AppToastHost";
 import {
   depositVault,
   getLiveWinsTicker,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/api";
 import { LIVE_WINS_REFRESH_EVENT } from "@/lib/liveWinsTicker";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
+import { useToast } from "@/lib/toast";
 
 const sideLinks = [
   { href: "/cases", src: "/assets/e2aff152f333aa01b1f9280bef464454.svg", label: "Cases" },
@@ -66,6 +68,7 @@ const getInitialFromLabel = (label: string | undefined): string => {
 };
 
 export default function Layout({ children, onLogout, userEmail, userLevel, userAvatarUrl, hideFooter = false }: Props) {
+  const toast = useToast();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
@@ -99,6 +102,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   });
   const latestTickerIdRef = useRef<string | null>(null);
   const hasTickerBootstrappedRef = useRef(false);
+  const hasCashierBootstrappedRef = useRef(false);
 
   const refreshWallets = useCallback(() => {
     getWallets().then(setWallets).catch(() => {});
@@ -271,20 +275,36 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       const nonCashier = existing.filter((entry) => !entry.id.startsWith("cashier:"));
       const existingCashierIds = new Set(existing.filter((entry) => entry.id.startsWith("cashier:")).map((entry) => entry.id));
       const hasNewCashierNotification = incoming.some((entry) => !existingCashierIds.has(entry.id));
+      const newCashierEntries = incoming.filter((entry) => !existingCashierIds.has(entry.id));
 
       const next = [...nonCashier, ...incoming]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 60);
       localStorage.setItem("notifications", JSON.stringify(next));
 
+      if (!hasCashierBootstrappedRef.current) {
+        hasCashierBootstrappedRef.current = true;
+        return;
+      }
+
       if (hasNewCashierNotification) {
         setHasNewNotif(true);
         localStorage.setItem("notifSeen", "false");
+
+        const newestEntry = [...newCashierEntries].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        if (newestEntry) {
+          toast.showSuccess({
+            title: newestEntry.title,
+            description: newestEntry.message
+          });
+        }
       }
     } catch {
       // Keep old notification behavior if cashier endpoint fails.
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     let active = true;
@@ -334,6 +354,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     try {
       await depositVault(amount, vaultLockDuration);
       setVaultInfo("Balance moved to vault successfully");
+      toast.showSuccess("Vault deposit completed successfully.");
       await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
     } catch (error) {
       setVaultError(error instanceof Error ? error.message : "Vault deposit failed");
@@ -354,6 +375,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     try {
       await withdrawVault(amount);
       setVaultInfo("Vault withdraw completed");
+      toast.showSuccess("Vault withdrawal completed successfully.");
       await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
     } catch (error) {
       setVaultError(error instanceof Error ? error.message : "Vault withdraw failed");
@@ -366,6 +388,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
+      <AppToastHost />
       {/* Main column — full width */}
       <div className="flex-1 flex min-h-0 flex-col min-w-0">
         {/* Top nav with hamburger */}

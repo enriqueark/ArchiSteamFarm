@@ -2,6 +2,7 @@ import { useState } from "react";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import { createWithdrawal } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 
 type WithdrawMethod = { asset: "USDT"; network: "erc20" };
 
@@ -10,6 +11,7 @@ const METHODS: WithdrawMethod[] = [
 ];
 
 export default function WithdrawPage() {
+  const toast = useToast();
   const [coins, setCoins] = useState("10");
   const [address, setAddress] = useState("");
   const [method, setMethod] = useState<WithdrawMethod>(METHODS[0]);
@@ -37,7 +39,15 @@ export default function WithdrawPage() {
         destinationAddress: address.trim()
       });
       setMessage(`Withdrawal requested: ${response.status} (${response.id})`);
+      toast.showSuccess({
+        title: "Retiro exitoso",
+        description: `Tu retiro de ${amountCoins.toFixed(2)} USDT fue solicitado correctamente.`
+      });
       setAddress("");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Withdrawal request failed.";
+      setMessage(text);
+      toast.showError(text);
     } finally {
       setLoading(false);
     }

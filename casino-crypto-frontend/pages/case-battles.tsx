@@ -16,6 +16,7 @@ import {
   type BattleTemplate,
   type CaseListItem
 } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
   const n = Number(atomic);
@@ -77,14 +78,9 @@ const initialDraft: CreateDraft = {
 const INTERNAL_CURRENCY = "USDT";
 
 export default function BattlesPage() {
+  const { showError, showSuccess } = useToast();
   const authed = true;
   const openAuth = (_mode: "login" | "register" = "login") => {};
-  const showError = (message: string) => {
-    if (typeof window !== "undefined") {
-      window.alert(message);
-    }
-  };
-  const showSuccess = (_message: string) => {};
 
   const [cases, setCases] = useState<CaseListItem[]>([]);
   const [battles, setBattles] = useState<BattleState[]>([]);
@@ -185,7 +181,7 @@ export default function BattlesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedBattleId]);
+  }, [selectedBattleId, showError]);
 
   useEffect(() => {
     if (!selectedBattle || selectedBattle.status !== "SETTLED") return;
