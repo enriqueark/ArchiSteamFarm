@@ -87,6 +87,12 @@ export default function MinesPage() {
   const [autoRevealedCells, setAutoRevealedCells] = useState<number[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cellAnimTimeoutsRef = useRef<number[]>([]);
+  const autoRevealTimeoutsRef = useRef<number[]>([]);
+
+  const clearAutoRevealTimeouts = useCallback(() => {
+    autoRevealTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    autoRevealTimeoutsRef.current = [];
+  }, []);
 
   useEffect(() => {
     getWallets()
@@ -217,16 +223,52 @@ export default function MinesPage() {
 
   const applyResolvedBoard = useCallback((resolvedBoard: Array<"safe" | "mine">, clickedCells: number[]) => {
     if (resolvedBoard.length !== BOARD) return;
+    clearAutoRevealTimeouts();
     const normalizedClicked = Array.from(
       new Set(clickedCells.filter((index) => Number.isInteger(index) && index >= 0 && index < BOARD))
     );
     const clickedSet = new Set(normalizedClicked);
     const nextCells = resolvedBoard.map((cell) => (cell === "mine" ? "mine" : "safe")) as Cell[];
     const auto = nextCells.map((_, index) => index).filter((index) => !clickedSet.has(index));
-    setCells(nextCells);
+    const clickedOnlyCells = Array(BOARD).fill("hidden") as Cell[];
+    normalizedClicked.forEach((index) => {
+      clickedOnlyCells[index] = nextCells[index];
+    });
+    setCells(clickedOnlyCells);
     setPlayerRevealedCells(normalizedClicked);
-    setAutoRevealedCells(auto);
-  }, []);
+    setAutoRevealedCells([]);
+    if (!auto.length) {
+      setCells(nextCells);
+      return;
+    }
+
+    const revealStepMs = 38;
+    auto.forEach((index, order) => {
+      const revealTimeout = window.setTimeout(() => {
+        setCells((prev) => {
+          if (prev[index] !== "hidden") return prev;
+          const copy = [...prev];
+          copy[index] = nextCells[index];
+          return copy;
+        });
+        setAutoRevealedCells((prev) => (prev.includes(index) ? prev : [...prev, index]));
+        setCellAnim((prev) => ({
+          ...prev,
+          [index]: nextCells[index] === "mine" ? "mine" : "safe"
+        }));
+        const clearAnimTimeout = window.setTimeout(() => {
+          setCellAnim((prev) => {
+            if (!(index in prev)) return prev;
+            const copy = { ...prev };
+            delete copy[index];
+            return copy;
+          });
+        }, nextCells[index] === "mine" ? 820 : 620);
+        cellAnimTimeoutsRef.current.push(clearAnimTimeout);
+      }, order * revealStepMs);
+      autoRevealTimeoutsRef.current.push(revealTimeout);
+    });
+  }, [clearAutoRevealTimeouts]);
 
   const triggerCellAnimation = useCallback((safeIndices: number[], mineIndex: number | null) => {
     const nextKeys = [...safeIndices];
@@ -290,6 +332,15 @@ export default function MinesPage() {
   }, [skinUrl]);
 
   useEffect(() => {
+    return () => {
+      const activeCellAnimTimeouts = [...cellAnimTimeoutsRef.current];
+      activeCellAnimTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      cellAnimTimeoutsRef.current = [];
+      clearAutoRevealTimeouts();
+    };
+  }, [clearAutoRevealTimeouts]);
+
+  useEffect(() => {
     let cancelled = false;
     const restoreActiveGame = async () => {
       setLd(true);
@@ -328,6 +379,7 @@ export default function MinesPage() {
   }, [fetchSkin, restoreSafeCellGains]);
 
   const reset = () => {
+    clearAutoRevealTimeouts();
     if (game?.gameId) {
       persistSafeCellGains(game.gameId, {});
     }
@@ -660,15 +712,22 @@ export default function MinesPage() {
             if (st === "safe") return (
               <div key={i} className={`mines-cell-safe ${cellAnim[i] === "safe" ? "is-reveal" : ""}`} style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#4ade60,#2d8f35)", boxShadow: "0 3px 0 0 #0d2a0f, inset 0 2px 0 rgba(255,255,255,.12)", position: "relative" }}>
                 <img src={GEM} alt="" style={{ width: "55%", height: "auto", position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -56%)" }} />
-                <div style={{ position: "absolute", left: "50%", bottom: 4, transform: "translateX(-50%)" }}>
-                  <CoinAmount
-                    amount={(safeCellGainByIndex[i] ?? "+0.00").replace("+", "")}
-                    prefix="+"
-                    iconSize={15}
-                    gap={2}
-                    textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
-                  />
-                </div>
+                {(() => {
+                  const gainLabel = safeCellGainByIndex[i] ?? "+0.00";
+                  const hideAutoZeroGain = isAutoRevealed && gainLabel === "+0.00";
+                  if (hideAutoZeroGain) return null;
+                  return (
+                    <div style={{ position: "absolute", left: "50%", bottom: 4, transform: "translateX(-50%)" }}>
+                      <CoinAmount
+                        amount={gainLabel.replace("+", "")}
+                        prefix="+"
+                        iconSize={15}
+                        gap={2}
+                        textStyle={{ color: "#0a2e0c", fontSize: 16, fontFamily: G, fontWeight: 700, margin: 0 }}
+                      />
+                    </div>
+                  );
+                })()}
                 {isAutoRevealed ? (
                   <div style={{ position: "absolute", inset: 0, background: "rgba(8, 15, 9, 0.38)", pointerEvents: "none" }} />
                 ) : null}
