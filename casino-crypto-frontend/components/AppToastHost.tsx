@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { APP_TOAST_EVENT_NAME, type AppToastDetail } from "@/lib/toast";
 
@@ -8,6 +8,7 @@ const DEFAULT_DURATION_MS = 5_000;
 const CLOSE_ANIMATION_MS = 250;
 const SUCCESS_ICON_SRC = "/assets/success-toast-dino.svg";
 const ERROR_ICON_SRC = "/assets/error-toast-dino.svg";
+const STACK_LIMIT = 4;
 
 const AMOUNT_REGEX = /\d[\d.,]*\s*[A-Z]{2,10}/;
 
@@ -80,85 +81,198 @@ function splitDescription(description: string, explicitAmount?: string): {
   };
 }
 
-export default function AppToastHost() {
-  const [toast, setToast] = useState<AppToastDetail | null>(null);
-  const [visible, setVisible] = useState(false);
-  const [progressWidth, setProgressWidth] = useState("100%");
-  const [progressTransition, setProgressTransition] = useState("none");
-  const hideTimerRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-  const progressKickoffRef = useRef<number | null>(null);
+type ToastItem = {
+  id: string;
+  detail: AppToastDetail;
+  isClosing: boolean;
+  progressActive: boolean;
+};
 
-  const clearTimers = useCallback(() => {
-    if (hideTimerRef.current !== null) {
-      window.clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
+type ToastVariantMetrics = {
+  maxWidth: number;
+  topBottomLineHeight: number;
+  iconWidth: number;
+  iconHeight: number;
+  titleSize: number;
+  titleMarginBottom: number;
+  descriptionSize: number;
+  descriptionLineHeight: number;
+  progressBottom: number;
+  progressHeight: number;
+};
+
+const ERROR_METRICS: ToastVariantMetrics = {
+  maxWidth: 360,
+  topBottomLineHeight: 3.5,
+  iconWidth: 50,
+  iconHeight: 42,
+  titleSize: 15.5,
+  titleMarginBottom: 3,
+  descriptionSize: 13.2,
+  descriptionLineHeight: 1.4,
+  progressBottom: 3.5,
+  progressHeight: 3
+};
+
+const SUCCESS_METRICS: ToastVariantMetrics = {
+  maxWidth: 355,
+  topBottomLineHeight: 3,
+  iconWidth: 44,
+  iconHeight: 37,
+  titleSize: 15,
+  titleMarginBottom: 2,
+  descriptionSize: 13,
+  descriptionLineHeight: 1.35,
+  progressBottom: 3,
+  progressHeight: 2.5
+};
+
+const getMetrics = (variant: AppToastDetail["variant"]): ToastVariantMetrics =>
+  variant === "error" ? ERROR_METRICS : SUCCESS_METRICS;
+
+const buildToastId = (): string => `toast-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+export default function AppToastHost() {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastsRef = useRef<ToastItem[]>([]);
+  const hideTimersRef = useRef<Record<string, number>>({});
+  const removeTimersRef = useRef<Record<string, number>>({});
+  const progressTimersRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
+
+  const clearToastTimers = useCallback((id: string) => {
+    const hideTimer = hideTimersRef.current[id];
+    if (typeof hideTimer === "number") {
+      window.clearTimeout(hideTimer);
+      delete hideTimersRef.current[id];
     }
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
+    const removeTimer = removeTimersRef.current[id];
+    if (typeof removeTimer === "number") {
+      window.clearTimeout(removeTimer);
+      delete removeTimersRef.current[id];
     }
-    if (progressKickoffRef.current !== null) {
-      window.clearTimeout(progressKickoffRef.current);
-      progressKickoffRef.current = null;
+    const progressTimer = progressTimersRef.current[id];
+    if (typeof progressTimer === "number") {
+      window.clearTimeout(progressTimer);
+      delete progressTimersRef.current[id];
     }
   }, []);
 
-  const hideToast = useCallback(() => {
-    clearTimers();
-    setVisible(false);
-    closeTimerRef.current = window.setTimeout(() => {
-      setToast(null);
-      setProgressTransition("none");
-      setProgressWidth("100%");
-      closeTimerRef.current = null;
-    }, CLOSE_ANIMATION_MS);
-  }, [clearTimers]);
+  const clearAllTimers = useCallback(() => {
+    Object.values(hideTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    Object.values(removeTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    Object.values(progressTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    hideTimersRef.current = {};
+    removeTimersRef.current = {};
+    progressTimersRef.current = {};
+  }, []);
+
+  const removeToast = useCallback(
+    (id: string) => {
+      clearToastTimers(id);
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    },
+    [clearToastTimers]
+  );
+
+  const closeToast = useCallback(
+    (id: string) => {
+      setToasts((prev) =>
+        prev.map((toast) =>
+          toast.id === id
+            ? {
+                ...toast,
+                isClosing: true
+              }
+            : toast
+        )
+      );
+      clearToastTimers(id);
+      removeTimersRef.current[id] = window.setTimeout(() => {
+        removeToast(id);
+      }, CLOSE_ANIMATION_MS);
+    },
+    [clearToastTimers, removeToast]
+  );
+
+  const scheduleToast = useCallback(
+    (id: string) => {
+      progressTimersRef.current[id] = window.setTimeout(() => {
+        setToasts((prev) =>
+          prev.map((toast) =>
+            toast.id === id
+              ? {
+                  ...toast,
+                  progressActive: true
+                }
+              : toast
+          )
+        );
+      }, 50);
+
+      hideTimersRef.current[id] = window.setTimeout(() => {
+        closeToast(id);
+      }, DEFAULT_DURATION_MS);
+    },
+    [closeToast]
+  );
 
   const showToast = useCallback(
     (detail: AppToastDetail) => {
-      clearTimers();
-      const durationMs = DEFAULT_DURATION_MS;
+      if (!detail.description?.trim()) return;
       const normalizedDetail = toEnglishToast(detail);
+      const nextId = buildToastId();
 
-      setToast(normalizedDetail);
-      setVisible(true);
-      setProgressTransition("none");
-      setProgressWidth("100%");
+      setToasts((prev) => {
+        let next = [...prev];
+        if (next.length >= STACK_LIMIT) {
+          const oldestToast = next[0];
+          if (oldestToast) {
+            clearToastTimers(oldestToast.id);
+            next = next.slice(1);
+          }
+        }
+        return [
+          ...next,
+          {
+            id: nextId,
+            detail: normalizedDetail,
+            isClosing: false,
+            progressActive: false
+          }
+        ];
+      });
 
-      progressKickoffRef.current = window.setTimeout(() => {
-        setProgressTransition(`width ${durationMs}ms linear`);
-        setProgressWidth("0%");
-      }, 50);
-
-      hideTimerRef.current = window.setTimeout(() => {
-        hideToast();
-      }, durationMs);
+      scheduleToast(nextId);
     },
-    [clearTimers, hideToast]
+    [clearToastTimers, scheduleToast]
   );
 
   useEffect(() => {
-    const onToast = (event: Event) => {
+    const onToastEvent = (event: Event) => {
       const custom = event as CustomEvent<AppToastDetail>;
-      if (!custom.detail?.description) return;
       showToast(custom.detail);
     };
 
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        hideToast();
+      if (event.key !== "Escape") return;
+      const latestToast = toastsRef.current[toastsRef.current.length - 1];
+      if (latestToast) {
+        closeToast(latestToast.id);
       }
     };
 
-    window.addEventListener(APP_TOAST_EVENT_NAME, onToast as EventListener);
+    window.addEventListener(APP_TOAST_EVENT_NAME, onToastEvent as EventListener);
     window.addEventListener("keydown", onEscape);
     return () => {
-      window.removeEventListener(APP_TOAST_EVENT_NAME, onToast as EventListener);
+      window.removeEventListener(APP_TOAST_EVENT_NAME, onToastEvent as EventListener);
       window.removeEventListener("keydown", onEscape);
-      clearTimers();
+      clearAllTimers();
     };
-  }, [clearTimers, hideToast, showToast]);
+  }, [clearAllTimers, closeToast, showToast]);
 
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
@@ -185,161 +299,143 @@ export default function AppToastHost() {
     };
   }, [showToast]);
 
-  const accentColor = toast?.variant === "error" ? "#f75154" : "#55FF60";
-  const isErrorToast = toast?.variant === "error";
-  const variantMetrics = isErrorToast
-    ? {
-        maxWidth: 360,
-        topBottomLineHeight: 3.5,
-        iconWidth: 50,
-        iconHeight: 42,
-        titleSize: 15.5,
-        titleMarginBottom: 3,
-        descriptionSize: 13.2,
-        descriptionLineHeight: 1.4,
-        progressBottom: 3.5,
-        progressHeight: 3
-      }
-    : {
-        maxWidth: 355,
-        topBottomLineHeight: 3,
-        iconWidth: 44,
-        iconHeight: 37,
-        titleSize: 15,
-        titleMarginBottom: 2,
-        descriptionSize: 13,
-        descriptionLineHeight: 1.35,
-        progressBottom: 3,
-        progressHeight: 2.5
-      };
-  const title = useMemo(() => {
-    if (toast?.title?.trim()) return toast.title.trim();
-    if (toast?.variant === "error") return "Error";
-    return "Operation successful";
-  }, [toast?.title, toast?.variant]);
-  const descriptionParts = useMemo(
-    () => splitDescription(toast?.description ?? "", toast?.amountText),
-    [toast?.description, toast?.amountText]
-  );
-
-  if (!toast) return null;
+  if (!toasts.length) return null;
 
   return (
-    <>
-      <div
-        style={{
-          position: "fixed",
-          bottom: 24,
-          left: 24,
-          zIndex: 99999,
-          maxWidth: variantMetrics.maxWidth,
-          width: "calc(100% - 48px)",
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(25px)",
-          transition: visible
-            ? "all 0.4s cubic-bezier(0.32, 0.72, 0, 1)"
-            : "all 0.25s ease",
-          pointerEvents: visible ? "auto" : "none",
-          boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.5)"
-        }}
-      >
-        <div
-          onClick={hideToast}
-          style={{
-            background: "#0A0A0A",
-            borderRadius: 9999,
-            padding: "13px 18px",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            position: "relative",
-            overflow: "hidden"
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: variantMetrics.topBottomLineHeight,
-              background: accentColor
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: variantMetrics.topBottomLineHeight,
-              background: accentColor
-            }}
-          />
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        left: 24,
+        zIndex: 99999,
+        width: "calc(100% - 48px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        pointerEvents: "none"
+      }}
+    >
+      {toasts.map((toast) => {
+        const isErrorToast = toast.detail.variant === "error";
+        const variantMetrics = getMetrics(toast.detail.variant);
+        const accentColor = isErrorToast ? "#f34950" : "#55FF60";
+        const title = toast.detail.title?.trim() || (isErrorToast ? "Error" : "Operation successful");
+        const descriptionParts = splitDescription(toast.detail.description ?? "", toast.detail.amountText);
 
+        return (
           <div
+            key={toast.id}
             style={{
-              flexShrink: 0,
-              width: variantMetrics.iconWidth,
-              height: variantMetrics.iconHeight,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
+              maxWidth: variantMetrics.maxWidth,
+              width: "100%",
+              opacity: toast.isClosing ? 0 : 1,
+              transform: toast.isClosing ? "translateY(25px)" : "translateY(0)",
+              transition: toast.isClosing
+                ? "all 0.25s ease"
+                : "all 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
+              boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.5)",
+              pointerEvents: "auto"
             }}
           >
-            <img
-              src={isErrorToast ? ERROR_ICON_SRC : SUCCESS_ICON_SRC}
-              alt=""
-              width={variantMetrics.iconWidth}
-              height={variantMetrics.iconHeight}
-            />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p
+            <div
+              onClick={() => closeToast(toast.id)}
               style={{
-                fontFamily: "Inter, system-ui, sans-serif",
-                fontWeight: 700,
-                fontSize: variantMetrics.titleSize,
-                color: "#ffffff",
-                margin: `0 0 ${variantMetrics.titleMarginBottom}px 0`,
-                lineHeight: 1.2
+                background: "#0A0A0A",
+                borderRadius: 9999,
+                padding: "13px 18px",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                position: "relative",
+                overflow: "hidden"
               }}
             >
-              {title}
-            </p>
-            <p
-              style={{
-                fontFamily: "Inter, system-ui, sans-serif",
-                fontSize: variantMetrics.descriptionSize,
-                color: "#94a3b8",
-                lineHeight: variantMetrics.descriptionLineHeight,
-                margin: 0
-              }}
-            >
-              {descriptionParts.before}
-              {descriptionParts.amount ? (
-                <span style={{ color: "#ffffff", fontWeight: 600 }}>{descriptionParts.amount}</span>
-              ) : null}
-              {descriptionParts.after}
-            </p>
-          </div>
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: variantMetrics.topBottomLineHeight,
+                  background: accentColor
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: variantMetrics.topBottomLineHeight,
+                  background: accentColor
+                }}
+              />
 
-          <div
-            style={{
-              position: "absolute",
-              bottom: variantMetrics.progressBottom,
-              left: 0,
-              height: variantMetrics.progressHeight,
-              background: accentColor,
-              width: progressWidth,
-              transition: progressTransition,
-              zIndex: 10
-            }}
-          />
-        </div>
-      </div>
-    </>
+              <div
+                style={{
+                  flexShrink: 0,
+                  width: variantMetrics.iconWidth,
+                  height: variantMetrics.iconHeight,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <img
+                  src={isErrorToast ? ERROR_ICON_SRC : SUCCESS_ICON_SRC}
+                  alt=""
+                  width={variantMetrics.iconWidth}
+                  height={variantMetrics.iconHeight}
+                />
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    fontFamily: "Inter, system-ui, sans-serif",
+                    fontWeight: 700,
+                    fontSize: variantMetrics.titleSize,
+                    color: "#ffffff",
+                    margin: `0 0 ${variantMetrics.titleMarginBottom}px 0`,
+                    lineHeight: 1.2
+                  }}
+                >
+                  {title}
+                </p>
+                <p
+                  style={{
+                    fontFamily: "Inter, system-ui, sans-serif",
+                    fontSize: variantMetrics.descriptionSize,
+                    color: "#94a3b8",
+                    lineHeight: variantMetrics.descriptionLineHeight,
+                    margin: 0
+                  }}
+                >
+                  {descriptionParts.before}
+                  {descriptionParts.amount ? (
+                    <span style={{ color: "#ffffff", fontWeight: 600 }}>{descriptionParts.amount}</span>
+                  ) : null}
+                  {descriptionParts.after}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: variantMetrics.progressBottom,
+                  left: 0,
+                  height: variantMetrics.progressHeight,
+                  background: accentColor,
+                  width: toast.progressActive ? "0%" : "100%",
+                  transition: toast.progressActive ? `width ${DEFAULT_DURATION_MS}ms linear` : "none",
+                  zIndex: 10
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
