@@ -20,11 +20,27 @@ export type AppToastDetail = {
 };
 
 export const APP_TOAST_EVENT_NAME = "app-toast";
+let lastToastEmit: { variant: ToastVariant; description: string; at: number } | null = null;
 
 export function emitAppToast(detail: AppToastDetail): void {
   if (typeof window === "undefined") {
     return;
   }
+  const now = Date.now();
+  const description = detail.description ?? "";
+  if (
+    lastToastEmit &&
+    lastToastEmit.variant === detail.variant &&
+    lastToastEmit.description === description &&
+    now - lastToastEmit.at < 500
+  ) {
+    return;
+  }
+  lastToastEmit = {
+    variant: detail.variant,
+    description,
+    at: now
+  };
   window.dispatchEvent(new CustomEvent<AppToastDetail>(APP_TOAST_EVENT_NAME, { detail }));
 }
 

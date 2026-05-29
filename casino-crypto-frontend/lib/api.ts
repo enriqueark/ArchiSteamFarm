@@ -1,3 +1,5 @@
+import { emitAppToast } from "@/lib/toast";
+
 function getBaseUrl(): string {
   if (typeof window !== "undefined" && window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_API_URL) {
     return window.__RUNTIME_CONFIG__.NEXT_PUBLIC_API_URL;
@@ -16,6 +18,7 @@ function getApi(): string {
 }
 
 let accessToken: string | null = null;
+let lastApiErrorToast: { message: string; at: number } | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -145,7 +148,17 @@ async function request<T>(
       clearSession();
     }
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || body.error || `HTTP ${res.status}`);
+    const message = body.message || body.error || `HTTP ${res.status}`;
+    const now = Date.now();
+    const shouldEmitToast =
+      !lastApiErrorToast ||
+      lastApiErrorToast.message !== message ||
+      now - lastApiErrorToast.at > 3_500;
+    if (shouldEmitToast) {
+      lastApiErrorToast = { message, at: now };
+      emitAppToast({ variant: "error", description: message });
+    }
+    throw new Error(message);
   }
 
   if (res.status === 204) return {} as T;

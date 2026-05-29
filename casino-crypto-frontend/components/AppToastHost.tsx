@@ -7,6 +7,7 @@ import { APP_TOAST_EVENT_NAME, type AppToastDetail } from "@/lib/toast";
 const DEFAULT_DURATION_MS = 5_000;
 const CLOSE_ANIMATION_MS = 250;
 const SUCCESS_ICON_SRC = "/assets/success-toast-dino.svg";
+const ERROR_ICON_SRC = "/assets/error-toast-dino.svg";
 
 const AMOUNT_REGEX = /\d[\d.,]*\s*[A-Z]{2,10}/;
 
@@ -16,7 +17,9 @@ function toEnglishToast(detail: AppToastDetail): AppToastDetail {
     "Tip exitoso": "Tip successful",
     "Tip Rain exitoso": "Rain tip successful",
     "Retiro exitoso": "Withdrawal successful",
-    "Depósito exitoso": "Deposit successful"
+    "Depósito exitoso": "Deposit successful",
+    "Depósito fallido": "Deposit failed",
+    "Retiro fallido": "Withdrawal failed"
   };
 
   const translateText = (value: string | undefined): string | undefined => {
@@ -25,7 +28,9 @@ function toEnglishToast(detail: AppToastDetail): AppToastDetail {
     next = titleMap[next] ?? next;
     next = next
       .replace(/^Tu depósito de (.+?) ha sido detectado y procesado exitosamente\.?$/i, "Your deposit of $1 has been detected and processed successfully.")
+      .replace(/^Tu depósito de (.+?) no pudo ser procesado\.?$/i, "Your deposit of $1 could not be processed.")
       .replace(/^Tu retiro de (.+?) fue solicitado correctamente\.?$/i, "Your withdrawal of $1 was requested successfully.")
+      .replace(/^Tu retiro de (.+?) no pudo ser procesado\.?$/i, "Your withdrawal of $1 could not be processed.")
       .replace(/^Has añadido (.+?) al Rain\.?$/i, "You added $1 to Rain.");
     return next;
   };
@@ -155,7 +160,58 @@ export default function AppToastHost() {
     };
   }, [clearTimers, hideToast, showToast]);
 
+  useEffect(() => {
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : "Unexpected error";
+      if (!message) return;
+      showToast({ variant: "error", description: message });
+    };
+    const onWindowError = (event: ErrorEvent) => {
+      const message = event.message?.trim();
+      if (!message || message === "Script error.") return;
+      showToast({ variant: "error", description: message });
+    };
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    window.addEventListener("error", onWindowError);
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("error", onWindowError);
+    };
+  }, [showToast]);
+
   const accentColor = toast?.variant === "error" ? "#f75154" : "#55FF60";
+  const isErrorToast = toast?.variant === "error";
+  const variantMetrics = isErrorToast
+    ? {
+        maxWidth: 360,
+        topBottomLineHeight: 3.5,
+        iconWidth: 50,
+        iconHeight: 42,
+        titleSize: 15.5,
+        titleMarginBottom: 3,
+        descriptionSize: 13.2,
+        descriptionLineHeight: 1.4,
+        progressBottom: 3.5,
+        progressHeight: 3
+      }
+    : {
+        maxWidth: 355,
+        topBottomLineHeight: 3,
+        iconWidth: 44,
+        iconHeight: 37,
+        titleSize: 15,
+        titleMarginBottom: 2,
+        descriptionSize: 13,
+        descriptionLineHeight: 1.35,
+        progressBottom: 3,
+        progressHeight: 2.5
+      };
   const title = useMemo(() => {
     if (toast?.title?.trim()) return toast.title.trim();
     if (toast?.variant === "error") return "Error";
@@ -176,7 +232,7 @@ export default function AppToastHost() {
           bottom: 24,
           left: 24,
           zIndex: 99999,
-          maxWidth: 355,
+          maxWidth: variantMetrics.maxWidth,
           width: "calc(100% - 48px)",
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0)" : "translateY(25px)",
@@ -206,7 +262,7 @@ export default function AppToastHost() {
               top: 0,
               left: 0,
               right: 0,
-              height: 3,
+              height: variantMetrics.topBottomLineHeight,
               background: accentColor
             }}
           />
@@ -216,7 +272,7 @@ export default function AppToastHost() {
               bottom: 0,
               left: 0,
               right: 0,
-              height: 3,
+              height: variantMetrics.topBottomLineHeight,
               background: accentColor
             }}
           />
@@ -224,19 +280,18 @@ export default function AppToastHost() {
           <div
             style={{
               flexShrink: 0,
-              width: 44,
-              height: 37,
+              width: variantMetrics.iconWidth,
+              height: variantMetrics.iconHeight,
               display: "flex",
               alignItems: "center",
               justifyContent: "center"
             }}
           >
             <img
-              src={SUCCESS_ICON_SRC}
+              src={isErrorToast ? ERROR_ICON_SRC : SUCCESS_ICON_SRC}
               alt=""
-              width={44}
-              height={37}
-              style={toast.variant === "error" ? { filter: "hue-rotate(300deg) saturate(1.25)" } : undefined}
+              width={variantMetrics.iconWidth}
+              height={variantMetrics.iconHeight}
             />
           </div>
 
@@ -245,9 +300,9 @@ export default function AppToastHost() {
               style={{
                 fontFamily: "Inter, system-ui, sans-serif",
                 fontWeight: 700,
-                fontSize: 15,
+                fontSize: variantMetrics.titleSize,
                 color: "#ffffff",
-                margin: "0 0 2px 0",
+                margin: `0 0 ${variantMetrics.titleMarginBottom}px 0`,
                 lineHeight: 1.2
               }}
             >
@@ -256,9 +311,9 @@ export default function AppToastHost() {
             <p
               style={{
                 fontFamily: "Inter, system-ui, sans-serif",
-                fontSize: 13,
+                fontSize: variantMetrics.descriptionSize,
                 color: "#94a3b8",
-                lineHeight: 1.35,
+                lineHeight: variantMetrics.descriptionLineHeight,
                 margin: 0
               }}
             >
@@ -273,9 +328,9 @@ export default function AppToastHost() {
           <div
             style={{
               position: "absolute",
-              bottom: 3,
+              bottom: variantMetrics.progressBottom,
               left: 0,
-              height: 2.5,
+              height: variantMetrics.progressHeight,
               background: accentColor,
               width: progressWidth,
               transition: progressTransition,

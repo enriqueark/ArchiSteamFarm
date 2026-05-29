@@ -321,9 +321,16 @@ export default function ChatPanel({ onClose }: Props) {
   const handleTip = async () => {
     if (!tipModal || tipSending) return;
     const amount = parseFloat(tipAmount);
-    if (!amount || amount < 1) { setTipError("Minimum tip is 1 COIN"); return; }
+    if (!amount || amount < 1) {
+      const message = "Minimum tip is 1 COIN";
+      setTipError(message);
+      toast.showError(message);
+      return;
+    }
     if (!tipModal.userPublicId || tipModal.userPublicId < 1) {
-      setTipError("This user cannot receive tips right now.");
+      const message = "This user cannot receive tips right now.";
+      setTipError(message);
+      toast.showError(message);
       return;
     }
     setTipSending(true); setTipError(null);
@@ -389,7 +396,9 @@ export default function ChatPanel({ onClose }: Props) {
     if (tippingRain) return;
     const amountCoins = Number(tipRainAmountInput);
     if (!Number.isFinite(amountCoins) || amountCoins < 1) {
-      setTipRainModalError("Tip amount must be at least 1 coin");
+      const message = "Tip amount must be at least 1 coin";
+      setTipRainModalError(message);
+      toast.showError(message);
       return;
     }
     setTippingRain(true);

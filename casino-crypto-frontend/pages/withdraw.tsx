@@ -22,11 +22,15 @@ export default function WithdrawPage() {
     setMessage(null);
     const amountCoins = Number(coins);
     if (!Number.isFinite(amountCoins) || amountCoins <= 0) {
-      setMessage("Enter a valid amount in COINS.");
+      const text = "Enter a valid amount in COINS.";
+      setMessage(text);
+      toast.showError(text);
       return;
     }
     if (!address.trim()) {
-      setMessage("Enter destination address.");
+      const text = "Enter destination address.";
+      setMessage(text);
+      toast.showError(text);
       return;
     }
 
@@ -47,7 +51,6 @@ export default function WithdrawPage() {
     } catch (error) {
       const text = error instanceof Error ? error.message : "Withdrawal request failed.";
       setMessage(text);
-      toast.showError(text);
     } finally {
       setLoading(false);
     }
