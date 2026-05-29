@@ -141,7 +141,7 @@ export default function AppToastHost() {
     };
 
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && toast) {
+      if (event.key === "Escape") {
         hideToast();
       }
     };
@@ -153,7 +153,7 @@ export default function AppToastHost() {
       window.removeEventListener("keydown", onEscape);
       clearTimers();
     };
-  }, [clearTimers, hideToast, showToast, toast]);
+  }, [clearTimers, hideToast, showToast]);
 
   const accentColor = toast?.variant === "error" ? "#f75154" : "#55FF60";
   const title = useMemo(() => {
