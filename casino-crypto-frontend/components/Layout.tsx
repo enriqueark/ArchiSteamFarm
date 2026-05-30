@@ -52,6 +52,16 @@ const atomicToCoinsString = (atomic: string, decimals = 2): string => {
   return (value / 1e8).toFixed(decimals);
 };
 
+type VaultLockOption = "NONE" | VaultLockDuration;
+
+const VAULT_LOCK_OPTIONS: Array<{ value: VaultLockOption; label: string }> = [
+  { value: "NONE", label: "No lock" },
+  { value: "1H", label: "1h" },
+  { value: "1D", label: "1 day" },
+  { value: "3D", label: "3 days" },
+  { value: "7D", label: "7 days" }
+];
+
 interface Props {
   children: ReactNode;
   onLogout?: () => void;
@@ -79,9 +89,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [vaultLoading, setVaultLoading] = useState(false);
   const [vaultActionLoading, setVaultActionLoading] = useState(false);
   const [vaultAmountCoins, setVaultAmountCoins] = useState("10");
-  const [vaultLockDuration, setVaultLockDuration] = useState<VaultLockDuration>("1H");
-  const [vaultError, setVaultError] = useState<string | null>(null);
-  const [vaultInfo, setVaultInfo] = useState<string | null>(null);
+  const [vaultLockDuration, setVaultLockDuration] = useState<VaultLockOption>("NONE");
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<LiveWinTickerItem[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
@@ -324,12 +332,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   const loadVaultState = async () => {
     setVaultLoading(true);
-    setVaultError(null);
     try {
       const data = await getVaultState();
       setVaultState(data);
     } catch (error) {
-      setVaultError(error instanceof Error ? error.message : "Failed to load vault");
+      toast.showError(error instanceof Error ? error.message : "Failed to load vault state.");
     } finally {
       setVaultLoading(false);
     }
@@ -338,53 +345,67 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const openVaultModal = async () => {
     setProfileMenuOpen(false);
     setVaultOpen(true);
-    setVaultInfo(null);
     await loadVaultState();
   };
 
   const handleVaultDeposit = async () => {
-    setVaultError(null);
-    setVaultInfo(null);
     const amount = Number(vaultAmountCoins);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setVaultError("Enter a valid amount");
+      toast.showError("Please enter a valid amount.");
       return;
     }
     setVaultActionLoading(true);
     try {
-      await depositVault(amount, vaultLockDuration);
-      setVaultInfo("Balance moved to vault successfully");
+      await depositVault(amount, vaultLockDuration === "NONE" ? undefined : vaultLockDuration);
       toast.showSuccess("Vault deposit completed successfully.");
       await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
     } catch (error) {
-      setVaultError(error instanceof Error ? error.message : "Vault deposit failed");
+      toast.showError(error instanceof Error ? error.message : "Vault deposit failed.");
     } finally {
       setVaultActionLoading(false);
     }
   };
 
   const handleVaultWithdraw = async () => {
-    setVaultError(null);
-    setVaultInfo(null);
     const amount = Number(vaultAmountCoins);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setVaultError("Enter a valid amount");
+      toast.showError("Please enter a valid amount.");
       return;
     }
     setVaultActionLoading(true);
     try {
       await withdrawVault(amount);
-      setVaultInfo("Vault withdraw completed");
       toast.showSuccess("Vault withdrawal completed successfully.");
       await Promise.all([loadVaultState(), getWallets().then(setWallets)]);
     } catch (error) {
-      setVaultError(error instanceof Error ? error.message : "Vault withdraw failed");
+      toast.showError(error instanceof Error ? error.message : "Vault withdrawal failed.");
     } finally {
       setVaultActionLoading(false);
     }
   };
 
   const availableVaultCoins = vaultState ? Number(atomicToCoinsString(vaultState.availableAtomic, 8)) : 0;
+  const walletAvailableCoins = (() => {
+    if (!primaryWallet) return 0;
+    if (primaryWallet.availableCoins && Number.isFinite(Number(primaryWallet.availableCoins))) {
+      return Number(primaryWallet.availableCoins);
+    }
+    if (primaryWallet.availableAtomic && Number.isFinite(Number(primaryWallet.availableAtomic))) {
+      return Number(primaryWallet.availableAtomic) / 1e8;
+    }
+    const balanceAtomic = Number(primaryWallet.balanceAtomic || "0");
+    const lockedAtomic = Number(primaryWallet.lockedAtomic || "0");
+    if (!Number.isFinite(balanceAtomic) || !Number.isFinite(lockedAtomic)) {
+      return 0;
+    }
+    return Math.max(0, (balanceAtomic - lockedAtomic) / 1e8);
+  })();
+  const maxVaultInputCoins = Math.max(
+    0,
+    Number.isFinite(walletAvailableCoins) ? walletAvailableCoins : 0,
+    Number.isFinite(availableVaultCoins) ? availableVaultCoins : 0
+  );
+  const activeVaultLocks = vaultState?.locks ?? [];
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
@@ -792,124 +813,160 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       </div>
       {vaultOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-[560px] rounded-[16px] border border-[#2b3746] bg-[#091624] shadow-[0_22px_60px_rgba(0,0,0,0.6)]">
-            <div className="flex items-center justify-between border-b border-[#223042] px-5 py-4">
+          <div className="w-full max-w-[430px] overflow-hidden rounded-[30px] border border-red-500/60 bg-[#0A0A0A] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]">
+            <div className="flex items-center justify-between border-b border-[#1e2937] px-6 pb-4 pt-5">
               <div>
-                <h2 className="m-0 text-[20px] font-bold text-white">Vault</h2>
-                <p className="m-0 mt-1 text-[12px] text-[#89a3bf]">Store your Coins and lock funds up to 7 days</p>
+                <h2 className="m-0 text-[35px] font-bold leading-none text-white">Vault</h2>
+                <p className="m-0 mt-1 text-[18px] text-[#98A8BD]">Store your Coins and lock funds up to 7 days</p>
               </div>
               <button
                 type="button"
                 onClick={() => setVaultOpen(false)}
-                className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#0e2335] text-[#9fb6cd] hover:text-white"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#9fb6cd] transition-colors hover:text-red-400"
               >
-                ✕
+                <span className="text-[24px] leading-none">x</span>
               </button>
             </div>
-            <div className="space-y-4 px-5 py-4">
+            <div className="space-y-6 p-6">
               {vaultLoading ? (
-                <p className="text-sm text-[#9ab2c8]">Loading vault...</p>
+                <div className="rounded-[18px] border border-[#1e2937] bg-[#111111] px-4 py-6 text-center text-sm text-[#9ab2c8]">
+                  Loading vault...
+                </div>
               ) : (
                 <>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
-                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Vault Total</p>
-                      <div className="mt-1">
-                        <CoinAmount
-                          amount={vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
-                          iconSize={16}
-                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}
-                        />
+                    <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="inline-flex h-4 w-4 rounded border border-emerald-400/50 bg-emerald-500/20" />
+                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Vault Total</p>
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <span className="text-[42px] font-bold leading-none text-white">
+                          {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
+                        </span>
+                        <CoinIcon size={24} />
                       </div>
                     </div>
-                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
-                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Available</p>
-                      <div className="mt-1">
-                        <CoinAmount
-                          amount={vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
-                          iconSize={16}
-                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#7de88f" }}
-                        />
+                    <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="inline-flex h-4 w-4 rounded-full border border-emerald-400/50 bg-emerald-500/20" />
+                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Available</p>
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <span className="text-[42px] font-bold leading-none text-[#2DE39D]">
+                          {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
+                        </span>
+                        <CoinIcon size={24} />
                       </div>
                     </div>
-                    <div className="rounded-[10px] border border-[#213447] bg-[#0b1d2d] p-3">
-                      <p className="m-0 text-[11px] uppercase text-[#7f9ab5]">Locked</p>
-                      <div className="mt-1">
-                        <CoinAmount
-                          amount={vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
-                          iconSize={16}
-                          textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffd28d" }}
-                        />
+                    <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="inline-flex h-4 w-4 rounded border border-orange-400/50 bg-orange-500/20" />
+                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Locked</p>
+                      </div>
+                      <div className="flex items-end gap-1">
+                        <span className="text-[42px] font-bold leading-none text-[#FFC27A]">
+                          {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
+                        </span>
+                        <CoinIcon size={24} />
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
-                    <input
-                      value={vaultAmountCoins}
-                      onChange={(event) => setVaultAmountCoins(event.target.value)}
-                      placeholder="Amount in Coins"
-                      className="h-[42px] rounded-[10px] border border-[#233a50] bg-[#0a1b2b] px-3 text-[14px] text-white outline-none focus:border-[#3f5f7a]"
-                    />
-                    <select
-                      value={vaultLockDuration}
-                      onChange={(event) => setVaultLockDuration(event.target.value as VaultLockDuration)}
-                      className="h-[42px] rounded-[10px] border border-[#233a50] bg-[#0a1b2b] px-3 text-[14px] text-white outline-none"
-                    >
-                      <option value="1H">Lock 1 hour</option>
-                      <option value="1D">Lock 24 hours</option>
-                      <option value="3D">Lock 3 days</option>
-                      <option value="7D">Lock 7 days</option>
-                    </select>
+                  <div>
+                    <label className="mb-2 block text-[26px] font-medium text-[#d6dce5]">Amount</label>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
+                        <CoinIcon size={22} />
+                      </div>
+                      <input
+                        value={vaultAmountCoins}
+                        onChange={(event) => setVaultAmountCoins(event.target.value)}
+                        placeholder="0.00"
+                        inputMode="decimal"
+                        className="h-[56px] w-full rounded-[16px] border border-[#1e2937] bg-[#111111] pl-11 pr-20 text-[39px] font-semibold leading-none text-white outline-none focus:border-red-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setVaultAmountCoins(maxVaultInputCoins > 0 ? maxVaultInputCoins.toFixed(2) : "0.00")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[#1e2937] px-4 py-1.5 text-[20px] font-bold text-red-400 transition-colors hover:bg-red-600 hover:text-white"
+                      >
+                        MAX
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div>
+                    <label className="mb-2 block text-[26px] font-medium text-[#d6dce5]">Lock duration</label>
+                    <div className="flex flex-wrap gap-2">
+                      {VAULT_LOCK_OPTIONS.map((option) => {
+                        const selected = option.value === vaultLockDuration;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setVaultLockDuration(option.value)}
+                            className={`rounded-[999px] border px-4 py-1.5 text-[16px] font-medium transition-all ${
+                              selected
+                                ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_0_3px_rgba(16,185,129,0.2)]"
+                                : "border-[#1e2937] text-[#d0d8e4] hover:border-gray-400"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
                     <button
                       type="button"
                       onClick={() => void handleVaultDeposit()}
                       disabled={vaultActionLoading}
-                      className="rounded-btn border border-[#f2686a] bg-gradient-to-b from-[#f75a5d] to-[#b73437] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-[14px] text-[24px] font-bold text-white shadow-lg shadow-red-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      {vaultActionLoading ? "Processing..." : "Deposit to Vault"}
+                      <span>v</span>
+                      <span>{vaultActionLoading ? "Processing..." : "Deposit to Vault"}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleVaultWithdraw()}
                       disabled={vaultActionLoading || availableVaultCoins <= 0}
-                      className="rounded-btn border border-[#2a9f6b] bg-gradient-to-b from-[#2bbf7b] to-[#1a8f5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#10b981] to-[#059669] py-[14px] text-[24px] font-bold text-white shadow-lg shadow-emerald-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      Withdraw from Vault
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVaultError(null);
-                        setVaultInfo(null);
-                        void loadVaultState();
-                      }}
-                      className="rounded-btn border border-[#35516d] bg-[#0d2234] px-4 py-2 text-sm font-semibold text-[#c9d7e5]"
-                    >
-                      Refresh
+                      <span>^</span>
+                      <span>Withdraw</span>
                     </button>
                   </div>
 
-                  {vaultError ? <p className="m-0 text-sm text-[#ff8d93]">{vaultError}</p> : null}
-                  {vaultInfo ? <p className="m-0 text-sm text-[#8df3a1]">{vaultInfo}</p> : null}
-
-                  <div className="rounded-[12px] border border-[#213447] bg-[#0a1b2b] p-3">
-                    <p className="m-0 mb-2 text-[12px] font-semibold uppercase text-[#8aa4be]">Active locks</p>
-                    {!vaultState?.locks?.length ? (
-                      <p className="m-0 text-sm text-[#7f97ae]">No active lock right now.</p>
+                  <div className="border-t border-[#1e2937] pt-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="m-0 text-[22px] font-semibold uppercase text-[#96a3b4]">Active Locks</p>
+                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[16px] font-medium text-emerald-400">
+                        {activeVaultLocks.length} active
+                      </span>
+                    </div>
+                    {!activeVaultLocks.length ? (
+                      <div className="rounded-[16px] border border-[#1e2937] bg-[#111111] p-4 text-center">
+                        <p className="m-0 text-[20px] text-[#5f7086]">No active locks right now.</p>
+                      </div>
                     ) : (
                       <div className="space-y-2">
-                        {vaultState.locks.map((lock) => (
-                          <div key={lock.id} className="flex items-center justify-between rounded-[8px] bg-[#0d2134] px-3 py-2">
+                        {activeVaultLocks.map((lock) => (
+                          <div
+                            key={lock.id}
+                            className="flex items-center justify-between rounded-[16px] border border-[#1e2937] bg-[#111111] px-3 py-2.5"
+                          >
                             <CoinAmount
                               amount={atomicToCoinsString(lock.amountAtomic)}
                               iconSize={14}
-                              textStyle={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}
+                              gap={4}
+                              textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}
                             />
-                            <span className="text-xs text-[#90a8c1]">Unlocks at {new Date(lock.unlockAt).toLocaleString()}</span>
+                            <span className="text-[14px] text-[#8fa1b7]">
+                              Unlocks {new Date(lock.unlockAt).toLocaleString()}
+                            </span>
                           </div>
                         ))}
                       </div>

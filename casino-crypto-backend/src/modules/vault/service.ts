@@ -35,19 +35,10 @@ export const settleMaturedVaultLocks = async (userId: string): Promise<void> => 
   if (!matured.length) {
     return;
   }
-  const total = matured.reduce((acc, row) => acc + row.amountAtomic, 0n);
-  await prisma.$transaction(async (tx) => {
-    await tx.vaultLock.deleteMany({
-      where: {
-        id: { in: matured.map((row) => row.id) }
-      }
-    });
-    await tx.vaultAccount.update({
-      where: { id: vault.id },
-      data: {
-        balanceAtomic: { decrement: total }
-      }
-    });
+  await prisma.vaultLock.deleteMany({
+    where: {
+      id: { in: matured.map((row) => row.id) }
+    }
   });
 };
 
@@ -113,6 +104,7 @@ export const depositToVault = async (input: {
   if (typeof lockHours === "number" && !VALID_LOCK_WINDOWS_HOURS.has(lockHours)) {
     throw new AppError("Invalid lock period. Allowed: 1h, 24h, 72h, 168h", 400, "INVALID_VAULT_LOCK_WINDOW");
   }
+  await settleMaturedVaultLocks(input.userId);
 
   const idempotencyKey = input.idempotencyKey ?? `vault:deposit:${randomUUID()}`;
   const walletIdempotency = `${idempotencyKey}:wallet`;
@@ -130,20 +122,53 @@ export const depositToVault = async (input: {
   });
 
   const vault = await getOrCreateVault(input.userId);
+  const now = new Date();
+  const requestedUnlockAt = typeof lockHours === "number" ? new Date(now.getTime() + lockHours * HOUR_MS) : null;
+
   await prisma.$transaction(async (tx) => {
-    await tx.vaultAccount.update({
+    const updatedVault = await tx.vaultAccount.update({
       where: { id: vault.id },
       data: {
         balanceAtomic: { increment: input.amountAtomic }
+      },
+      select: {
+        id: true,
+        balanceAtomic: true
       }
     });
 
-    if (typeof lockHours === "number") {
+    const longestActiveLock = await tx.vaultLock.findFirst({
+      where: {
+        vaultId: vault.id,
+        unlockAt: { gt: now }
+      },
+      orderBy: {
+        unlockAt: "desc"
+      },
+      select: {
+        unlockAt: true
+      }
+    });
+    const effectiveUnlockAt = (() => {
+      if (longestActiveLock && requestedUnlockAt) {
+        return longestActiveLock.unlockAt > requestedUnlockAt ? longestActiveLock.unlockAt : requestedUnlockAt;
+      }
+      return longestActiveLock?.unlockAt ?? requestedUnlockAt;
+    })();
+
+    await tx.vaultLock.deleteMany({
+      where: {
+        vaultId: vault.id,
+        unlockAt: { gt: now }
+      }
+    });
+
+    if (effectiveUnlockAt && effectiveUnlockAt > now && updatedVault.balanceAtomic > 0n) {
       await tx.vaultLock.create({
         data: {
           vaultId: vault.id,
-          amountAtomic: input.amountAtomic,
-          unlockAt: new Date(Date.now() + lockHours * HOUR_MS)
+          amountAtomic: updatedVault.balanceAtomic,
+          unlockAt: effectiveUnlockAt
         }
       });
     }

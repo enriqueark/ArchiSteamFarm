@@ -3,6 +3,7 @@ import Card from "@/components/Card";
 import Button from "@/components/Button";
 import CoinAmount from "@/components/CoinAmount";
 import { getWallets, type Wallet } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 
 function atomicToCoins(atomic: string): string {
   const n = Number(atomic);
@@ -11,6 +12,7 @@ function atomicToCoins(atomic: string): string {
 }
 
 export default function WalletPage() {
+  const toast = useToast();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +42,10 @@ export default function WalletPage() {
           <Button
             variant="secondary"
             onClick={() => {
-              // cashier deposit addresses endpoint guarantees account wallet initialization
-              window.alert("Deposit flow is enabled from backend cashier. Ask me and I wire the full modal next.");
+              toast.showSuccess({
+                title: "Deposit",
+                description: "Deposit flow is enabled from cashier."
+              });
             }}
             disabled={loading}
           >
@@ -50,7 +54,10 @@ export default function WalletPage() {
           <Button
             variant="secondary"
             onClick={() => {
-              window.alert("Withdraw flow is enabled from backend cashier. Ask me and I wire the full modal next.");
+              toast.showSuccess({
+                title: "Withdraw",
+                description: "Withdrawal flow is enabled from cashier."
+              });
             }}
             disabled={loading}
           >
