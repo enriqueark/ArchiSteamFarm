@@ -1009,7 +1009,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                               gap={4}
                               textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}
                             />
-                            <span className="text-[14px] text-[#8fa1b7]">
+                            <span className="vault-unlock-glow text-[14px]">
                               {formatVaultUnlockCountdown(lock.unlockAt, vaultNowMs)}
                             </span>
                           </div>
@@ -1023,6 +1023,27 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           </div>
         </div>
       )}
+      <style jsx global>{`
+        @keyframes vaultUnlockRedPulse {
+          0% {
+            color: #f87171;
+            text-shadow: 0 0 6px rgba(248, 113, 113, 0.45), 0 0 14px rgba(248, 113, 113, 0.25);
+          }
+          50% {
+            color: #ef4444;
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.5);
+          }
+          100% {
+            color: #f87171;
+            text-shadow: 0 0 6px rgba(248, 113, 113, 0.45), 0 0 14px rgba(248, 113, 113, 0.25);
+          }
+        }
+
+        .vault-unlock-glow {
+          animation: vaultUnlockRedPulse 1.8s ease-in-out infinite;
+          font-weight: 600;
+        }
+      `}</style>
     </div>
   );
 }
