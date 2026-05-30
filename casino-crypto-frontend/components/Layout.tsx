@@ -836,7 +836,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 <>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-2 flex items-center gap-2 pl-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
                           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <path d="M3.5 8.5h17v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
@@ -853,7 +853,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-2 flex items-center gap-2 pl-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
                           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <circle cx="12" cy="12" r="8.5" />
@@ -870,7 +870,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-2 flex items-center gap-2 pl-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-orange-400">
                           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <rect x="5.5" y="10" width="13" height="9" rx="1.8" />
