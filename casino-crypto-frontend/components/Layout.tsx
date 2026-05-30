@@ -52,6 +52,17 @@ const atomicToCoinsString = (atomic: string, decimals = 2): string => {
   return (value / 1e8).toFixed(decimals);
 };
 
+const formatVaultUnlockCountdown = (unlockAt: string | Date, nowMs: number): string => {
+  const unlockMs = new Date(unlockAt).getTime();
+  if (!Number.isFinite(unlockMs)) return "Unlock time unavailable";
+  const remainingMs = Math.max(0, unlockMs - nowMs);
+  const totalMinutes = Math.floor(remainingMs / 60_000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  return `Unlocks in ${days}d ${hours}h ${minutes}m`;
+};
+
 type VaultLockOption = "NONE" | VaultLockDuration;
 
 const VAULT_LOCK_OPTIONS: Array<{ value: VaultLockOption; label: string }> = [
@@ -90,6 +101,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [vaultActionLoading, setVaultActionLoading] = useState(false);
   const [vaultAmountCoins, setVaultAmountCoins] = useState("0");
   const [vaultLockDuration, setVaultLockDuration] = useState<VaultLockOption>("NONE");
+  const [vaultNowMs, setVaultNowMs] = useState<number>(() => Date.now());
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<LiveWinTickerItem[]>([]);
   const socketRef = useRef<CasinoSocket | null>(null);
@@ -406,6 +418,18 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     Number.isFinite(availableVaultCoins) ? availableVaultCoins : 0
   );
   const activeVaultLocks = vaultState?.locks ?? [];
+  const activeVaultLocksCount = activeVaultLocks.length;
+
+  useEffect(() => {
+    if (!vaultOpen || activeVaultLocksCount === 0) {
+      return;
+    }
+    setVaultNowMs(Date.now());
+    const interval = window.setInterval(() => {
+      setVaultNowMs(Date.now());
+    }, 1_000);
+    return () => window.clearInterval(interval);
+  }, [vaultOpen, activeVaultLocksCount]);
 
   return (
     <div className="h-screen flex overflow-hidden bg-page">
@@ -986,7 +1010,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                               textStyle={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}
                             />
                             <span className="text-[14px] text-[#8fa1b7]">
-                              Unlocks {new Date(lock.unlockAt).toLocaleString()}
+                              {formatVaultUnlockCountdown(lock.unlockAt, vaultNowMs)}
                             </span>
                           </div>
                         ))}
