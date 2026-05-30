@@ -813,11 +813,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       </div>
       {vaultOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-[430px] overflow-hidden rounded-[30px] border border-red-500/60 bg-[#0A0A0A] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]">
-            <div className="flex items-center justify-between border-b border-[#1e2937] px-6 pb-4 pt-5">
+          <div className="w-full max-w-[650px] overflow-hidden rounded-[30px] border border-red-500/60 bg-[#0A0A0A] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]">
+            <div className="flex items-center justify-between border-b border-[#1e2937] px-6 pb-3 pt-4">
               <div>
-                <h2 className="m-0 text-[35px] font-bold leading-none text-white">Vault</h2>
-                <p className="m-0 mt-1 text-[18px] text-[#98A8BD]">Store your Coins and lock funds up to 7 days</p>
+                <h2 className="m-0 text-[20px] font-bold leading-none text-white">Vault</h2>
+                <p className="m-0 mt-1 text-[11px] text-[#98A8BD]">Store your Coins and lock funds up to 7 days</p>
               </div>
               <button
                 type="button"
@@ -827,7 +827,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                 <span className="text-[24px] leading-none">x</span>
               </button>
             </div>
-            <div className="space-y-6 p-6">
+            <div className="space-y-4 p-5">
               {vaultLoading ? (
                 <div className="rounded-[18px] border border-[#1e2937] bg-[#111111] px-4 py-6 text-center text-sm text-[#9ab2c8]">
                   Loading vault...
@@ -837,59 +837,74 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="inline-flex h-4 w-4 rounded border border-emerald-400/50 bg-emerald-500/20" />
+                        <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                            <path d="M3.5 8.5h17v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+                            <path d="M8 8.5V7a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5" />
+                          </svg>
+                        </span>
                         <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Vault Total</p>
                       </div>
                       <div className="flex items-end gap-1">
-                        <span className="text-[42px] font-bold leading-none text-white">
+                        <span className="text-[24px] font-bold leading-none text-white">
                           {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={24} />
+                        <CoinIcon size={18} />
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="inline-flex h-4 w-4 rounded-full border border-emerald-400/50 bg-emerald-500/20" />
+                        <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                            <circle cx="12" cy="12" r="8.5" />
+                            <path d="m8.5 12 2.3 2.3 4.7-4.7" />
+                          </svg>
+                        </span>
                         <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Available</p>
                       </div>
                       <div className="flex items-end gap-1">
-                        <span className="text-[42px] font-bold leading-none text-[#2DE39D]">
+                        <span className="text-[24px] font-bold leading-none text-[#2DE39D]">
                           {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={24} />
+                        <CoinIcon size={18} />
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="inline-flex h-4 w-4 rounded border border-orange-400/50 bg-orange-500/20" />
+                        <span className="inline-flex h-4 w-4 items-center justify-center text-orange-400">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                            <rect x="5.5" y="10" width="13" height="9" rx="1.8" />
+                            <path d="M8.5 10V7.8a3.5 3.5 0 0 1 7 0V10" />
+                          </svg>
+                        </span>
                         <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Locked</p>
                       </div>
                       <div className="flex items-end gap-1">
-                        <span className="text-[42px] font-bold leading-none text-[#FFC27A]">
+                        <span className="text-[24px] font-bold leading-none text-[#FFC27A]">
                           {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={24} />
+                        <CoinIcon size={18} />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[26px] font-medium text-[#d6dce5]">Amount</label>
+                    <label className="mb-2 block text-[16px] font-medium text-[#d6dce5]">Amount</label>
                     <div className="relative">
                       <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                        <CoinIcon size={22} />
+                        <CoinIcon size={20} />
                       </div>
                       <input
                         value={vaultAmountCoins}
                         onChange={(event) => setVaultAmountCoins(event.target.value)}
                         placeholder="0.00"
                         inputMode="decimal"
-                        className="h-[56px] w-full rounded-[16px] border border-[#1e2937] bg-[#111111] pl-11 pr-20 text-[39px] font-semibold leading-none text-white outline-none focus:border-red-500"
+                        className="h-[54px] w-full rounded-[16px] border border-[#1e2937] bg-[#111111] pl-11 pr-20 text-[42px] font-semibold leading-none text-white outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => setVaultAmountCoins(maxVaultInputCoins > 0 ? maxVaultInputCoins.toFixed(2) : "0.00")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[#1e2937] px-4 py-1.5 text-[20px] font-bold text-red-400 transition-colors hover:bg-red-600 hover:text-white"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[#1e2937] px-4 py-1.5 text-[13px] font-bold text-red-400 transition-colors hover:bg-red-600 hover:text-white"
                       >
                         MAX
                       </button>
@@ -897,7 +912,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[26px] font-medium text-[#d6dce5]">Lock duration</label>
+                    <label className="mb-2 block text-[16px] font-medium text-[#d6dce5]">Lock duration</label>
                     <div className="flex flex-wrap gap-2">
                       {VAULT_LOCK_OPTIONS.map((option) => {
                         const selected = option.value === vaultLockDuration;
@@ -906,7 +921,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                             key={option.value}
                             type="button"
                             onClick={() => setVaultLockDuration(option.value)}
-                            className={`rounded-[999px] border px-4 py-1.5 text-[16px] font-medium transition-all ${
+                            className={`rounded-[999px] border px-4 py-1.5 text-[13px] font-medium transition-all ${
                               selected
                                 ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_0_3px_rgba(16,185,129,0.2)]"
                                 : "border-[#1e2937] text-[#d0d8e4] hover:border-gray-400"
@@ -924,32 +939,38 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       type="button"
                       onClick={() => void handleVaultDeposit()}
                       disabled={vaultActionLoading}
-                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-[14px] text-[24px] font-bold text-white shadow-lg shadow-red-900/45 transition-all hover:brightness-105 disabled:opacity-60"
+                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-[12px] text-[18px] font-bold text-white shadow-lg shadow-red-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      <span>v</span>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 5v13" />
+                        <path d="m7.5 13.5 4.5 4.5 4.5-4.5" />
+                      </svg>
                       <span>{vaultActionLoading ? "Processing..." : "Deposit to Vault"}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleVaultWithdraw()}
                       disabled={vaultActionLoading || availableVaultCoins <= 0}
-                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#10b981] to-[#059669] py-[14px] text-[24px] font-bold text-white shadow-lg shadow-emerald-900/45 transition-all hover:brightness-105 disabled:opacity-60"
+                      className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#10b981] to-[#059669] py-[12px] text-[18px] font-bold text-white shadow-lg shadow-emerald-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      <span>^</span>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 19V6" />
+                        <path d="m16.5 10.5-4.5-4.5-4.5 4.5" />
+                      </svg>
                       <span>Withdraw</span>
                     </button>
                   </div>
 
                   <div className="border-t border-[#1e2937] pt-4">
                     <div className="mb-3 flex items-center justify-between">
-                      <p className="m-0 text-[22px] font-semibold uppercase text-[#96a3b4]">Active Locks</p>
-                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[16px] font-medium text-emerald-400">
+                      <p className="m-0 text-[18px] font-semibold uppercase text-[#96a3b4]">Active Locks</p>
+                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[13px] font-medium text-emerald-400">
                         {activeVaultLocks.length} active
                       </span>
                     </div>
                     {!activeVaultLocks.length ? (
                       <div className="rounded-[16px] border border-[#1e2937] bg-[#111111] p-4 text-center">
-                        <p className="m-0 text-[20px] text-[#5f7086]">No active locks right now.</p>
+                        <p className="m-0 text-[14px] text-[#5f7086]">No active locks right now.</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
