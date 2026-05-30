@@ -845,7 +845,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                         </span>
                         <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Vault Total</p>
                       </div>
-                      <div className="flex items-center justify-start gap-2 pl-10">
+                      <div className="flex items-center justify-start gap-2 pl-4">
                         <CoinIcon size={17} />
                         <span className="inline-flex items-center text-[22px] font-bold leading-none text-white">
                           {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
@@ -862,7 +862,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                         </span>
                         <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Available</p>
                       </div>
-                      <div className="flex items-center justify-start gap-2 pl-10">
+                      <div className="flex items-center justify-start gap-2 pl-4">
                         <CoinIcon size={17} />
                         <span className="inline-flex items-center text-[22px] font-bold leading-none text-[#2DE39D]">
                           {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
@@ -879,7 +879,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                         </span>
                         <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Locked</p>
                       </div>
-                      <div className="flex items-center justify-start gap-2 pl-10">
+                      <div className="flex items-center justify-start gap-2 pl-4">
                         <CoinIcon size={17} />
                         <span className="inline-flex items-center text-[22px] font-bold leading-none text-[#FFC27A]">
                           {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
