@@ -88,7 +88,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const [vaultLoading, setVaultLoading] = useState(false);
   const [vaultActionLoading, setVaultActionLoading] = useState(false);
-  const [vaultAmountCoins, setVaultAmountCoins] = useState("10");
+  const [vaultAmountCoins, setVaultAmountCoins] = useState("0");
   const [vaultLockDuration, setVaultLockDuration] = useState<VaultLockOption>("NONE");
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [tickerEvents, setTickerEvents] = useState<LiveWinTickerItem[]>([]);
@@ -817,7 +817,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
             <div className="flex items-center justify-between border-b border-[#1e2937] px-6 pb-3 pt-4">
               <div>
                 <h2 className="m-0 text-[20px] font-bold leading-none text-white">Vault</h2>
-                <p className="m-0 mt-1 text-[11px] text-[#98A8BD]">Store your Coins and lock funds up to 7 days</p>
+                <p className="m-0 mt-1 text-[13px] text-[#98A8BD]">Store your Coins and lock funds up to 7 days</p>
               </div>
               <button
                 type="button"
@@ -838,52 +838,52 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
-                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <path d="M3.5 8.5h17v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
                             <path d="M8 8.5V7a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5" />
                           </svg>
                         </span>
-                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Vault Total</p>
+                        <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Vault Total</p>
                       </div>
-                      <div className="flex items-end gap-1">
-                        <span className="text-[24px] font-bold leading-none text-white">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <CoinIcon size={20} />
+                        <span className="text-[37px] font-bold leading-none text-white">
                           {vaultState ? atomicToCoinsString(vaultState.balanceAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={18} />
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-emerald-400">
-                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <circle cx="12" cy="12" r="8.5" />
                             <path d="m8.5 12 2.3 2.3 4.7-4.7" />
                           </svg>
                         </span>
-                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Available</p>
+                        <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Available</p>
                       </div>
-                      <div className="flex items-end gap-1">
-                        <span className="text-[24px] font-bold leading-none text-[#2DE39D]">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <CoinIcon size={20} />
+                        <span className="text-[37px] font-bold leading-none text-[#2DE39D]">
                           {vaultState ? atomicToCoinsString(vaultState.availableAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={18} />
                       </div>
                     </div>
                     <div className="rounded-[17px] border border-[#1e2937] bg-[#111111] p-3.5">
                       <div className="mb-2 flex items-center gap-2">
                         <span className="inline-flex h-4 w-4 items-center justify-center text-orange-400">
-                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9">
                             <rect x="5.5" y="10" width="13" height="9" rx="1.8" />
                             <path d="M8.5 10V7.8a3.5 3.5 0 0 1 7 0V10" />
                           </svg>
                         </span>
-                        <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8fa1b6]">Locked</p>
+                        <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#8fa1b6]">Locked</p>
                       </div>
-                      <div className="flex items-end gap-1">
-                        <span className="text-[24px] font-bold leading-none text-[#FFC27A]">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <CoinIcon size={20} />
+                        <span className="text-[37px] font-bold leading-none text-[#FFC27A]">
                           {vaultState ? atomicToCoinsString(vaultState.lockedAtomic) : "0.00"}
                         </span>
-                        <CoinIcon size={18} />
                       </div>
                     </div>
                   </div>
@@ -899,7 +899,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                         onChange={(event) => setVaultAmountCoins(event.target.value)}
                         placeholder="0.00"
                         inputMode="decimal"
-                        className="h-[54px] w-full rounded-[16px] border border-[#1e2937] bg-[#111111] pl-11 pr-20 text-[42px] font-semibold leading-none text-white outline-none focus:border-red-500"
+                        className="h-[54px] w-full rounded-[16px] border border-[#1e2937] bg-[#111111] pl-11 pr-20 text-[23px] font-semibold leading-none text-white outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
@@ -941,11 +941,11 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       disabled={vaultActionLoading}
                       className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#ef4444] to-[#dc2626] py-[12px] text-[18px] font-bold text-white shadow-lg shadow-red-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2">
                         <path d="M12 5v13" />
                         <path d="m7.5 13.5 4.5 4.5 4.5-4.5" />
                       </svg>
-                      <span>{vaultActionLoading ? "Processing..." : "Deposit to Vault"}</span>
+                      <span>{vaultActionLoading ? "Processing..." : "Deposit"}</span>
                     </button>
                     <button
                       type="button"
@@ -953,7 +953,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                       disabled={vaultActionLoading || availableVaultCoins <= 0}
                       className="flex items-center justify-center gap-2 rounded-[17px] bg-gradient-to-b from-[#10b981] to-[#059669] py-[12px] text-[18px] font-bold text-white shadow-lg shadow-emerald-900/45 transition-all hover:brightness-105 disabled:opacity-60"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2">
                         <path d="M12 19V6" />
                         <path d="m16.5 10.5-4.5-4.5-4.5 4.5" />
                       </svg>
