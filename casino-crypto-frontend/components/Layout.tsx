@@ -67,10 +67,10 @@ type VaultLockOption = "NONE" | VaultLockDuration;
 
 const VAULT_LOCK_OPTIONS: Array<{ value: VaultLockOption; label: string }> = [
   { value: "NONE", label: "No lock" },
-  { value: "1H", label: "1h" },
-  { value: "1D", label: "1 day" },
-  { value: "3D", label: "3 days" },
-  { value: "7D", label: "7 days" }
+  { value: "1H", label: "1 Hour" },
+  { value: "1D", label: "1 Day" },
+  { value: "3D", label: "3 Days" },
+  { value: "7D", label: "7 Days" }
 ];
 
 interface Props {
