@@ -26,12 +26,12 @@ const fmtCoins = (atomic: string): string =>
 
 type RarityTier = "COVERT" | "CLASSIFIED" | "RESTRICTED" | "MIL_SPEC" | "INDUSTRIAL";
 
-const rarityMeta: Record<RarityTier, { label: string; color: string }> = {
-  COVERT: { label: "Covert", color: "#ef4444" },
-  CLASSIFIED: { label: "Classified", color: "#ec4899" },
-  RESTRICTED: { label: "Restricted", color: "#a855f7" },
-  MIL_SPEC: { label: "Mil-Spec", color: "#3b82f6" },
-  INDUSTRIAL: { label: "Industrial", color: "#e5e7eb" }
+const rarityMeta: Record<RarityTier, { color: string }> = {
+  COVERT: { color: "#ef4444" },
+  CLASSIFIED: { color: "#ec4899" },
+  RESTRICTED: { color: "#a855f7" },
+  MIL_SPEC: { color: "#3b82f6" },
+  INDUSTRIAL: { color: "#e5e7eb" }
 };
 
 const inferRarityTier = (item: CaseItem): RarityTier => {
@@ -273,9 +273,17 @@ export default function CaseDetailPage() {
             type="button"
             onClick={() => void openCaseNow()}
             disabled={opening || caseDetails.source === "admin-local"}
-            className="mt-4 w-full rounded-[8px] border border-[#b78324] bg-gradient-to-b from-[#c49331] to-[#8b641d] px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-[8px] border border-[#16a34a] bg-gradient-to-b from-[#22c55e] to-[#15803d] px-3 py-2 text-sm font-bold text-white shadow-[0_0_16px_rgba(34,197,94,0.35)] disabled:opacity-50"
           >
-            {opening ? "Opening..." : `Open for ${fmtCoins(caseDetails.priceAtomic)}`}
+            {opening ? (
+              "Opening..."
+            ) : (
+              <>
+                <span>OPEN FOR</span>
+                <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
+                <span>{fmtCoins(caseDetails.priceAtomic)}</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -293,7 +301,7 @@ export default function CaseDetailPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-bold uppercase text-[#bfd0e4]">Case Contain</h2>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
           {orderedItems.map((item) => {
             const rarity = inferRarityTier(item);
             const meta = rarityMeta[rarity];
@@ -302,32 +310,29 @@ export default function CaseDetailPage() {
             return (
               <div
                 key={item.id}
-                className="relative overflow-hidden rounded-[10px] border border-[#1e344d] bg-[#0a1726] p-2"
-                style={{
-                  boxShadow: `inset 0 -80px 90px -80px ${meta.color}66`
-                }}
+                className="relative overflow-hidden rounded-[10px] border border-[#323a46] bg-[#171d28] p-1.5"
               >
-                <div
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[54px]"
-                  style={{ background: `linear-gradient(180deg, transparent 0%, ${meta.color}22 100%)` }}
-                />
                 <div className="relative">
-                  <div className="mb-1 flex items-center justify-between text-[10px] text-[#a8bcd3]">
-                    <span className="font-semibold">{meta.label}</span>
-                    <span>{dropLabel}</span>
+                  <div className="mb-1 flex items-center justify-start text-[10px] text-[#b8c3d3]">
+                    <span className="rounded bg-[#263245]/80 px-1.5 py-[1px] font-semibold">{dropLabel}</span>
                   </div>
-                  <div className="mb-2 flex h-[74px] items-center justify-center">
+                  <div
+                    className="mb-2 flex h-[98px] items-center justify-center rounded-[8px]"
+                    style={{
+                      background: `radial-gradient(circle at 50% 46%, ${meta.color}40 0%, ${meta.color}14 36%, rgba(110,118,129,0.18) 65%, rgba(30,36,46,0.85) 100%)`
+                    }}
+                  >
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt={item.name} className="h-[68px] w-[68px] object-contain" />
+                      <img src={item.imageUrl} alt={item.name} className="h-[86px] w-[86px] object-contain" />
                     ) : (
                       <span className="text-xs text-[#617a96]">No image</span>
                     )}
                   </div>
                   <p className="line-clamp-2 text-[12px] font-semibold text-white">{item.name}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[#f5c14f]">
-                    <img src="/assets/coin-dino-original.png" alt="" className="h-[15px] w-[15px] object-contain" />
-                    <span className="text-[12px] font-semibold">{fmtCoins(item.valueAtomic)}</span>
+                  <div className="mt-1 flex items-center gap-1.5 text-[#f5c14f]">
+                    <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
+                    <span className="text-[14px] font-semibold">{fmtCoins(item.valueAtomic)}</span>
                   </div>
                 </div>
               </div>
