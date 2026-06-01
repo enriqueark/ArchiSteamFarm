@@ -104,7 +104,9 @@ const normalizeTagSet = (tags: CaseCategoryTag[] | string[] | undefined): CaseCa
       next.add(upper);
     }
   }
-  next.add("ALL");
+  if (next.size === 0) {
+    next.add("ALL");
+  }
   return Array.from(next);
 };
 

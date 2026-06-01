@@ -51,6 +51,12 @@ const SORT_OPTIONS = [
 ] as const;
 
 const tierOrder = ["L", "M", "H", "I"] as const;
+const tierColor: Record<(typeof tierOrder)[number], string> = {
+  L: "#22c55e",
+  M: "#eab308",
+  H: "#f97316",
+  I: "#ef4444"
+};
 
 const isInPriceRange = (atomic: string, rangeKey: string): boolean => {
   const selected = PRICE_RANGE_OPTIONS.find((option) => option.key === rangeKey) || PRICE_RANGE_OPTIONS[0];
@@ -59,6 +65,34 @@ const isInPriceRange = (atomic: string, rangeKey: string): boolean => {
   if (selected.max !== null && price > selected.max) return false;
   return true;
 };
+
+function VolatilityBar({ tier }: { tier: "L" | "M" | "H" | "I" }) {
+  return (
+    <div className="mt-2">
+      <div className="mb-1 grid grid-cols-4 text-center text-[10px] font-semibold text-[#9cb0c7]">
+        {tierOrder.map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        {tierOrder.map((label) => {
+          const active = label === tier;
+          return (
+            <span
+              key={label}
+              className="h-[3px] rounded-full transition-all"
+              style={{
+                backgroundColor: tierColor[label],
+                opacity: active ? 1 : 0.35,
+                boxShadow: active ? `0 0 8px ${tierColor[label]}` : "none"
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
@@ -336,39 +370,27 @@ export default function CasesPage() {
                 key={c.id}
                 type="button"
                 onClick={() => setSelectedCaseId(c.id)}
-                className={`group rounded-[12px] border bg-[#0a1726] p-3 text-left transition-all ${
+                className={`group overflow-hidden rounded-[12px] border bg-[#0a1726] text-left transition-all ${
                   selected
                     ? "border-[#3b6fa5] shadow-[0_0_0_1px_rgba(59,111,165,0.4)]"
                     : "border-[#1c324b] hover:border-[#2e4f73]"
                 }`}
               >
-                <div className="relative mb-2 flex h-[92px] items-center justify-center rounded-[8px] border border-[#1a2e46] bg-[#0d2135]">
+                <div className="relative flex h-[116px] items-center justify-center bg-gradient-to-b from-[#0f2740] to-[#0a1726]">
                   {c.logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.logoUrl} alt={c.title} className="h-[78px] w-[78px] object-contain" />
+                    <img src={c.logoUrl} alt={c.title} className="h-[96px] w-[96px] object-contain" />
                   ) : (
                     <span className="text-xs text-[#5f7997]">No image</span>
                   )}
                 </div>
-                <p className="truncate text-[12px] font-semibold text-white">{c.title}</p>
-                <div className="mt-1 flex items-center gap-1.5 text-[#f5c14f]">
-                  <img src="/assets/coin-dino-original.png" alt="" className="h-[16px] w-[16px] object-contain" />
-                  <span className="text-[13px] font-bold leading-none">{fmtCoins(c.priceAtomic)}</span>
-                </div>
-                <div className="mt-2 grid grid-cols-4 rounded-[6px] border border-[#1a2e46] bg-[#081321]">
-                  {tierOrder.map((tier) => {
-                    const active = c.volatilityTier === tier;
-                    return (
-                      <span
-                        key={tier}
-                        className={`py-0.5 text-center text-[10px] font-semibold ${
-                          active ? "bg-[#17324e] text-white" : "text-[#6f8aa7]"
-                        }`}
-                      >
-                        {tier}
-                      </span>
-                    );
-                  })}
+                <div className="px-3 pb-3 pt-2">
+                  <p className="truncate text-center text-[12px] font-semibold text-white">{c.title}</p>
+                  <div className="mt-1 flex items-center justify-center gap-1.5 text-[#f5c14f]">
+                    <img src="/assets/coin-dino-original.png" alt="" className="h-[20px] w-[20px] object-contain" />
+                    <span className="text-[13px] font-bold leading-none">{fmtCoins(c.priceAtomic)}</span>
+                  </div>
+                  <VolatilityBar tier={c.volatilityTier} />
                 </div>
               </button>
             );

@@ -62,6 +62,25 @@ const toCoins = (atomic: string): string => {
   return (value / 1e8).toFixed(2);
 };
 
+const tagLabel: Record<CaseCategoryTag, string> = {
+  ALL: "All",
+  ORIGINALS: "Originals",
+  CS2: "CS2",
+  KNIVES: "Knives",
+  GLOVES: "Gloves",
+  "1%": "1%",
+  "5%": "5%",
+  "10%": "10%",
+  CREATOR: "Creator"
+};
+
+const volColorByTier: Record<"L" | "M" | "H" | "I", string> = {
+  L: "#22c55e",
+  M: "#eab308",
+  H: "#f97316",
+  I: "#ef4444"
+};
+
 export default function AdminCasesPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -215,6 +234,7 @@ export default function AdminCasesPage() {
                     {toCoins(row.priceAtomic)} COINS • VOL {row.volatilityTier} ({row.volatilityIndex}) •{" "}
                     {row.isActive ? "Visible" : "Hidden"}
                   </p>
+                  <p className="text-[11px] text-[#7f95ae]">Tags: {row.tags.map((tag) => tagLabel[tag]).join(", ")}</p>
                 </div>
                 <button
                   type="button"
@@ -265,7 +285,9 @@ export default function AdminCasesPage() {
               className="w-full rounded-[8px] border border-[#24405e] bg-[#081321] px-3 py-2 text-sm text-white outline-none"
             />
 
-            <div className="flex flex-wrap gap-2">
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase text-[#9fb4cb]">Category tags</p>
+              <div className="grid grid-cols-3 gap-2">
               {CASE_CATEGORY_TAGS.map((tag) => {
                 const active = form.tags.includes(tag);
                 return (
@@ -276,22 +298,24 @@ export default function AdminCasesPage() {
                       setForm((prev) => {
                         const has = prev.tags.includes(tag);
                         const next = has ? prev.tags.filter((item) => item !== tag) : [...prev.tags, tag];
-                        if (!next.includes("ALL")) {
-                          next.push("ALL");
-                        }
+                        if (next.length === 0) next.push("ALL");
                         return { ...prev, tags: next as CaseCategoryTag[] };
                       });
                     }}
-                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                    className={`rounded-[8px] border px-2 py-1.5 text-[11px] font-semibold ${
                       active
                         ? "border-[#f5c14f] bg-[#f5c14f]/10 text-[#ffd56f]"
-                        : "border-[#22405f] text-[#9cb1c9]"
+                        : "border-[#22405f] bg-[#0b1b2c] text-[#9cb1c9]"
                     }`}
                   >
-                    {tag}
+                    {tagLabel[tag]}
                   </button>
                 );
               })}
+              </div>
+              <p className="mt-1 text-[11px] text-[#7f95ae]">
+                Selected: {form.tags.map((tag) => tagLabel[tag]).join(", ")}
+              </p>
             </div>
 
             <label className="flex items-center gap-2 text-sm text-[#c4d4e5]">
@@ -307,6 +331,22 @@ export default function AdminCasesPage() {
               <p className="text-xs font-semibold uppercase text-[#a4b8ce]">
                 Volatility preview: {volatilityPreview.volatilityTier} ({volatilityPreview.volatilityIndex})
               </p>
+              <div className="mt-2 grid grid-cols-4 gap-1">
+                {(["L", "M", "H", "I"] as const).map((tier) => {
+                  const active = tier === volatilityPreview.volatilityTier;
+                  return (
+                    <span
+                      key={tier}
+                      className="h-[4px] rounded-full"
+                      style={{
+                        backgroundColor: volColorByTier[tier],
+                        opacity: active ? 1 : 0.3,
+                        boxShadow: active ? `0 0 8px ${volColorByTier[tier]}` : "none"
+                      }}
+                    />
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-2">
