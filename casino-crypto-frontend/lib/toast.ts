@@ -73,11 +73,13 @@ export function showErrorToast(input: AppToastInput): void {
   });
 }
 
+const TOAST_API = Object.freeze({
+  showSuccess: showSuccessToast,
+  showError: showErrorToast
+});
+
 export function useToast() {
-  return {
-    showSuccess: showSuccessToast,
-    showError: showErrorToast
-  };
+  return TOAST_API;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
