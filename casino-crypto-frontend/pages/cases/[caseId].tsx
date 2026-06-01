@@ -222,14 +222,14 @@ export default function CaseDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link href="/cases" className="inline-flex items-center gap-2 rounded-[8px] border border-[#2a3f59] bg-[#0a1829] px-3 py-2 text-sm font-semibold text-[#c4d4e6]">
+      <Link href="/cases" className="inline-flex items-center gap-2 rounded-[8px] border border-[#3b3d44] bg-[#1a1c22] px-3 py-2 text-sm font-semibold text-[#ff4d6d]">
         <span>{"<"}</span>
         <span>Back</span>
       </Link>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <div className="rounded-[12px] border border-[#1f3450] bg-[#0b1728] p-4">
-          <div className="flex h-[112px] items-center justify-center rounded-[10px] bg-[#0e2135]">
+        <div className="rounded-[12px] border border-[#2d3139] bg-[#13161c] p-4">
+          <div className="flex h-[112px] items-center justify-center rounded-[10px] bg-[#1b1f27]">
             {caseDetails.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={caseDetails.logoUrl} alt={caseDetails.title} className="h-[86px] w-[86px] object-contain" />
@@ -241,8 +241,8 @@ export default function CaseDetailPage() {
           <h1 className="mt-3 text-center text-[17px] font-bold text-white">{caseDetails.title}</h1>
 
           <div className="mt-1 flex items-center justify-center gap-1.5 text-[#f5c14f]">
-            <img src="/assets/coin-dino-original.png" alt="" className="h-[22px] w-[22px] object-contain" />
-            <span className="text-[16px] font-bold">{fmtCoins(caseDetails.priceAtomic)}</span>
+            <img src="/assets/coin-dino-original.png" alt="" className="h-[30px] w-[30px] object-contain" />
+            <span className="text-[20px] font-bold leading-none">{fmtCoins(caseDetails.priceAtomic)}</span>
           </div>
 
           <div className="mt-3">
@@ -280,15 +280,15 @@ export default function CaseDetailPage() {
             ) : (
               <>
                 <span>OPEN FOR</span>
-                <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
+                <img src="/assets/coin-dino-original.png" alt="" className="h-[24px] w-[24px] object-contain" />
                 <span>{fmtCoins(caseDetails.priceAtomic)}</span>
               </>
             )}
           </button>
         </div>
 
-        <div className="rounded-[12px] border border-[#1f3450] bg-[#060f1d]">
-          <div className="flex h-[100%] min-h-[250px] items-center justify-center rounded-[12px] bg-gradient-to-b from-[#081426] to-[#050d18]">
+        <div className="rounded-[12px] border border-[#2d3139] bg-[#12161d]">
+          <div className="flex h-[100%] min-h-[250px] items-center justify-center rounded-[12px] bg-gradient-to-b from-[#1a1f27] to-[#0f1218]">
             {lastOpening?.item?.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={lastOpening.item.imageUrl} alt={lastOpening.item.name} className="h-[120px] w-[120px] object-contain" />
@@ -301,7 +301,7 @@ export default function CaseDetailPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-bold uppercase text-[#bfd0e4]">Case Contain</h2>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-9">
           {orderedItems.map((item) => {
             const rarity = inferRarityTier(item);
             const meta = rarityMeta[rarity];
@@ -310,29 +310,30 @@ export default function CaseDetailPage() {
             return (
               <div
                 key={item.id}
-                className="relative overflow-hidden rounded-[10px] border border-[#323a46] bg-[#171d28] p-1.5"
+                className="relative overflow-hidden rounded-[10px] border border-[#353a43] bg-[#1a1f27] p-1.5"
               >
                 <div className="relative">
-                  <div className="mb-1 flex items-center justify-start text-[10px] text-[#b8c3d3]">
-                    <span className="rounded bg-[#263245]/80 px-1.5 py-[1px] font-semibold">{dropLabel}</span>
+                  <div className="mb-1 flex items-center justify-start text-[10px] font-semibold text-[#b8c3d3]">
+                    <span>{dropLabel}</span>
                   </div>
-                  <div
-                    className="mb-2 flex h-[98px] items-center justify-center rounded-[8px]"
-                    style={{
-                      background: `radial-gradient(circle at 50% 46%, ${meta.color}40 0%, ${meta.color}14 36%, rgba(110,118,129,0.18) 65%, rgba(30,36,46,0.85) 100%)`
-                    }}
-                  >
+                  <div className="mb-2 relative flex h-[110px] items-center justify-center">
+                    <div
+                      className="pointer-events-none absolute inset-0"
+                      style={{
+                        background: `radial-gradient(circle at 50% 48%, ${meta.color}4f 0%, ${meta.color}22 40%, rgba(34,37,45,0.1) 74%, rgba(26,31,39,0.0) 100%)`
+                      }}
+                    />
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt={item.name} className="h-[86px] w-[86px] object-contain" />
+                      <img src={item.imageUrl} alt={item.name} className="relative z-[1] h-[102px] w-[102px] object-contain" />
                     ) : (
                       <span className="text-xs text-[#617a96]">No image</span>
                     )}
                   </div>
                   <p className="line-clamp-2 text-[12px] font-semibold text-white">{item.name}</p>
                   <div className="mt-1 flex items-center gap-1.5 text-[#f5c14f]">
-                    <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
-                    <span className="text-[14px] font-semibold">{fmtCoins(item.valueAtomic)}</span>
+                    <img src="/assets/coin-dino-original.png" alt="" className="h-[22px] w-[22px] object-contain" />
+                    <span className="text-[16px] font-semibold leading-none">{fmtCoins(item.valueAtomic)}</span>
                   </div>
                 </div>
               </div>
