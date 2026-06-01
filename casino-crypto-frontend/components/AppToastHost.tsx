@@ -277,6 +277,9 @@ export default function AppToastHost() {
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
+      if (reason && typeof reason === "object" && "__appToastShown" in reason) {
+        return;
+      }
       const message =
         reason instanceof Error
           ? reason.message

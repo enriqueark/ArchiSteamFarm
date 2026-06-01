@@ -19,6 +19,7 @@ function getApi(): string {
 
 let accessToken: string | null = null;
 let lastApiErrorToast: { message: string; at: number } | null = null;
+let auth401Burst: { count: number; lastAt: number } = { count: 0, lastAt: 0 };
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -53,11 +54,15 @@ export async function validateSession(): Promise<boolean> {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) return true;
-    clearSession();
-    return false;
+    if (res.status === 401 || res.status === 403) {
+      clearSession();
+      return false;
+    }
+    // Preserve current session for transient backend errors (5xx, timeouts behind proxies, etc).
+    return true;
   } catch {
-    clearSession();
-    return false;
+    // Network/transient failures should not force a logout.
+    return true;
   }
 }
 
@@ -144,21 +149,39 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    if (res.status === 401 && needsAuth) {
-      clearSession();
-    }
+    const isUnauthorized = res.status === 401 && needsAuth;
     const body = await res.json().catch(() => ({}));
     const message = body.message || body.error || `HTTP ${res.status}`;
+
+    if (isUnauthorized) {
+      const now = Date.now();
+      if (now - auth401Burst.lastAt > 30_000) {
+        auth401Burst = { count: 0, lastAt: now };
+      }
+      auth401Burst.count += 1;
+      auth401Burst.lastAt = now;
+      // Avoid kicking users out on a single transient 401 during heavy activity.
+      if (auth401Burst.count >= 4) {
+        clearSession();
+        auth401Burst = { count: 0, lastAt: now };
+      }
+    }
+
     const now = Date.now();
+    const isGenericInternalError = message.toLowerCase() === "an internal error occurred";
+    const dedupeWindowMs = isGenericInternalError ? 15_000 : 3_500;
     const shouldEmitToast =
       !lastApiErrorToast ||
       lastApiErrorToast.message !== message ||
-      now - lastApiErrorToast.at > 3_500;
+      now - lastApiErrorToast.at > dedupeWindowMs;
     if (shouldEmitToast) {
       lastApiErrorToast = { message, at: now };
       emitAppToast({ variant: "error", description: message });
     }
-    throw new Error(message);
+    const error = new Error(message) as Error & { __appToastShown?: boolean; statusCode?: number };
+    error.__appToastShown = shouldEmitToast;
+    error.statusCode = res.status;
+    throw error;
   }
 
   if (res.status === 204) return {} as T;
