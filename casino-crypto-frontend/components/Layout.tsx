@@ -657,6 +657,19 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
                   <button
                     type="button"
+                    onClick={() => { setProfileMenuOpen(false); void router.push("/admin-cases"); }}
+                    className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="#ff4d6d" strokeWidth="2"/>
+                      <path d="M9 12h6M9 16h4M9 8h6" stroke="#ff4d6d" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <span className="transition-colors group-hover:text-[#ff4d6d]" style={{ fontSize: 15, fontWeight: 500 }}>Admin Cases</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
                     className="group flex w-full items-center gap-3 px-[18px] py-3 text-left transition-all duration-150 hover:bg-[#1f1f1f]"
                     style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff", fontSize: 15, fontWeight: 500, fontFamily: "Inter, system-ui, sans-serif" }}
