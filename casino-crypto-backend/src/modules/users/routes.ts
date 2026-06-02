@@ -318,6 +318,7 @@ const getWinsTickerFeed = async (limit: number): Promise<WinsTickerItem[]> => {
       take: perModeLimit,
       select: {
         id: true,
+        caseId: true,
         priceAtomic: true,
         payoutAtomic: true,
         createdAt: true,
@@ -409,7 +410,7 @@ const getWinsTickerFeed = async (limit: number): Promise<WinsTickerItem[]> => {
       id: `CASES:${row.id}`,
       mode: "CASES",
       modeLabel: "Cases",
-      route: "/cases",
+      route: `/cases/${row.caseId}`,
       occurredAt: row.createdAt.toISOString(),
       user: {
         publicId: row.user.publicId ?? null,
