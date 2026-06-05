@@ -266,6 +266,9 @@ export default function RoulettePage() {
   useEffect(() => {
     spinTranslateRef.current = spinTranslate;
   }, [spinTranslate]);
+  useEffect(() => {
+    availableCoinsRef.current = availableCoins;
+  }, [availableCoins]);
 
   const clearRaf = useCallback(() => {
     if (rafRef.current !== null) {
@@ -575,9 +578,13 @@ export default function RoulettePage() {
       toast.showError("You can't bet more than 5000 COINS.");
       return;
     }
-    if (availableCoins !== null && currentAmount > maxBetByBalance) {
-      toast.showError("Not enough available COINS.");
-      return;
+    if (currentAmount > maxBetByBalance) {
+      await loadWalletBalance();
+      const refreshedMax = Math.min(MAX_BET_COINS, Math.max(0, availableCoinsRef.current ?? 0));
+      if (currentAmount > refreshedMax) {
+        toast.showError("Not enough available COINS.");
+        return;
+      }
     }
 
     setPlacing(true);
@@ -673,7 +680,7 @@ export default function RoulettePage() {
           </div>
         </div>
 
-        <div ref={laneRef} className="relative overflow-hidden rounded-xl border border-[#30343c] bg-[#15171b] px-2 py-4">
+        <div ref={laneRef} className="relative overflow-hidden rounded-xl border border-[#30343c] bg-[#15171b] py-4">
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
           <div className="relative h-[68px]">
