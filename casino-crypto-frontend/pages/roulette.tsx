@@ -506,6 +506,7 @@ export default function RoulettePage() {
   }, [playAmountInput]);
 
   const maxBetByBalance = Math.min(MAX_BET_COINS, Math.max(0, availableCoins ?? 0));
+  const canBetNow = !!round && round.status === "OPEN" && !isVisualSpinning && !placing;
 
   const nextSpinSeconds = useMemo(() => {
     if (!round) return 0;
@@ -546,6 +547,12 @@ export default function RoulettePage() {
     if (visibleSlots.length === 0) {
       return 0;
     }
+    const containing = visibleSlots.find(
+      (slot) => pointerPx >= slot.left && pointerPx <= slot.left + SLOT_SIZE
+    );
+    if (containing) {
+      return containing.globalIndex;
+    }
     let bestIndex = visibleSlots[0].globalIndex;
     let bestDistance = Number.POSITIVE_INFINITY;
     for (const slot of visibleSlots) {
@@ -566,8 +573,7 @@ export default function RoulettePage() {
 
   const placeBet = async (color: BetColor) => {
     setSelectedColor(color);
-    if (!round || round.status !== "OPEN" || isVisualSpinning) {
-      toast.showError("Betting is currently closed.");
+    if (!canBetNow) {
       return;
     }
     if (!Number.isFinite(currentAmount) || currentAmount < MIN_BET_COINS) {
@@ -578,15 +584,6 @@ export default function RoulettePage() {
       toast.showError("You can't bet more than 5000 COINS.");
       return;
     }
-    if (currentAmount > maxBetByBalance) {
-      await loadWalletBalance();
-      const refreshedMax = Math.min(MAX_BET_COINS, Math.max(0, availableCoinsRef.current ?? 0));
-      if (currentAmount > refreshedMax) {
-        toast.showError("Not enough available COINS.");
-        return;
-      }
-    }
-
     setPlacing(true);
     try {
       const response = await placeRouletteBet(CURRENCY, color, coinsToAtomicString(currentAmount));
@@ -613,9 +610,7 @@ export default function RoulettePage() {
   const displayedPanels = flashPanels ?? livePanels;
 
   const applyMaxBet = async () => {
-    if (availableCoinsRef.current === null) {
-      await loadWalletBalance();
-    }
+    await loadWalletBalance();
     const capped = Math.min(MAX_BET_COINS, Math.max(0, availableCoinsRef.current ?? 0));
     setPlayAmountInput(formatCoinsInput(capped));
   };
@@ -798,7 +793,7 @@ export default function RoulettePage() {
               <button
                 type="button"
                 onClick={() => void placeBet(color)}
-                disabled={placing}
+                disabled={!canBetNow}
                 className={`mb-3 h-10 w-full rounded-md text-xs font-extrabold tracking-[0.1em] text-white transition-all disabled:opacity-60 ${
                   BET_THEME[color].actionClass
                 }`}
