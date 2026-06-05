@@ -55,7 +55,7 @@ const MIN_BET_COINS = 0.1;
 const MAX_BET_COINS = 5_000;
 const COIN_DECIMALS = 1e8;
 
-const SLOT_SIZE = 64;
+const SLOT_SIZE = 68;
 const SLOT_GAP = 9;
 const SLOT_STRIDE = SLOT_SIZE + SLOT_GAP;
 
@@ -244,6 +244,7 @@ export default function RoulettePage() {
   const toast = useToast();
   const laneRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const availableCoinsRef = useRef<number | null>(null);
   const previousRoundRef = useRef<{ id: string | null; status: string | null }>({ id: null, status: null });
   const handledSettledRoundRef = useRef<string | null>(null);
   const flashTimerRef = useRef<number | null>(null);
@@ -254,7 +255,7 @@ export default function RoulettePage() {
   const [selectedColor, setSelectedColor] = useState<BetColor>("RED");
   const [playAmountInput, setPlayAmountInput] = useState("1");
   const [placing, setPlacing] = useState(false);
-  const [availableCoins, setAvailableCoins] = useState(0);
+  const [availableCoins, setAvailableCoins] = useState<number | null>(null);
   const [laneWidth, setLaneWidth] = useState(960);
   const [spinTranslate, setSpinTranslate] = useState(0);
   const [isVisualSpinning, setIsVisualSpinning] = useState(false);
@@ -286,7 +287,9 @@ export default function RoulettePage() {
       const wallets = await getWallets();
       const primary = wallets.find((item) => item.currency === CURRENCY) ?? wallets[0];
       if (primary) {
-        setAvailableCoins(walletAvailableCoins(primary));
+        const next = walletAvailableCoins(primary);
+        availableCoinsRef.current = next;
+        setAvailableCoins(next);
       }
     } catch {
       // Keep last known value on transient errors.
@@ -425,7 +428,6 @@ export default function RoulettePage() {
       const end = targetGlobal * SLOT_STRIDE + SLOT_SIZE / 2 - pointerPx;
       const durationMs = 2900;
       const startedAt = performance.now();
-      const cycle = WHEEL_LENGTH * SLOT_STRIDE;
 
       const tick = (ts: number) => {
         const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
@@ -441,9 +443,8 @@ export default function RoulettePage() {
           return;
         }
 
-        const normalized = mod(end, cycle) + cycle * 20;
-        spinTranslateRef.current = normalized;
-        setSpinTranslate(normalized);
+        spinTranslateRef.current = end;
+        setSpinTranslate(end);
         setIsVisualSpinning(false);
         rafRef.current = null;
       };
@@ -501,7 +502,7 @@ export default function RoulettePage() {
     return Math.max(0, normalized);
   }, [playAmountInput]);
 
-  const maxBetByBalance = Math.min(MAX_BET_COINS, Math.max(0, availableCoins));
+  const maxBetByBalance = Math.min(MAX_BET_COINS, Math.max(0, availableCoins ?? 0));
 
   const nextSpinSeconds = useMemo(() => {
     if (!round) return 0;
@@ -526,7 +527,6 @@ export default function RoulettePage() {
   }, [isVisualSpinning, round]);
 
   const pointerPx = laneWidth * 0.5;
-  const activeGlobalIndex = Math.round((spinTranslate + pointerPx - SLOT_SIZE / 2) / SLOT_STRIDE);
   const firstGlobalIndex = Math.floor(spinTranslate / SLOT_STRIDE) - 24;
   const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + 48;
   const visibleSlots = useMemo(
@@ -539,6 +539,22 @@ export default function RoulettePage() {
       }),
     [firstGlobalIndex, renderCount, spinTranslate]
   );
+  const activeGlobalIndex = useMemo(() => {
+    if (visibleSlots.length === 0) {
+      return 0;
+    }
+    let bestIndex = visibleSlots[0].globalIndex;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const slot of visibleSlots) {
+      const centerX = slot.left + SLOT_SIZE / 2;
+      const distance = Math.abs(centerX - pointerPx);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = slot.globalIndex;
+      }
+    }
+    return bestIndex;
+  }, [pointerPx, visibleSlots]);
 
   const updateAmount = (updater: (current: number) => number) => {
     const next = Math.min(MAX_BET_COINS, Math.max(0, Math.round(updater(currentAmount) * 100) / 100));
@@ -559,7 +575,7 @@ export default function RoulettePage() {
       toast.showError("You can't bet more than 5000 COINS.");
       return;
     }
-    if (currentAmount > maxBetByBalance) {
+    if (availableCoins !== null && currentAmount > maxBetByBalance) {
       toast.showError("Not enough available COINS.");
       return;
     }
@@ -569,7 +585,9 @@ export default function RoulettePage() {
       const response = await placeRouletteBet(CURRENCY, color, coinsToAtomicString(currentAmount));
       setRound(response.round);
       if (response.wallet?.availableAtomic) {
-        setAvailableCoins(atomicToCoins(response.wallet.availableAtomic));
+        const next = atomicToCoins(response.wallet.availableAtomic);
+        availableCoinsRef.current = next;
+        setAvailableCoins(next);
       } else {
         await loadWalletBalance();
       }
@@ -586,6 +604,14 @@ export default function RoulettePage() {
   const livePanels = useMemo(() => buildPanelsFromBreakdown(breakdown, null), [breakdown]);
   const showingFlash = flashPanels !== null;
   const displayedPanels = flashPanels ?? livePanels;
+
+  const applyMaxBet = async () => {
+    if (availableCoinsRef.current === null) {
+      await loadWalletBalance();
+    }
+    const capped = Math.min(MAX_BET_COINS, Math.max(0, availableCoinsRef.current ?? 0));
+    setPlayAmountInput(formatCoinsInput(capped));
+  };
 
   const last100 = history.slice(0, 100);
   const last10 = last100.slice(0, 10);
@@ -650,7 +676,7 @@ export default function RoulettePage() {
         <div ref={laneRef} className="relative overflow-hidden rounded-xl border border-[#30343c] bg-[#15171b] px-2 py-4">
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
-          <div className="relative h-[64px]">
+          <div className="relative h-[68px]">
             {visibleSlots.map(({ globalIndex, slot, left }) => {
               const isActive = globalIndex === activeGlobalIndex;
               return (
@@ -734,7 +760,7 @@ export default function RoulettePage() {
           </button>
           <button
             type="button"
-            onClick={() => setPlayAmountInput(formatCoinsInput(maxBetByBalance))}
+            onClick={() => void applyMaxBet()}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             MAX
