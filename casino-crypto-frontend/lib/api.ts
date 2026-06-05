@@ -306,17 +306,64 @@ export async function getCurrentRound(currency = "USDT"): Promise<RouletteRound>
 export async function placeRouletteBet(
   currency: string,
   betType: string,
-  stakeAtomic: string,
-  betValue?: string
+  stakeAtomic: string
 ): Promise<RouletteBetResponse> {
   const body: Record<string, string> = { currency, betType, stakeAtomic };
-  if (betValue) body.betValue = betValue;
   return request<RouletteBetResponse>(
     "/roulette/bets",
     { method: "POST", body: JSON.stringify(body) },
     true,
     true
   );
+}
+
+export interface RouletteBetBreakdownEntry {
+  userId: string;
+  userLabel: string;
+  stakeAtomic: string;
+}
+
+export interface RouletteBetBreakdown {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  totalsAtomic: {
+    RED: string;
+    BLACK: string;
+    GREEN: string;
+    BAIT: string;
+  };
+  entriesByType: {
+    RED: RouletteBetBreakdownEntry[];
+    BLACK: RouletteBetBreakdownEntry[];
+    GREEN: RouletteBetBreakdownEntry[];
+    BAIT: RouletteBetBreakdownEntry[];
+  };
+  totalStakedAtomic: string;
+}
+
+export async function getCurrentRouletteBetBreakdown(currency = "USDT"): Promise<RouletteBetBreakdown> {
+  return request<RouletteBetBreakdown>(`/roulette/rounds/current/breakdown?currency=${currency}`, {}, false);
+}
+
+export async function getRouletteBetBreakdownByRoundId(roundId: string): Promise<RouletteBetBreakdown> {
+  return request<RouletteBetBreakdown>(`/roulette/rounds/${roundId}/breakdown`, {}, false);
+}
+
+export interface RouletteResultItem {
+  roundId: string;
+  roundNumber: number;
+  currency: string;
+  winningNumber: number;
+  winningColor: "RED" | "BLACK" | "GREEN";
+  totalStakedAtomic: string;
+  totalPayoutAtomic: string;
+  settledAt: string;
+}
+
+export async function getRouletteResults(currency = "USDT", limit = 20): Promise<RouletteResultItem[]> {
+  const safeLimit = Math.max(1, Math.min(20, limit));
+  return request<RouletteResultItem[]>(`/roulette/results?currency=${currency}&limit=${safeLimit}`, {}, false);
 }
 
 export interface RouletteBet {

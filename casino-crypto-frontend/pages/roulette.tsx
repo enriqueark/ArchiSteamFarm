@@ -1,4 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  getCurrentRouletteBetBreakdown,
+  getCurrentRound,
+  getRouletteBetBreakdownByRoundId,
+  getRouletteResults,
+  getWallets,
+  placeRouletteBet,
+  type RouletteBetBreakdown,
+  type RouletteRound,
+  type Wallet
+} from "@/lib/api";
+import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 import { useToast } from "@/lib/toast";
 
 type BetColor = "RED" | "GREEN" | "BLACK" | "BAIT";
@@ -6,10 +18,10 @@ type BaseColor = "RED" | "GREEN" | "BLACK";
 type WheelSlotKind = "RED" | "BLACK" | "GREEN" | "BAIT_RED" | "BAIT_BLACK";
 
 type WheelSlot = {
+  number: number;
   kind: WheelSlotKind;
   color: BaseColor;
   isBait: boolean;
-  baitSide: "LEFT" | "RIGHT" | null;
 };
 
 type HistoryEntry = {
@@ -36,48 +48,45 @@ type ColorPanel = {
   entries: SettledEntry[];
 };
 
-const SPIN_INTERVAL_SECONDS = 15;
-const HISTORY_STORAGE_KEY = "roulette-color-history-v3";
+const CURRENCY = "USDT";
 const BET_ORDER: BetColor[] = ["RED", "GREEN", "BLACK", "BAIT"];
-const MAX_PLAY_AMOUNT = 1000;
+const HISTORY_STORAGE_KEY = "roulette-color-history-v4";
+const MIN_BET_COINS = 0.1;
+const MAX_BET_COINS = 5_000;
+const COIN_DECIMALS = 1e8;
 
-const SLOT_SIZE = 58;
-const SLOT_GAP = 8;
+const SLOT_SIZE = 64;
+const SLOT_GAP = 9;
 const SLOT_STRIDE = SLOT_SIZE + SLOT_GAP;
 
-// Exact pattern:
-// - 1 green
-// - 7 reds (includes BAIT_RED)
-// - 7 blacks (includes BAIT_BLACK)
-// - BAIT is always left/right of green
+// Alternating red/black pattern with BAIT on both sides of green.
 const WHEEL_LAYOUT: WheelSlot[] = [
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null },
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null },
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null },
-  { kind: "BAIT_RED", color: "RED", isBait: true, baitSide: "LEFT" },
-  { kind: "GREEN", color: "GREEN", isBait: false, baitSide: null },
-  { kind: "BAIT_BLACK", color: "BLACK", isBait: true, baitSide: "RIGHT" },
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null },
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null },
-  { kind: "RED", color: "RED", isBait: false, baitSide: null },
-  { kind: "BLACK", color: "BLACK", isBait: false, baitSide: null }
+  { number: 2, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 3, kind: "RED", color: "RED", isBait: false },
+  { number: 4, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 5, kind: "RED", color: "RED", isBait: false },
+  { number: 6, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 7, kind: "RED", color: "RED", isBait: false },
+  { number: 14, kind: "BAIT_RED", color: "RED", isBait: true },
+  { number: 0, kind: "GREEN", color: "GREEN", isBait: false },
+  { number: 1, kind: "BAIT_BLACK", color: "BLACK", isBait: true },
+  { number: 8, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 9, kind: "RED", color: "RED", isBait: false },
+  { number: 10, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 11, kind: "RED", color: "RED", isBait: false },
+  { number: 12, kind: "BLACK", color: "BLACK", isBait: false },
+  { number: 13, kind: "RED", color: "RED", isBait: false }
 ];
 const WHEEL_LENGTH = WHEEL_LAYOUT.length;
 
+const NUMBER_TO_LAYOUT_INDEX = WHEEL_LAYOUT.reduce<Record<number, number>>((acc, slot, index) => {
+  acc[slot.number] = index;
+  return acc;
+}, {});
+
 const BET_THEME: Record<
   BetColor,
-  {
-    label: string;
-    multiplier: number;
-    chipClass: string;
-    accentClass: string;
-    actionClass: string;
-  }
+  { label: string; multiplier: number; chipClass: string; accentClass: string; actionClass: string }
 > = {
   RED: {
     label: "RED",
@@ -113,16 +122,25 @@ const BET_THEME: Record<
   }
 };
 
-const randomId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
-const randomWheelSlot = (): WheelSlot => WHEEL_LAYOUT[Math.floor(Math.random() * WHEEL_LENGTH)];
+const randomId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const createEmptyPanels = (): Record<BetColor, ColorPanel> => ({
-  RED: { plays: 0, net: 0, entries: [] },
-  GREEN: { plays: 0, net: 0, entries: [] },
-  BLACK: { plays: 0, net: 0, entries: [] },
-  BAIT: { plays: 0, net: 0, entries: [] }
-});
+const atomicToCoins = (atomic: string): number => {
+  const value = Number(atomic);
+  if (!Number.isFinite(value)) return 0;
+  return value / COIN_DECIMALS;
+};
+
+const coinsToAtomicString = (coins: number): string => {
+  const scaled = Math.round(Math.max(0, coins) * COIN_DECIMALS);
+  return String(BigInt(scaled));
+};
+
+const formatAmount = (value: number): string =>
+  value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
+const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -161,69 +179,189 @@ const getTileClass = (slot: WheelSlot): string => {
   return `bg-gradient-to-b from-[#454b55] to-[#2a2f36] border-[#555c68] ${slot.isBait ? "ring-2 ring-[#dabf72]/85" : ""}`;
 };
 
-const formatAmount = (value: number): string =>
-  value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const slotByWinningNumber = (winningNumber: number): WheelSlot =>
+  WHEEL_LAYOUT[NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0]];
 
-const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
-const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
+const emptyPanels = (): Record<BetColor, ColorPanel> => ({
+  RED: { plays: 0, net: 0, entries: [] },
+  GREEN: { plays: 0, net: 0, entries: [] },
+  BLACK: { plays: 0, net: 0, entries: [] },
+  BAIT: { plays: 0, net: 0, entries: [] }
+});
+
+const walletAvailableCoins = (wallet: Wallet): number => {
+  if (wallet.availableCoins && Number.isFinite(Number(wallet.availableCoins))) {
+    return Number(wallet.availableCoins);
+  }
+  if (wallet.availableAtomic) {
+    return atomicToCoins(wallet.availableAtomic);
+  }
+  try {
+    const balance = BigInt(wallet.balanceAtomic);
+    const locked = BigInt(wallet.lockedAtomic);
+    return Number(balance - locked) / COIN_DECIMALS;
+  } catch {
+    return 0;
+  }
+};
+
+const formatCoinsInput = (value: number): string => {
+  const normalized = Math.max(0, value);
+  return normalized.toFixed(8).replace(/\.?0+$/, "") || "0";
+};
+
+const buildPanelsFromBreakdown = (
+  breakdown: RouletteBetBreakdown | null,
+  winner: WheelSlot | null
+): Record<BetColor, ColorPanel> => {
+  const panels = emptyPanels();
+  if (!breakdown) return panels;
+
+  for (const color of BET_ORDER) {
+    const rows = breakdown.entriesByType[color];
+    const entries: SettledEntry[] = rows.map((row) => {
+      const amount = atomicToCoins(row.stakeAtomic);
+      const net = winner ? (didBetWin(color, winner) ? amount * (BET_THEME[color].multiplier - 1) : -amount) : 0;
+      return {
+        id: `${color}-${row.userId}-${row.stakeAtomic}-${randomId()}`,
+        userLabel: row.userLabel,
+        color,
+        amount,
+        isUser: false,
+        net
+      };
+    });
+
+    panels[color].entries = entries.slice(0, 8);
+    panels[color].plays = rows.length;
+    panels[color].net = entries.reduce((acc, entry) => acc + entry.net, 0);
+  }
+
+  return panels;
+};
 
 export default function RoulettePage() {
   const toast = useToast();
   const laneRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const previousRoundRef = useRef<{ id: string | null; status: string | null }>({ id: null, status: null });
+  const handledSettledRoundRef = useRef<string | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
 
-  const [roundNumber, setRoundNumber] = useState(1);
-  const [countdown, setCountdown] = useState(SPIN_INTERVAL_SECONDS);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [statusText, setStatusText] = useState("Waiting for next spin");
+  const [round, setRound] = useState<RouletteRound | null>(null);
+  const [breakdown, setBreakdown] = useState<RouletteBetBreakdown | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [selectedColor, setSelectedColor] = useState<BetColor>("RED");
   const [playAmountInput, setPlayAmountInput] = useState("1");
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [roundEntries, setRoundEntries] = useState<BetEntry[]>([]);
-  const [lastPanels, setLastPanels] = useState<Record<BetColor, ColorPanel>>(createEmptyPanels());
-  const [pointerRatio, setPointerRatio] = useState(0.5);
-  const [laneWidth, setLaneWidth] = useState(920);
+  const [placing, setPlacing] = useState(false);
+  const [availableCoins, setAvailableCoins] = useState(0);
+  const [laneWidth, setLaneWidth] = useState(960);
   const [spinTranslate, setSpinTranslate] = useState(0);
+  const [isVisualSpinning, setIsVisualSpinning] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const [flashPanels, setFlashPanels] = useState<Record<BetColor, ColorPanel> | null>(null);
 
   const spinTranslateRef = useRef(spinTranslate);
   useEffect(() => {
     spinTranslateRef.current = spinTranslate;
   }, [spinTranslate]);
 
-  const currentAmount = useMemo(() => {
-    const normalized = Number(playAmountInput.replace(",", "."));
-    if (!Number.isFinite(normalized)) return 0;
-    return Math.max(0, normalized);
-  }, [playAmountInput]);
-
-  useEffect(() => {
-    const fallbackHistory = Array.from({ length: 100 }, () => toHistoryEntry(randomWheelSlot()));
-    if (typeof window === "undefined") {
-      setHistory(fallbackHistory);
-      return;
+  const clearRaf = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
+  }, []);
+
+  const clearFlash = useCallback(() => {
+    setFlashPanels(null);
+    if (flashTimerRef.current !== null) {
+      window.clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = null;
+    }
+  }, []);
+
+  const loadWalletBalance = useCallback(async () => {
     try {
-      const stored = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (!stored) {
-        setHistory(fallbackHistory);
-        return;
+      const wallets = await getWallets();
+      const primary = wallets.find((item) => item.currency === CURRENCY) ?? wallets[0];
+      if (primary) {
+        setAvailableCoins(walletAvailableCoins(primary));
       }
-      const parsed = JSON.parse(stored) as unknown;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const sanitized = parsed.filter(isHistoryEntry).slice(0, 100);
-        setHistory(sanitized.length > 0 ? sanitized : fallbackHistory);
-        return;
-      }
-      setHistory(fallbackHistory);
     } catch {
-      setHistory(fallbackHistory);
+      // Keep last known value on transient errors.
     }
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || history.length === 0) return;
-    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 100)));
-  }, [history]);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [currentRound, currentBreakdown, recentResults] = await Promise.all([
+          getCurrentRound(CURRENCY),
+          getCurrentRouletteBetBreakdown(CURRENCY),
+          getRouletteResults(CURRENCY, 20)
+        ]);
+        if (cancelled) return;
+        setRound(currentRound);
+        setBreakdown(currentBreakdown);
+
+        const serverHistory = recentResults.map((row) => toHistoryEntry(slotByWinningNumber(row.winningNumber)));
+        let storedHistory: HistoryEntry[] = [];
+        if (typeof window !== "undefined") {
+          try {
+            const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw) as unknown;
+              if (Array.isArray(parsed)) {
+                storedHistory = parsed.filter(isHistoryEntry).slice(0, 100);
+              }
+            }
+          } catch {
+            storedHistory = [];
+          }
+        }
+        setHistory([...serverHistory, ...storedHistory].slice(0, 100));
+      } catch {
+        // Ignore bootstrap fetch errors and rely on websocket updates.
+      }
+      await loadWalletBalance();
+    };
+    void load();
+
+    const socket = new CasinoSocket(CURRENCY);
+    socket.subscribe((event: SocketEvent) => {
+      if (event.type === "roulette.round") {
+        setRound({
+          id: event.data.roundId,
+          roundNumber: event.data.roundNumber,
+          currency: event.data.currency,
+          status: event.data.status,
+          openAt: event.data.openAt,
+          betsCloseAt: event.data.betsCloseAt,
+          spinStartsAt: event.data.spinStartsAt,
+          settleAt: event.data.settleAt,
+          winningNumber: event.data.winningNumber,
+          winningColor: event.data.winningColor,
+          totalStakedAtomic: event.data.totalStakedAtomic,
+          totalPayoutAtomic: event.data.totalPayoutAtomic
+        });
+      } else if (event.type === "roulette.betBreakdown") {
+        setBreakdown(event.data);
+      }
+    });
+    socket.connect();
+
+    return () => {
+      cancelled = true;
+      socket.disconnect();
+      clearRaf();
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+        flashTimerRef.current = null;
+      }
+    };
+  }, [clearRaf, loadWalletBalance]);
 
   useEffect(() => {
     if (!laneRef.current || typeof ResizeObserver === "undefined") return;
@@ -231,142 +369,166 @@ export default function RoulettePage() {
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      setLaneWidth(Math.max(320, Math.floor(entry.contentRect.width)));
+      setLaneWidth(Math.max(420, Math.floor(entry.contentRect.width)));
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
+    const timer = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(timer);
   }, []);
 
-  const settleRound = useCallback(
-    (winner: WheelSlot) => {
-      setHistory((previous) => [toHistoryEntry(winner), ...previous].slice(0, 100));
-      setLastPanels(() => {
-        const grouped = createEmptyPanels();
-        roundEntries.forEach((entry) => {
-          const multiplier = BET_THEME[entry.color].multiplier;
-          const net = didBetWin(entry.color, winner) ? entry.amount * (multiplier - 1) : -entry.amount;
-          grouped[entry.color].entries.push({ ...entry, net });
-          grouped[entry.color].plays += 1;
-          grouped[entry.color].net += net;
-        });
-        BET_ORDER.forEach((color) => {
-          grouped[color].entries.sort((a, b) => b.net - a.net);
-          grouped[color].entries = grouped[color].entries.slice(0, 8);
-        });
-        return grouped;
-      });
-      setRoundEntries([]);
+  useEffect(() => {
+    if (typeof window === "undefined" || history.length === 0) return;
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 100)));
+  }, [history]);
+
+  const startContinuousSpin = useCallback(() => {
+    clearRaf();
+    setIsVisualSpinning(true);
+    const cycle = WHEEL_LENGTH * SLOT_STRIDE;
+    let lastTs = performance.now();
+    const baseSpeed = 870; // px/s
+
+    const tick = (ts: number) => {
+      const dt = (ts - lastTs) / 1000;
+      lastTs = ts;
+      const pulse = 1 + 0.18 * Math.sin(ts / 170);
+      let next = spinTranslateRef.current + baseSpeed * pulse * dt;
+      if (next > cycle * 80) {
+        next -= cycle * 50;
+      }
+      spinTranslateRef.current = next;
+      setSpinTranslate(next);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  }, [clearRaf]);
+
+  const stopSpinAtWinningNumber = useCallback(
+    (winningNumber: number) => {
+      clearRaf();
+      setIsVisualSpinning(true);
+
+      const pointerPx = laneWidth * 0.5;
+      const currentActive = Math.round((spinTranslateRef.current + pointerPx - SLOT_SIZE / 2) / SLOT_STRIDE);
+      const currentLayout = mod(currentActive, WHEEL_LENGTH);
+      const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
+      const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
+      const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
+      const targetGlobal = currentActive + stepsToWinner + extraLoops;
+
+      const start = spinTranslateRef.current;
+      const end = targetGlobal * SLOT_STRIDE + SLOT_SIZE / 2 - pointerPx;
+      const durationMs = 2900;
+      const startedAt = performance.now();
+      const cycle = WHEEL_LENGTH * SLOT_STRIDE;
+
+      const tick = (ts: number) => {
+        const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
+        const ease = 1 - (1 - progress) ** 3;
+        const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
+        const mix = Math.max(0, Math.min(1, ease + wobble));
+        const next = start + (end - start) * mix;
+        spinTranslateRef.current = next;
+        setSpinTranslate(next);
+
+        if (progress < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+
+        const normalized = mod(end, cycle) + cycle * 20;
+        spinTranslateRef.current = normalized;
+        setSpinTranslate(normalized);
+        setIsVisualSpinning(false);
+        rafRef.current = null;
+      };
+
+      rafRef.current = requestAnimationFrame(tick);
     },
-    [roundEntries]
+    [clearRaf, laneWidth]
   );
 
-  const runSpin = useCallback(() => {
-    if (isSpinning) return;
+  useEffect(() => {
+    if (!round) return;
+    const previous = previousRoundRef.current;
+    const status = round.status;
 
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    if (status === "SPINNING" && (previous.id !== round.id || previous.status !== "SPINNING")) {
+      startContinuousSpin();
     }
 
-    const nextPointerRatio = 0.12 + Math.random() * 0.76;
-    setPointerRatio(nextPointerRatio);
-    const pointerPx = laneWidth * nextPointerRatio;
+    if (status === "SETTLED" && round.winningNumber !== null && handledSettledRoundRef.current !== round.id) {
+      handledSettledRoundRef.current = round.id;
 
-    const currentActiveIndex = Math.round((spinTranslateRef.current + pointerPx - SLOT_SIZE / 2) / SLOT_STRIDE);
-    const winnerIndex = Math.floor(Math.random() * WHEEL_LENGTH);
-    const winner = WHEEL_LAYOUT[winnerIndex];
-
-    let targetGlobalIndex = currentActiveIndex + WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2)) + Math.floor(Math.random() * WHEEL_LENGTH);
-    const correction = mod(winnerIndex - mod(targetGlobalIndex, WHEEL_LENGTH), WHEEL_LENGTH);
-    targetGlobalIndex += correction;
-
-    const startTranslate = spinTranslateRef.current;
-    const endTranslate = targetGlobalIndex * SLOT_STRIDE + SLOT_SIZE / 2 - pointerPx;
-    const durationMs = 5800 + Math.random() * 1800;
-    const startedAt = performance.now();
-
-    setIsSpinning(true);
-    setStatusText("Spinning...");
-
-    const animate = (now: number) => {
-      const elapsed = now - startedAt;
-      const progress = Math.max(0, Math.min(1, elapsed / durationMs));
-      const easeOut = 1 - (1 - progress) ** 3;
-      const feint = progress > 0.68 ? Math.sin((progress - 0.68) * 42) * (1 - progress) * 0.045 : 0;
-      const mix = Math.max(0, Math.min(1, easeOut + feint));
-      const currentTranslate = startTranslate + (endTranslate - startTranslate) * mix;
-
-      spinTranslateRef.current = currentTranslate;
-      setSpinTranslate(currentTranslate);
-
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(animate);
-        return;
+      const winnerSlot = slotByWinningNumber(round.winningNumber);
+      if (previous.status === "SPINNING" || isVisualSpinning) {
+        stopSpinAtWinningNumber(round.winningNumber);
       }
 
-      spinTranslateRef.current = endTranslate;
-      setSpinTranslate(endTranslate);
-      rafRef.current = null;
-      settleRound(winner);
-      setRoundNumber((value) => value + 1);
-      setIsSpinning(false);
-      setCountdown(SPIN_INTERVAL_SECONDS);
-      setStatusText(getWinnerLabel(winner));
-    };
+      setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
 
-    rafRef.current = requestAnimationFrame(animate);
-  }, [isSpinning, laneWidth, settleRound]);
-
-  useEffect(() => {
-    if (isSpinning) return;
-    if (countdown <= 0) {
-      runSpin();
-      return;
-    }
-    const timer = window.setTimeout(() => setCountdown((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearTimeout(timer);
-  }, [countdown, isSpinning, runSpin]);
-
-  const updateAmount = (updater: (current: number) => number) => {
-    const next = Math.min(MAX_PLAY_AMOUNT, Math.max(0, Math.round(updater(currentAmount) * 100) / 100));
-    setPlayAmountInput(String(next));
-  };
-
-  const placeBet = (color: BetColor) => {
-    setSelectedColor(color);
-    if (isSpinning) {
-      toast.showError("Round is spinning. Wait for next one.");
-      return;
-    }
-    if (!Number.isFinite(currentAmount) || currentAmount <= 0) {
-      toast.showError("Enter a valid amount before betting.");
-      return;
+      void (async () => {
+        try {
+          const settledBreakdown = await getRouletteBetBreakdownByRoundId(round.id);
+          setFlashPanels(buildPanelsFromBreakdown(settledBreakdown, winnerSlot));
+          if (flashTimerRef.current !== null) {
+            window.clearTimeout(flashTimerRef.current);
+          }
+          flashTimerRef.current = window.setTimeout(() => setFlashPanels(null), 3000);
+        } catch {
+          // Ignore missing settled breakdown.
+        }
+      })();
     }
 
-    const ticket: BetEntry = {
-      id: randomId(),
-      userLabel: "You",
-      color,
-      amount: currentAmount,
-      isUser: true
-    };
-    setRoundEntries((previous) => [ticket, ...previous]);
-    toast.showSuccess(`Bet placed on ${BET_THEME[color].label}.`);
-  };
+    if (status === "OPEN" && previous.status && previous.status !== "OPEN") {
+      clearFlash();
+      setIsVisualSpinning(false);
+      handledSettledRoundRef.current = null;
+    }
 
-  const pointerPx = laneWidth * pointerRatio;
+    previousRoundRef.current = { id: round.id, status };
+  }, [clearFlash, isVisualSpinning, round, startContinuousSpin, stopSpinAtWinningNumber]);
+
+  const currentAmount = useMemo(() => {
+    const normalized = Number(playAmountInput.replace(",", "."));
+    if (!Number.isFinite(normalized)) return 0;
+    return Math.max(0, normalized);
+  }, [playAmountInput]);
+
+  const maxBetByBalance = Math.min(MAX_BET_COINS, Math.max(0, availableCoins));
+
+  const nextSpinSeconds = useMemo(() => {
+    if (!round) return 0;
+    if (round.status === "SPINNING") return 0;
+    const now = nowMs;
+    let target = now;
+    if (round.status === "OPEN" || round.status === "CLOSED") {
+      target = Date.parse(round.spinStartsAt);
+    }
+    if (round.status === "SETTLED") {
+      return 0;
+    }
+    return Math.max(0, Math.ceil((target - now) / 1000));
+  }, [nowMs, round]);
+
+  const statusText = useMemo(() => {
+    if (!round) return "Waiting for next spin";
+    if (isVisualSpinning || round.status === "SPINNING") return "Spinning...";
+    if (round.status === "CLOSED") return "Bets closed";
+    if (round.status === "SETTLED" && round.winningNumber !== null) return getWinnerLabel(slotByWinningNumber(round.winningNumber));
+    return "Waiting for next spin";
+  }, [isVisualSpinning, round]);
+
+  const pointerPx = laneWidth * 0.5;
   const activeGlobalIndex = Math.round((spinTranslate + pointerPx - SLOT_SIZE / 2) / SLOT_STRIDE);
-  const firstGlobalIndex = Math.floor(spinTranslate / SLOT_STRIDE) - 3;
-  const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + 8;
+  const firstGlobalIndex = Math.floor(spinTranslate / SLOT_STRIDE) - 24;
+  const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + 48;
   const visibleSlots = useMemo(
     () =>
       Array.from({ length: renderCount }, (_, offset) => {
@@ -377,6 +539,53 @@ export default function RoulettePage() {
       }),
     [firstGlobalIndex, renderCount, spinTranslate]
   );
+
+  const updateAmount = (updater: (current: number) => number) => {
+    const next = Math.min(MAX_BET_COINS, Math.max(0, Math.round(updater(currentAmount) * 100) / 100));
+    setPlayAmountInput(formatCoinsInput(next));
+  };
+
+  const placeBet = async (color: BetColor) => {
+    setSelectedColor(color);
+    if (!round || round.status !== "OPEN" || isVisualSpinning) {
+      toast.showError("Betting is currently closed.");
+      return;
+    }
+    if (!Number.isFinite(currentAmount) || currentAmount < MIN_BET_COINS) {
+      toast.showError("Minimum roulette bet is 0.10 COINS.");
+      return;
+    }
+    if (currentAmount > MAX_BET_COINS) {
+      toast.showError("You can't bet more than 5000 COINS.");
+      return;
+    }
+    if (currentAmount > maxBetByBalance) {
+      toast.showError("Not enough available COINS.");
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      const response = await placeRouletteBet(CURRENCY, color, coinsToAtomicString(currentAmount));
+      setRound(response.round);
+      if (response.wallet?.availableAtomic) {
+        setAvailableCoins(atomicToCoins(response.wallet.availableAtomic));
+      } else {
+        await loadWalletBalance();
+      }
+      const latestBreakdown = await getCurrentRouletteBetBreakdown(CURRENCY);
+      setBreakdown(latestBreakdown);
+      toast.showSuccess(`Bet placed on ${BET_THEME[color].label}.`);
+    } catch {
+      // API layer already emits global error toast.
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const livePanels = useMemo(() => buildPanelsFromBreakdown(breakdown, null), [breakdown]);
+  const showingFlash = flashPanels !== null;
+  const displayedPanels = flashPanels ?? livePanels;
 
   const last100 = history.slice(0, 100);
   const last10 = last100.slice(0, 10);
@@ -408,7 +617,7 @@ export default function RoulettePage() {
           ))}
         </div>
         <div
-          className="mb-2 grid gap-2"
+          className="grid gap-2"
           style={{ gridTemplateColumns: `repeat(${Math.min(10, last10.length || 10)}, minmax(0, 1fr))`, maxWidth: "460px" }}
         >
           {last10.map((entry, index) => (
@@ -429,35 +638,28 @@ export default function RoulettePage() {
 
       <div className="rounded-xl border border-[#2e3138] bg-[#1b1d22] p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-[#d5d8de]">{statusText}</p>
-          </div>
+          <p className="text-sm font-medium text-[#d5d8de]">{statusText}</p>
           <div className="rounded-lg border border-[#3a3d45] bg-[#16181d] px-3 py-2 text-right">
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9a9ea8]">Next spin</p>
-            <p className="font-mono text-lg font-bold text-[#f2f3f6]">{isSpinning ? "--:--" : toMinutesSeconds(countdown)}</p>
+            <p className="font-mono text-lg font-bold text-[#f2f3f6]">
+              {isVisualSpinning || round?.status === "SPINNING" ? "--:--" : toMinutesSeconds(nextSpinSeconds)}
+            </p>
           </div>
         </div>
 
         <div ref={laneRef} className="relative overflow-hidden rounded-xl border border-[#30343c] bg-[#15171b] px-2 py-4">
-          <div
-            className="pointer-events-none absolute bottom-2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]"
-            style={{ left: `${pointerRatio * 100}%` }}
-          />
+          <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
-          <div className="relative h-[58px]">
+          <div className="relative h-[64px]">
             {visibleSlots.map(({ globalIndex, slot, left }) => {
               const isActive = globalIndex === activeGlobalIndex;
               return (
                 <div
-                  key={`${globalIndex}-${slot.kind}`}
+                  key={`${globalIndex}-${slot.number}`}
                   className={`absolute top-0 rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
-                    isActive ? "z-20 scale-[1.06] opacity-100 brightness-125 shadow-[0_0_22px_rgba(255,255,255,0.18)]" : "opacity-40"
+                    isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
                   }`}
-                  style={{
-                    left,
-                    width: SLOT_SIZE,
-                    height: SLOT_SIZE
-                  }}
+                  style={{ left, width: SLOT_SIZE, height: SLOT_SIZE }}
                 >
                   {slot.isBait && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ebcf7f]" />}
                 </div>
@@ -490,49 +692,49 @@ export default function RoulettePage() {
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current + 1)}
+            onClick={() => updateAmount((value) => value + 1)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +1
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current + 10)}
+            onClick={() => updateAmount((value) => value + 10)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +10
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current + 100)}
+            onClick={() => updateAmount((value) => value + 100)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +100
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current + 1000)}
+            onClick={() => updateAmount((value) => value + 1000)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +1000
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current / 2)}
+            onClick={() => updateAmount((value) => value / 2)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             1/2
           </button>
           <button
             type="button"
-            onClick={() => updateAmount((current) => current * 2)}
+            onClick={() => updateAmount((value) => value * 2)}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             X2
           </button>
           <button
             type="button"
-            onClick={() => setPlayAmountInput(String(MAX_PLAY_AMOUNT))}
+            onClick={() => setPlayAmountInput(formatCoinsInput(maxBetByBalance))}
             className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             MAX
@@ -540,15 +742,11 @@ export default function RoulettePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {BET_ORDER.map((color) => {
-          const panel = lastPanels[color];
-          const pendingRows = roundEntries
-            .filter((entry) => entry.color === color)
-            .slice(0, 8)
-            .map((entry) => ({ ...entry, net: 0 }));
-          const rowsToRender = panel.entries.length > 0 ? panel.entries : pendingRows;
-          const netClass = panel.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]";
+          const panel = displayedPanels[color];
+          const headerValue = showingFlash ? formatSignedAmount(panel.net) : "+0.00";
+          const headerClass = showingFlash ? (panel.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#56d58f]";
 
           return (
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
@@ -566,24 +764,25 @@ export default function RoulettePage() {
 
               <button
                 type="button"
-                onClick={() => placeBet(color)}
-                className={`mb-3 h-10 w-full rounded-md text-xs font-extrabold tracking-[0.1em] text-white transition-all ${
+                onClick={() => void placeBet(color)}
+                disabled={placing}
+                className={`mb-3 h-10 w-full rounded-md text-xs font-extrabold tracking-[0.1em] text-white transition-all disabled:opacity-60 ${
                   BET_THEME[color].actionClass
                 }`}
               >
-                PLAY
+                {placing ? "PLACING..." : "PLAY"}
               </button>
 
               <div className="mb-2 flex items-center justify-between text-xs">
                 <span className="text-[#a2a7b0]">{panel.plays} Plays</span>
-                <span className={`font-semibold ${netClass}`}>{formatSignedAmount(panel.net)}</span>
+                <span className={`font-semibold ${headerClass}`}>{headerValue}</span>
               </div>
 
               <div className="max-h-[210px] space-y-1 overflow-auto pr-1">
-                {rowsToRender.length === 0 ? (
+                {panel.entries.length === 0 ? (
                   <p className="text-xs text-[#8b8f98]">No plays yet.</p>
                 ) : (
-                  rowsToRender.map((entry) => (
+                  panel.entries.map((entry) => (
                     <div key={entry.id} className="flex items-center justify-between rounded-md bg-[#15181d] px-2 py-1.5 text-xs">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#464b55] text-[9px] font-bold text-[#f0f2f5]">
@@ -591,8 +790,12 @@ export default function RoulettePage() {
                         </span>
                         <span className="truncate text-[#eceef2]">{entry.userLabel}</span>
                       </div>
-                      <span className={entry.net === 0 ? "text-[#d6d9de]" : entry.net > 0 ? "text-[#56d58f]" : "text-[#ff8080]"}>
-                        {entry.net === 0 ? formatAmount(entry.amount) : formatSignedAmount(entry.net)}
+                      <span
+                        className={
+                          showingFlash ? (entry.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#d6d9de]"
+                        }
+                      >
+                        {showingFlash ? formatSignedAmount(entry.net) : formatAmount(entry.amount)}
                       </span>
                     </div>
                   ))

@@ -172,6 +172,7 @@ const ROUND_CLOSE_TO_SPIN_MS = 0;
 const ROUND_SPIN_MS = env.ROULETTE_SPIN_SECONDS * 1000;
 const WORKER_TICK_MS = env.ROULETTE_WORKER_TICK_MS;
 const ROUND_RESULTS_PAUSE_MS = 5_000;
+const MIN_ROULETTE_BET_ATOMIC = 10n ** BigInt(PLATFORM_VIRTUAL_COIN_DECIMALS - 1); // 0.1 COINS
 const MAX_ROULETTE_BET_ATOMIC = MAX_GAME_BET_COINS * 10n ** BigInt(PLATFORM_VIRTUAL_COIN_DECIMALS);
 
 let broadcaster: RouletteBroadcaster | null = null;
@@ -1209,6 +1210,9 @@ export const placeRouletteBet = async (input: PlaceRouletteBetInput): Promise<Ro
 
   if (input.stakeAtomic <= 0n) {
     throw new AppError("stakeAtomic must be greater than 0", 400, "INVALID_STAKE");
+  }
+  if (input.stakeAtomic < MIN_ROULETTE_BET_ATOMIC) {
+    throw new AppError("Minimum roulette bet is 0.1 COINS", 400, "ROULETTE_MIN_BET_NOT_MET");
   }
   if (input.stakeAtomic > MAX_ROULETTE_BET_ATOMIC) {
     throw new AppError("You can't bet more than 5000 per game", 400, "ROULETTE_MAX_BET_EXCEEDED");
