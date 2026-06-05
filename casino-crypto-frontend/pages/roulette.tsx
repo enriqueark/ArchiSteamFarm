@@ -36,7 +36,8 @@ type ColorPanel = {
 };
 
 const SPIN_INTERVAL_SECONDS = 15;
-const CENTER_INDEX = 11;
+const VISIBLE_SLOT_COUNT = 15;
+const CENTER_INDEX = Math.floor(VISIBLE_SLOT_COUNT / 2);
 const HISTORY_STORAGE_KEY = "roulette-color-history-v2";
 const BET_ORDER: BetColor[] = ["RED", "GREEN", "BLACK", "BAIT"];
 const BOT_NAMES = [
@@ -92,28 +93,32 @@ const BET_THEME: Record<
     multiplier: 2,
     chipClass: "bg-[#cf5858] border-[#f08d8d]",
     accentClass: "text-[#ff8c8c]",
-    actionClass: "bg-[#8b4040] hover:bg-[#a24c4c]"
+    actionClass:
+      "bg-gradient-to-r from-[#d85f5f] to-[#b44545] hover:from-[#e77474] hover:to-[#c95252] shadow-[0_0_18px_rgba(216,95,95,0.55)]"
   },
   GREEN: {
     label: "GREEN",
     multiplier: 14,
     chipClass: "bg-[#1e9e57] border-[#5add97]",
     accentClass: "text-[#61e09e]",
-    actionClass: "bg-[#1b6f45] hover:bg-[#238b57]"
+    actionClass:
+      "bg-gradient-to-r from-[#2bbf70] to-[#1c894f] hover:from-[#39d880] hover:to-[#27a660] shadow-[0_0_18px_rgba(45,191,113,0.55)]"
   },
   BLACK: {
     label: "BLACK",
     multiplier: 2,
     chipClass: "bg-[#2f333b] border-[#666f7d]",
     accentClass: "text-[#c4ccd8]",
-    actionClass: "bg-[#3b4350] hover:bg-[#4a5566]"
+    actionClass:
+      "bg-gradient-to-r from-[#606b7d] to-[#424c5d] hover:from-[#74839a] hover:to-[#52627a] shadow-[0_0_18px_rgba(103,116,138,0.55)]"
   },
   BAIT: {
     label: "BAIT",
     multiplier: 7,
     chipClass: "bg-gradient-to-r from-[#a34646] to-[#31363f] border-[#b89b4f]",
     accentClass: "text-[#ebcf7f]",
-    actionClass: "bg-gradient-to-r from-[#883b3b] to-[#3b404a] hover:from-[#a54a4a] hover:to-[#4a505d]"
+    actionClass:
+      "bg-gradient-to-r from-[#c55353] to-[#59606d] hover:from-[#d86666] hover:to-[#687286] shadow-[0_0_18px_rgba(203,176,105,0.5)]"
   }
 };
 
@@ -122,11 +127,10 @@ const randomId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const randomFrom = <T,>(rows: T[]): T => rows[Math.floor(Math.random() * rows.length)];
 
 const randomWheelSlot = (): WheelSlot => WHEEL_LAYOUT[Math.floor(Math.random() * WHEEL_LAYOUT.length)];
+const WHEEL_LENGTH = WHEEL_LAYOUT.length;
 
-const buildInitialTrack = (): WheelSlot[] => {
-  const seed = Math.floor(Math.random() * WHEEL_LAYOUT.length);
-  return Array.from({ length: 23 }, (_, idx) => WHEEL_LAYOUT[(seed + idx) % WHEEL_LAYOUT.length]);
-};
+const getTrackWindow = (startIndex: number): WheelSlot[] =>
+  Array.from({ length: VISIBLE_SLOT_COUNT }, (_, idx) => WHEEL_LAYOUT[(startIndex + idx) % WHEEL_LENGTH]);
 
 const createEmptyPanels = (): Record<BetColor, ColorPanel> => ({
   RED: { plays: 0, net: 0, entries: [] },
@@ -173,8 +177,8 @@ const didBetWin = (betColor: BetColor, winner: WheelSlot): boolean => {
 };
 
 const getWinnerLabel = (slot: WheelSlot): string => {
-  if (slot.kind === "BAIT_RED") return "BAIT RED won (left of green)";
-  if (slot.kind === "BAIT_BLACK") return "BAIT BLACK won (right of green)";
+  if (slot.kind === "BAIT_RED") return "BAIT RED landed (BAIT x7 + RED x2)";
+  if (slot.kind === "BAIT_BLACK") return "BAIT BLACK landed (BAIT x7 + BLACK x2)";
   return `${slot.color} won`;
 };
 
@@ -196,6 +200,17 @@ const isHistoryEntry = (value: unknown): value is HistoryEntry => {
   return colorOk && typeof row.isBait === "boolean" && baitOk;
 };
 
+const getSpinStepDelayMs = (step: number, totalSteps: number): number => {
+  const progress = step / totalSteps;
+  if (progress < 0.2) return 52;
+  if (progress < 0.45) return 78;
+  if (progress < 0.68) return 112;
+  if (progress < 0.82) return 152;
+  // Late-stage feints to feel like "almost stopping"
+  if (progress < 0.93) return step % 2 === 0 ? 220 : 128;
+  return 280 + Math.floor((progress - 0.93) * 900);
+};
+
 export default function RoulettePage() {
   const [roundNumber, setRoundNumber] = useState(1);
   const [countdown, setCountdown] = useState(SPIN_INTERVAL_SECONDS);
@@ -204,18 +219,25 @@ export default function RoulettePage() {
   const [selectedColor, setSelectedColor] = useState<BetColor>("RED");
   const [playAmountInput, setPlayAmountInput] = useState("1");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [trackSlots, setTrackSlots] = useState<WheelSlot[]>(buildInitialTrack);
+  const [trackStart, setTrackStart] = useState(() => Math.floor(Math.random() * WHEEL_LENGTH));
   const [roundEntries, setRoundEntries] = useState<BetEntry[]>([]);
   const [lastPanels, setLastPanels] = useState<Record<BetColor, ColorPanel>>(createEmptyPanels());
   const [notice, setNotice] = useState<string | null>(null);
 
-  const spinIntervalRef = useRef<number | null>(null);
+  const spinTimeoutRef = useRef<number | null>(null);
+  const trackStartRef = useRef(trackStart);
 
   const currentAmount = useMemo(() => {
     const normalized = Number(playAmountInput.replace(",", "."));
     if (!Number.isFinite(normalized)) return 0;
     return Math.max(0, normalized);
   }, [playAmountInput]);
+
+  useEffect(() => {
+    trackStartRef.current = trackStart;
+  }, [trackStart]);
+
+  const trackSlots = useMemo(() => getTrackWindow(trackStart), [trackStart]);
 
   useEffect(() => {
     setRoundEntries(generateBotEntries());
@@ -249,9 +271,9 @@ export default function RoulettePage() {
 
   useEffect(() => {
     return () => {
-      if (spinIntervalRef.current !== null) {
-        window.clearInterval(spinIntervalRef.current);
-        spinIntervalRef.current = null;
+      if (spinTimeoutRef.current !== null) {
+        window.clearTimeout(spinTimeoutRef.current);
+        spinTimeoutRef.current = null;
       }
     };
   }, []);
@@ -284,36 +306,41 @@ export default function RoulettePage() {
     setIsSpinning(true);
     setStatusText("Spinning...");
     setNotice(null);
-    const winner = randomWheelSlot();
-    let ticks = 0;
-    const maxTicks = 46;
+    const winnerIndex = Math.floor(Math.random() * WHEEL_LENGTH);
+    const winner = WHEEL_LAYOUT[winnerIndex];
 
-    if (spinIntervalRef.current !== null) {
-      window.clearInterval(spinIntervalRef.current);
-      spinIntervalRef.current = null;
+    const currentCenterIndex = (trackStartRef.current + CENTER_INDEX) % WHEEL_LENGTH;
+    const stepsToWinner = (winnerIndex - currentCenterIndex + WHEEL_LENGTH) % WHEEL_LENGTH;
+    const totalSteps = stepsToWinner + WHEEL_LENGTH * 3;
+    let currentStep = 0;
+
+    if (spinTimeoutRef.current !== null) {
+      window.clearTimeout(spinTimeoutRef.current);
+      spinTimeoutRef.current = null;
     }
 
-    spinIntervalRef.current = window.setInterval(() => {
-      ticks += 1;
-      setTrackSlots((previous) => [...previous.slice(1), randomWheelSlot()]);
+    const doStep = () => {
+      currentStep += 1;
+      setTrackStart((prev) => {
+        const next = (prev + 1) % WHEEL_LENGTH;
+        trackStartRef.current = next;
+        return next;
+      });
 
-      if (ticks >= maxTicks) {
-        if (spinIntervalRef.current !== null) {
-          window.clearInterval(spinIntervalRef.current);
-          spinIntervalRef.current = null;
-        }
-        setTrackSlots((previous) => {
-          const next = [...previous];
-          next[CENTER_INDEX] = winner;
-          return next;
-        });
+      if (currentStep >= totalSteps) {
         settleRound(winner);
         setRoundNumber((value) => value + 1);
         setIsSpinning(false);
         setCountdown(SPIN_INTERVAL_SECONDS);
         setStatusText(getWinnerLabel(winner));
+        spinTimeoutRef.current = null;
+        return;
       }
-    }, 80);
+
+      spinTimeoutRef.current = window.setTimeout(doStep, getSpinStepDelayMs(currentStep, totalSteps));
+    };
+
+    spinTimeoutRef.current = window.setTimeout(doStep, 48);
   }, [isSpinning, settleRound]);
 
   useEffect(() => {
@@ -376,16 +403,19 @@ export default function RoulettePage() {
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8a8e98]">Last 100</span>
           {BET_ORDER.map((color) => (
             <div key={color} className="flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full border ${BET_THEME[color].chipClass}`} />
+              <span className={`h-4 w-4 rounded-full border ${BET_THEME[color].chipClass}`} />
               <span>{historyCount[color]}</span>
             </div>
           ))}
         </div>
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div
+          className="mb-2 grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${Math.min(10, last10.length || 10)}, minmax(0, 1fr))`, maxWidth: "420px" }}
+        >
           {last10.map((entry, index) => (
             <span
               key={`${entry.color}-${entry.isBait}-${index}`}
-              className={`h-5 w-5 rounded border ${
+              className={`h-7 w-full rounded border ${
                 entry.color === "RED"
                   ? "bg-[#b64f4f] border-[#df7c7c]"
                   : entry.color === "GREEN"
@@ -416,11 +446,11 @@ export default function RoulettePage() {
         <div className="relative overflow-hidden rounded-xl border border-[#30343c] bg-[#15171b] px-3 py-4">
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-20 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_12px_rgba(255,255,255,0.3)]" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-[56px] w-[56px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-white/15" />
-          <div className="flex items-center gap-2">
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${VISIBLE_SLOT_COUNT}, minmax(0, 1fr))` }}>
             {trackSlots.map((slot, index) => (
               <div
                 key={`${slot.kind}-${index}`}
-                className={`relative h-11 w-11 shrink-0 rounded-md border ${getTileClass(slot)} ${
+                className={`relative h-11 w-full rounded-md border ${getTileClass(slot)} ${
                   index === CENTER_INDEX ? "ring-2 ring-white/20" : ""
                 }`}
               >
@@ -450,56 +480,56 @@ export default function RoulettePage() {
           <button
             type="button"
             onClick={() => setPlayAmountInput("0")}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             X
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current + 1)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +1
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current + 10)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +10
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current + 100)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +100
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current + 1000)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             +1000
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current / 2)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             1/2
           </button>
           <button
             type="button"
             onClick={() => updateAmount((current) => current * 2)}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             X2
           </button>
           <button
             type="button"
             onClick={() => setPlayAmountInput(String(MAX_PLAY_AMOUNT))}
-            className="h-8 rounded-md border border-[#3b3e46] bg-[#191c22] px-2.5 text-xs font-bold text-[#b8bcc5] hover:bg-[#22252d]"
+            className="h-8 rounded-md border border-[#595d67] bg-[#2a2f39] px-2.5 text-xs font-bold text-[#e1e4ea] shadow-[0_0_10px_rgba(255,255,255,0.12)] hover:bg-[#363c48]"
           >
             MAX
           </button>
@@ -521,7 +551,7 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className={`h-3.5 w-3.5 rounded-full border ${BET_THEME[color].chipClass}`} />
+                  <span className={`h-5 w-5 rounded-full border ${BET_THEME[color].chipClass}`} />
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
                 {selectedColor === color && (
@@ -534,7 +564,7 @@ export default function RoulettePage() {
               <button
                 type="button"
                 onClick={() => placeBet(color)}
-                className={`mb-3 h-9 w-full rounded-md text-xs font-bold tracking-[0.08em] text-white transition-colors ${
+                  className={`mb-3 h-10 w-full rounded-md text-xs font-extrabold tracking-[0.1em] text-white transition-all ${
                   BET_THEME[color].actionClass
                 }`}
               >
