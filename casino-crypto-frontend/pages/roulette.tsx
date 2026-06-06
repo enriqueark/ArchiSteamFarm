@@ -141,7 +141,6 @@ const formatAmount = (value: number): string =>
 
 const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
-const CYCLE_WIDTH = WHEEL_LENGTH * SLOT_STRIDE;
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -249,26 +248,20 @@ type VisibleSlot = {
 };
 
 const buildVisibleSlots = (phase: number, laneWidth: number): VisibleSlot[] => {
-  const phaseMod = mod(phase, CYCLE_WIDTH);
-  const slots: VisibleSlot[] = [];
-
-  for (let repeat = -2; repeat <= 3; repeat += 1) {
-    for (let layoutIndex = 0; layoutIndex < WHEEL_LENGTH; layoutIndex += 1) {
-      const left = repeat * CYCLE_WIDTH + layoutIndex * SLOT_STRIDE - phaseMod;
-      if (left < -SLOT_SIZE * 2 || left > laneWidth + SLOT_SIZE * 2) {
-        continue;
-      }
-      slots.push({
-        renderKey: `${repeat}:${layoutIndex}`,
-        layoutIndex,
-        slot: WHEEL_LAYOUT[layoutIndex],
-        left
-      });
-    }
-  }
-
-  slots.sort((a, b) => a.left - b.left);
-  return slots;
+  const visibleCount = Math.ceil(laneWidth / SLOT_STRIDE) + 14;
+  const centerGlobalIndex = Math.floor(phase / SLOT_STRIDE);
+  const startGlobalIndex = centerGlobalIndex - Math.ceil(visibleCount / 2);
+  return Array.from({ length: visibleCount }, (_, offset) => {
+    const globalIndex = startGlobalIndex + offset;
+    const layoutIndex = mod(globalIndex, WHEEL_LENGTH);
+    const left = globalIndex * SLOT_STRIDE - phase;
+    return {
+      renderKey: String(globalIndex),
+      layoutIndex,
+      slot: WHEEL_LAYOUT[layoutIndex],
+      left
+    };
+  });
 };
 
 const findActiveSlot = (
@@ -458,7 +451,7 @@ export default function RoulettePage() {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
       const pulse = 1 + 0.18 * Math.sin(ts / 170);
-      const next = mod(spinTranslateRef.current + baseSpeed * pulse * dt, CYCLE_WIDTH);
+      const next = spinTranslateRef.current + baseSpeed * pulse * dt;
       spinTranslateRef.current = next;
       setSpinTranslate(next);
       rafRef.current = requestAnimationFrame(tick);
@@ -473,7 +466,7 @@ export default function RoulettePage() {
       setIsVisualSpinning(true);
 
       const pointerPx = laneWidth * 0.5;
-      const startPhase = mod(spinTranslateRef.current, CYCLE_WIDTH);
+      const startPhase = spinTranslateRef.current;
       const currentActive = findActiveSlot(startPhase, laneWidth, pointerPx);
       const currentLayout = currentActive?.layoutIndex ?? 0;
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
@@ -488,7 +481,7 @@ export default function RoulettePage() {
         const ease = 1 - (1 - progress) ** 3;
         const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
         const mix = Math.max(0, Math.min(1, ease + wobble));
-        const next = mod(startPhase + totalTravel * mix, CYCLE_WIDTH);
+        const next = startPhase + totalTravel * mix;
         spinTranslateRef.current = next;
         setSpinTranslate(next);
 
@@ -497,7 +490,7 @@ export default function RoulettePage() {
           return;
         }
 
-        const finalPhase = mod(startPhase + totalTravel, CYCLE_WIDTH);
+        const finalPhase = startPhase + totalTravel;
         spinTranslateRef.current = finalPhase;
         setSpinTranslate(finalPhase);
         setIsVisualSpinning(false);
