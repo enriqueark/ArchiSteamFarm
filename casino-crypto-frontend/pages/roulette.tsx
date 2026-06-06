@@ -141,6 +141,9 @@ const formatAmount = (value: number): string =>
 
 const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
+const CYCLE_WIDTH = WHEEL_LENGTH * SLOT_STRIDE;
+const STRIP_REPEATS = 7;
+const CENTER_REPEAT = Math.floor(STRIP_REPEATS / 2);
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -241,45 +244,47 @@ const buildPanelsFromBreakdown = (
 };
 
 type VisibleSlot = {
-  renderKey: string;
-  layoutIndex: number;
+  repeatedIndex: number;
   slot: WheelSlot;
   left: number;
 };
 
 const buildVisibleSlots = (phase: number, laneWidth: number): VisibleSlot[] => {
-  const visibleCount = Math.ceil(laneWidth / SLOT_STRIDE) + 14;
-  const centerGlobalIndex = Math.floor(phase / SLOT_STRIDE);
-  const startGlobalIndex = centerGlobalIndex - Math.ceil(visibleCount / 2);
-  return Array.from({ length: visibleCount }, (_, offset) => {
-    const globalIndex = startGlobalIndex + offset;
-    const layoutIndex = mod(globalIndex, WHEEL_LENGTH);
-    const left = globalIndex * SLOT_STRIDE - phase;
-    return {
-      renderKey: String(globalIndex),
-      layoutIndex,
+  const phaseMod = mod(phase, CYCLE_WIDTH);
+  const translateX = phaseMod + CYCLE_WIDTH * (CENTER_REPEAT - 1);
+  const totalSlots = WHEEL_LENGTH * STRIP_REPEATS;
+  const slots: VisibleSlot[] = [];
+
+  for (let repeatedIndex = 0; repeatedIndex < totalSlots; repeatedIndex += 1) {
+    const layoutIndex = mod(repeatedIndex, WHEEL_LENGTH);
+    const left = repeatedIndex * SLOT_STRIDE - translateX;
+    if (left < -SLOT_SIZE * 2 || left > laneWidth + SLOT_SIZE * 2) {
+      continue;
+    }
+    slots.push({
+      repeatedIndex,
       slot: WHEEL_LAYOUT[layoutIndex],
       left
-    };
-  });
+    });
+  }
+
+  return slots;
 };
 
 const findActiveSlot = (
-  phase: number,
-  laneWidth: number,
+  visibleSlots: VisibleSlot[],
   pointerPx: number
 ): VisibleSlot | null => {
-  const visible = buildVisibleSlots(phase, laneWidth);
-  if (visible.length === 0) {
+  if (visibleSlots.length === 0) {
     return null;
   }
-  const hit = visible.find((slot) => pointerPx >= slot.left && pointerPx <= slot.left + SLOT_SIZE);
+  const hit = visibleSlots.find((slot) => pointerPx >= slot.left && pointerPx <= slot.left + SLOT_SIZE);
   if (hit) {
     return hit;
   }
-  let bestSlot = visible[0];
+  let bestSlot = visibleSlots[0];
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const slot of visible) {
+  for (const slot of visibleSlots) {
     const centerX = slot.left + SLOT_SIZE / 2;
     const distance = Math.abs(centerX - pointerPx);
     if (distance < bestDistance) {
@@ -467,8 +472,9 @@ export default function RoulettePage() {
 
       const pointerPx = laneWidth * 0.5;
       const startPhase = spinTranslateRef.current;
-      const currentActive = findActiveSlot(startPhase, laneWidth, pointerPx);
-      const currentLayout = currentActive?.layoutIndex ?? 0;
+      const projectedSlots = buildVisibleSlots(startPhase, laneWidth);
+      const currentActive = findActiveSlot(projectedSlots, pointerPx);
+      const currentLayout = currentActive ? mod(currentActive.repeatedIndex, WHEEL_LENGTH) : 0;
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
       const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
@@ -578,8 +584,8 @@ export default function RoulettePage() {
   const pointerPx = laneWidth * 0.5;
   const visibleSlots = useMemo(() => buildVisibleSlots(spinTranslate, laneWidth), [spinTranslate, laneWidth]);
   const activeSlotKey = useMemo(() => {
-    return findActiveSlot(spinTranslate, laneWidth, pointerPx)?.renderKey ?? "";
-  }, [laneWidth, pointerPx, spinTranslate]);
+    return findActiveSlot(visibleSlots, pointerPx)?.repeatedIndex ?? -1;
+  }, [pointerPx, visibleSlots]);
 
   const updateAmount = (updater: (current: number) => number) => {
     const next = Math.min(MAX_BET_COINS, Math.max(0, Math.round(updater(currentAmount) * 100) / 100));
@@ -694,11 +700,11 @@ export default function RoulettePage() {
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
           <div className="relative h-[68px]">
-            {visibleSlots.map(({ renderKey, slot, left }) => {
-              const isActive = renderKey === activeSlotKey;
+            {visibleSlots.map(({ repeatedIndex, slot, left }) => {
+              const isActive = repeatedIndex === activeSlotKey;
               return (
                 <div
-                  key={`${renderKey}-${slot.number}`}
+                  key={`${repeatedIndex}-${slot.number}`}
                   className={`absolute top-0 rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
                     isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
                   }`}
