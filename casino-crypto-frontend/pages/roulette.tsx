@@ -141,7 +141,6 @@ const formatAmount = (value: number): string =>
 
 const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
-const CYCLE_WIDTH = WHEEL_LENGTH * SLOT_STRIDE;
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -242,13 +241,12 @@ const buildPanelsFromBreakdown = (
 };
 
 const buildVisibleSlots = (phase: number, laneWidth: number): Array<{ globalIndex: number; slot: WheelSlot; left: number }> => {
-  const normalizedPhase = mod(phase, CYCLE_WIDTH);
-  const firstGlobalIndex = Math.floor(normalizedPhase / SLOT_STRIDE) - WHEEL_LENGTH;
-  const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + WHEEL_LENGTH * 2 + 6;
+  const firstGlobalIndex = Math.floor(phase / SLOT_STRIDE) - WHEEL_LENGTH * 2;
+  const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + WHEEL_LENGTH * 4 + 12;
   return Array.from({ length: renderCount }, (_, offset) => {
     const globalIndex = firstGlobalIndex + offset;
     const slot = WHEEL_LAYOUT[mod(globalIndex, WHEEL_LENGTH)];
-    const left = globalIndex * SLOT_STRIDE - normalizedPhase;
+    const left = globalIndex * SLOT_STRIDE - phase;
     return { globalIndex, slot, left };
   });
 };
@@ -437,7 +435,7 @@ export default function RoulettePage() {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
       const pulse = 1 + 0.18 * Math.sin(ts / 170);
-      const next = mod(spinTranslateRef.current + baseSpeed * pulse * dt, CYCLE_WIDTH);
+      const next = spinTranslateRef.current + baseSpeed * pulse * dt;
       spinTranslateRef.current = next;
       setSpinTranslate(next);
       rafRef.current = requestAnimationFrame(tick);
@@ -452,7 +450,7 @@ export default function RoulettePage() {
       setIsVisualSpinning(true);
 
       const pointerPx = laneWidth * 0.5;
-      const startPhase = mod(spinTranslateRef.current, CYCLE_WIDTH);
+      const startPhase = spinTranslateRef.current;
       const currentActive = findActiveGlobalIndex(startPhase, laneWidth, pointerPx);
       const currentLayout = mod(currentActive, WHEEL_LENGTH);
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
@@ -467,7 +465,7 @@ export default function RoulettePage() {
         const ease = 1 - (1 - progress) ** 3;
         const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
         const mix = Math.max(0, Math.min(1, ease + wobble));
-        const next = mod(startPhase + totalTravel * mix, CYCLE_WIDTH);
+        const next = startPhase + totalTravel * mix;
         spinTranslateRef.current = next;
         setSpinTranslate(next);
 
@@ -476,7 +474,7 @@ export default function RoulettePage() {
           return;
         }
 
-        const finalPhase = mod(startPhase + totalTravel, CYCLE_WIDTH);
+        const finalPhase = startPhase + totalTravel;
         spinTranslateRef.current = finalPhase;
         setSpinTranslate(finalPhase);
         setIsVisualSpinning(false);
