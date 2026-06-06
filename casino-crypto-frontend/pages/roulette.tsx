@@ -142,8 +142,11 @@ const formatAmount = (value: number): string =>
 const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
 const CYCLE_WIDTH = WHEEL_LENGTH * SLOT_STRIDE;
-const STRIP_REPEATS = 7;
-const CENTER_REPEAT = Math.floor(STRIP_REPEATS / 2);
+const TRACK_REPEATS = 120;
+const TRACK_SLOT_COUNT = TRACK_REPEATS * WHEEL_LENGTH;
+const TRACK_SLOTS: WheelSlot[] = Array.from({ length: TRACK_SLOT_COUNT }, (_, index) => WHEEL_LAYOUT[index % WHEEL_LENGTH]);
+const TRACK_WIDTH = TRACK_SLOT_COUNT * SLOT_STRIDE;
+const INITIAL_TRANSLATE = CYCLE_WIDTH * 30;
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -243,56 +246,40 @@ const buildPanelsFromBreakdown = (
   return panels;
 };
 
-type VisibleSlot = {
-  repeatedIndex: number;
-  slot: WheelSlot;
-  left: number;
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const normalizeTranslate = (value: number, laneWidth: number): number => {
+  let next = value;
+  const min = CYCLE_WIDTH * 8;
+  const max = Math.max(min + CYCLE_WIDTH, TRACK_WIDTH - laneWidth - CYCLE_WIDTH * 8);
+  const shift = CYCLE_WIDTH * 20;
+  while (next > max) next -= shift;
+  while (next < min) next += shift;
+  return next;
 };
 
-const buildVisibleSlots = (phase: number, laneWidth: number): VisibleSlot[] => {
-  const phaseMod = mod(phase, CYCLE_WIDTH);
-  const translateX = phaseMod + CYCLE_WIDTH * (CENTER_REPEAT - 1);
-  const totalSlots = WHEEL_LENGTH * STRIP_REPEATS;
-  const slots: VisibleSlot[] = [];
-
-  for (let repeatedIndex = 0; repeatedIndex < totalSlots; repeatedIndex += 1) {
-    const layoutIndex = mod(repeatedIndex, WHEEL_LENGTH);
-    const left = repeatedIndex * SLOT_STRIDE - translateX;
-    if (left < -SLOT_SIZE * 2 || left > laneWidth + SLOT_SIZE * 2) {
-      continue;
-    }
-    slots.push({
-      repeatedIndex,
-      slot: WHEEL_LAYOUT[layoutIndex],
-      left
-    });
-  }
-
-  return slots;
-};
-
-const findActiveSlot = (
-  visibleSlots: VisibleSlot[],
-  pointerPx: number
-): VisibleSlot | null => {
-  if (visibleSlots.length === 0) {
-    return null;
-  }
-  const hit = visibleSlots.find((slot) => pointerPx >= slot.left && pointerPx <= slot.left + SLOT_SIZE);
-  if (hit) {
-    return hit;
-  }
-  let bestSlot = visibleSlots[0];
+const getActiveRepeatedIndex = (translate: number, pointerPx: number): number => {
+  const approx = clamp(Math.floor((translate + pointerPx) / SLOT_STRIDE), 0, TRACK_SLOT_COUNT - 1);
+  let hitIndex: number | null = null;
+  let bestIndex = approx;
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const slot of visibleSlots) {
-    const centerX = slot.left + SLOT_SIZE / 2;
+
+  for (let index = approx - 3; index <= approx + 3; index += 1) {
+    if (index < 0 || index >= TRACK_SLOT_COUNT) continue;
+    const left = index * SLOT_STRIDE - translate;
+    if (pointerPx >= left && pointerPx <= left + SLOT_SIZE) {
+      hitIndex = index;
+      break;
+    }
+    const centerX = left + SLOT_SIZE / 2;
     const distance = Math.abs(centerX - pointerPx);
     if (distance < bestDistance) {
       bestDistance = distance;
-      bestSlot = slot;
+      bestIndex = index;
     }
   }
-  return bestSlot;
+
+  return hitIndex ?? bestIndex;
 };
 
 export default function RoulettePage() {
@@ -312,7 +299,7 @@ export default function RoulettePage() {
   const [placing, setPlacing] = useState(false);
   const [availableCoins, setAvailableCoins] = useState<number | null>(null);
   const [laneWidth, setLaneWidth] = useState(960);
-  const [spinTranslate, setSpinTranslate] = useState(0);
+  const [spinTranslate, setSpinTranslate] = useState(INITIAL_TRANSLATE);
   const [isVisualSpinning, setIsVisualSpinning] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [flashPanels, setFlashPanels] = useState<Record<BetColor, ColorPanel> | null>(null);
@@ -456,14 +443,15 @@ export default function RoulettePage() {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
       const pulse = 1 + 0.18 * Math.sin(ts / 170);
-      const next = spinTranslateRef.current + baseSpeed * pulse * dt;
+      const raw = spinTranslateRef.current + baseSpeed * pulse * dt;
+      const next = normalizeTranslate(raw, laneWidth);
       spinTranslateRef.current = next;
       setSpinTranslate(next);
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [clearRaf]);
+  }, [clearRaf, laneWidth]);
 
   const stopSpinAtWinningNumber = useCallback(
     (winningNumber: number) => {
@@ -471,23 +459,32 @@ export default function RoulettePage() {
       setIsVisualSpinning(true);
 
       const pointerPx = laneWidth * 0.5;
-      const startPhase = spinTranslateRef.current;
-      const projectedSlots = buildVisibleSlots(startPhase, laneWidth);
-      const currentActive = findActiveSlot(projectedSlots, pointerPx);
-      const currentLayout = currentActive ? mod(currentActive.repeatedIndex, WHEEL_LENGTH) : 0;
+      let startPhase = normalizeTranslate(spinTranslateRef.current, laneWidth);
+      const currentRepeatedIndex = getActiveRepeatedIndex(startPhase, pointerPx);
+      const currentLayout = mod(currentRepeatedIndex, WHEEL_LENGTH);
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
       const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
-      const totalTravel = (stepsToWinner + extraLoops) * SLOT_STRIDE;
+      const targetRepeatedIndex = currentRepeatedIndex + stepsToWinner + extraLoops;
       const durationMs = 2900;
       const startedAt = performance.now();
+      let endPhase = targetRepeatedIndex * SLOT_STRIDE + SLOT_SIZE / 2 - pointerPx;
+
+      while (endPhase > TRACK_WIDTH - laneWidth - CYCLE_WIDTH * 4) {
+        startPhase -= CYCLE_WIDTH * 20;
+        endPhase -= CYCLE_WIDTH * 20;
+      }
+      if (startPhase !== spinTranslateRef.current) {
+        spinTranslateRef.current = startPhase;
+        setSpinTranslate(startPhase);
+      }
 
       const tick = (ts: number) => {
         const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
         const ease = 1 - (1 - progress) ** 3;
         const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
         const mix = Math.max(0, Math.min(1, ease + wobble));
-        const next = startPhase + totalTravel * mix;
+        const next = startPhase + (endPhase - startPhase) * mix;
         spinTranslateRef.current = next;
         setSpinTranslate(next);
 
@@ -496,9 +493,8 @@ export default function RoulettePage() {
           return;
         }
 
-        const finalPhase = startPhase + totalTravel;
-        spinTranslateRef.current = finalPhase;
-        setSpinTranslate(finalPhase);
+        spinTranslateRef.current = endPhase;
+        setSpinTranslate(endPhase);
         setIsVisualSpinning(false);
         rafRef.current = null;
       };
@@ -582,10 +578,7 @@ export default function RoulettePage() {
   }, [isVisualSpinning, round]);
 
   const pointerPx = laneWidth * 0.5;
-  const visibleSlots = useMemo(() => buildVisibleSlots(spinTranslate, laneWidth), [spinTranslate, laneWidth]);
-  const activeSlotKey = useMemo(() => {
-    return findActiveSlot(visibleSlots, pointerPx)?.repeatedIndex ?? -1;
-  }, [pointerPx, visibleSlots]);
+  const activeSlotKey = useMemo(() => getActiveRepeatedIndex(spinTranslate, pointerPx), [pointerPx, spinTranslate]);
 
   const updateAmount = (updater: (current: number) => number) => {
     const next = Math.min(MAX_BET_COINS, Math.max(0, Math.round(updater(currentAmount) * 100) / 100));
@@ -700,20 +693,30 @@ export default function RoulettePage() {
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
           <div className="relative h-[68px]">
-            {visibleSlots.map(({ repeatedIndex, slot, left }) => {
-              const isActive = repeatedIndex === activeSlotKey;
-              return (
-                <div
-                  key={`${repeatedIndex}-${slot.number}`}
-                  className={`absolute top-0 rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
-                    isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
-                  }`}
-                  style={{ left, width: SLOT_SIZE, height: SLOT_SIZE }}
-                >
-                  {slot.isBait && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ebcf7f]" />}
-                </div>
-              );
-            })}
+            <div
+              className="absolute left-0 top-0 flex"
+              style={{
+                width: TRACK_WIDTH,
+                gap: `${SLOT_GAP}px`,
+                transform: `translate3d(${-spinTranslate}px, 0, 0)`,
+                willChange: "transform"
+              }}
+            >
+              {TRACK_SLOTS.map((slot, repeatedIndex) => {
+                const isActive = repeatedIndex === activeSlotKey;
+                return (
+                  <div
+                    key={`${repeatedIndex}-${slot.number}`}
+                    className={`relative rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
+                      isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
+                    }`}
+                    style={{ width: SLOT_SIZE, height: SLOT_SIZE, flex: "0 0 auto" }}
+                  >
+                    {slot.isBait && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ebcf7f]" />}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
