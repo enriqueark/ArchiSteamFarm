@@ -141,6 +141,7 @@ const formatAmount = (value: number): string =>
 
 const formatSignedAmount = (value: number): string => `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 const toMinutesSeconds = (value: number): string => `00:${String(Math.max(0, value)).padStart(2, "0")}`;
+const CYCLE_WIDTH = WHEEL_LENGTH * SLOT_STRIDE;
 
 const toHistoryEntry = (slot: WheelSlot): HistoryEntry => ({
   color: slot.color,
@@ -240,38 +241,60 @@ const buildPanelsFromBreakdown = (
   return panels;
 };
 
-const buildVisibleSlots = (phase: number, laneWidth: number): Array<{ globalIndex: number; slot: WheelSlot; left: number }> => {
-  const firstGlobalIndex = Math.floor(phase / SLOT_STRIDE) - WHEEL_LENGTH * 2;
-  const renderCount = Math.ceil(laneWidth / SLOT_STRIDE) + WHEEL_LENGTH * 4 + 12;
-  return Array.from({ length: renderCount }, (_, offset) => {
-    const globalIndex = firstGlobalIndex + offset;
-    const slot = WHEEL_LAYOUT[mod(globalIndex, WHEEL_LENGTH)];
-    const left = globalIndex * SLOT_STRIDE - phase;
-    return { globalIndex, slot, left };
-  });
+type VisibleSlot = {
+  renderKey: string;
+  layoutIndex: number;
+  slot: WheelSlot;
+  left: number;
 };
 
-const findActiveGlobalIndex = (
+const buildVisibleSlots = (phase: number, laneWidth: number): VisibleSlot[] => {
+  const phaseMod = mod(phase, CYCLE_WIDTH);
+  const slots: VisibleSlot[] = [];
+
+  for (let repeat = -2; repeat <= 3; repeat += 1) {
+    for (let layoutIndex = 0; layoutIndex < WHEEL_LENGTH; layoutIndex += 1) {
+      const left = repeat * CYCLE_WIDTH + layoutIndex * SLOT_STRIDE - phaseMod;
+      if (left < -SLOT_SIZE * 2 || left > laneWidth + SLOT_SIZE * 2) {
+        continue;
+      }
+      slots.push({
+        renderKey: `${repeat}:${layoutIndex}`,
+        layoutIndex,
+        slot: WHEEL_LAYOUT[layoutIndex],
+        left
+      });
+    }
+  }
+
+  slots.sort((a, b) => a.left - b.left);
+  return slots;
+};
+
+const findActiveSlot = (
   phase: number,
   laneWidth: number,
   pointerPx: number
-): number => {
+): VisibleSlot | null => {
   const visible = buildVisibleSlots(phase, laneWidth);
+  if (visible.length === 0) {
+    return null;
+  }
   const hit = visible.find((slot) => pointerPx >= slot.left && pointerPx <= slot.left + SLOT_SIZE);
   if (hit) {
-    return hit.globalIndex;
+    return hit;
   }
-  let bestIndex = visible[0]?.globalIndex ?? 0;
+  let bestSlot = visible[0];
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const slot of visible) {
     const centerX = slot.left + SLOT_SIZE / 2;
     const distance = Math.abs(centerX - pointerPx);
     if (distance < bestDistance) {
       bestDistance = distance;
-      bestIndex = slot.globalIndex;
+      bestSlot = slot;
     }
   }
-  return bestIndex;
+  return bestSlot;
 };
 
 export default function RoulettePage() {
@@ -435,7 +458,7 @@ export default function RoulettePage() {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
       const pulse = 1 + 0.18 * Math.sin(ts / 170);
-      const next = spinTranslateRef.current + baseSpeed * pulse * dt;
+      const next = mod(spinTranslateRef.current + baseSpeed * pulse * dt, CYCLE_WIDTH);
       spinTranslateRef.current = next;
       setSpinTranslate(next);
       rafRef.current = requestAnimationFrame(tick);
@@ -450,9 +473,9 @@ export default function RoulettePage() {
       setIsVisualSpinning(true);
 
       const pointerPx = laneWidth * 0.5;
-      const startPhase = spinTranslateRef.current;
-      const currentActive = findActiveGlobalIndex(startPhase, laneWidth, pointerPx);
-      const currentLayout = mod(currentActive, WHEEL_LENGTH);
+      const startPhase = mod(spinTranslateRef.current, CYCLE_WIDTH);
+      const currentActive = findActiveSlot(startPhase, laneWidth, pointerPx);
+      const currentLayout = currentActive?.layoutIndex ?? 0;
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
       const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
@@ -465,7 +488,7 @@ export default function RoulettePage() {
         const ease = 1 - (1 - progress) ** 3;
         const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
         const mix = Math.max(0, Math.min(1, ease + wobble));
-        const next = startPhase + totalTravel * mix;
+        const next = mod(startPhase + totalTravel * mix, CYCLE_WIDTH);
         spinTranslateRef.current = next;
         setSpinTranslate(next);
 
@@ -474,7 +497,7 @@ export default function RoulettePage() {
           return;
         }
 
-        const finalPhase = startPhase + totalTravel;
+        const finalPhase = mod(startPhase + totalTravel, CYCLE_WIDTH);
         spinTranslateRef.current = finalPhase;
         setSpinTranslate(finalPhase);
         setIsVisualSpinning(false);
@@ -561,8 +584,8 @@ export default function RoulettePage() {
 
   const pointerPx = laneWidth * 0.5;
   const visibleSlots = useMemo(() => buildVisibleSlots(spinTranslate, laneWidth), [spinTranslate, laneWidth]);
-  const activeGlobalIndex = useMemo(() => {
-    return findActiveGlobalIndex(spinTranslate, laneWidth, pointerPx);
+  const activeSlotKey = useMemo(() => {
+    return findActiveSlot(spinTranslate, laneWidth, pointerPx)?.renderKey ?? "";
   }, [laneWidth, pointerPx, spinTranslate]);
 
   const updateAmount = (updater: (current: number) => number) => {
@@ -678,11 +701,11 @@ export default function RoulettePage() {
           <div className="pointer-events-none absolute bottom-2 left-1/2 top-2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/85 shadow-[0_0_14px_rgba(255,255,255,0.35)]" />
 
           <div className="relative h-[68px]">
-            {visibleSlots.map(({ globalIndex, slot, left }) => {
-              const isActive = globalIndex === activeGlobalIndex;
+            {visibleSlots.map(({ renderKey, slot, left }) => {
+              const isActive = renderKey === activeSlotKey;
               return (
                 <div
-                  key={`${globalIndex}-${slot.number}`}
+                  key={`${renderKey}-${slot.number}`}
                   className={`absolute top-0 rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
                     isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
                   }`}
