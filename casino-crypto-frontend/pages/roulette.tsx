@@ -51,6 +51,7 @@ type ColorPanel = {
 const CURRENCY = "USDT";
 const BET_ORDER: BetColor[] = ["RED", "GREEN", "BLACK", "BAIT"];
 const HISTORY_STORAGE_KEY = "roulette-color-history-v4";
+const SPIN_TRANSLATE_STORAGE_KEY = "roulette-spin-translate-v1";
 const MIN_BET_COINS = 0.1;
 const MAX_BET_COINS = 5_000;
 const COIN_DECIMALS = 1e8;
@@ -249,6 +250,28 @@ const buildPanelsFromBreakdown = (
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
+const readStoredSpinTranslate = (): number => {
+  if (typeof window === "undefined") return INITIAL_TRANSLATE;
+  try {
+    const raw = window.localStorage.getItem(SPIN_TRANSLATE_STORAGE_KEY);
+    if (!raw) return INITIAL_TRANSLATE;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return INITIAL_TRANSLATE;
+    return Math.max(0, Math.min(TRACK_WIDTH - SLOT_STRIDE, parsed));
+  } catch {
+    return INITIAL_TRANSLATE;
+  }
+};
+
+const persistSpinTranslate = (value: number): void => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SPIN_TRANSLATE_STORAGE_KEY, String(value));
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
 const normalizeTranslate = (value: number, laneWidth: number): number => {
   let next = value;
   const min = CYCLE_WIDTH * 8;
@@ -309,7 +332,7 @@ export default function RoulettePage() {
   const [placing, setPlacing] = useState(false);
   const [availableCoins, setAvailableCoins] = useState<number | null>(null);
   const [laneWidth, setLaneWidth] = useState(960);
-  const [spinTranslate, setSpinTranslate] = useState(INITIAL_TRANSLATE);
+  const [spinTranslate, setSpinTranslate] = useState(() => readStoredSpinTranslate());
   const [isVisualSpinning, setIsVisualSpinning] = useState(false);
   const [revealedWinnerRoundId, setRevealedWinnerRoundId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -322,6 +345,13 @@ export default function RoulettePage() {
   useEffect(() => {
     availableCoinsRef.current = availableCoins;
   }, [availableCoins]);
+
+  useEffect(
+    () => () => {
+      persistSpinTranslate(spinTranslateRef.current);
+    },
+    []
+  );
 
   const clearRaf = useCallback(() => {
     if (rafRef.current !== null) {
@@ -529,11 +559,10 @@ export default function RoulettePage() {
       setRevealedWinnerRoundId(null);
 
       const winnerSlot = slotByWinningNumber(round.winningNumber);
-      if (previous.status === "SPINNING" || isVisualSpinning) {
-        stopSpinAtWinningNumber(round.winningNumber, () => setRevealedWinnerRoundId(round.id));
-      } else {
+      stopSpinAtWinningNumber(round.winningNumber, () => {
+        persistSpinTranslate(spinTranslateRef.current);
         setRevealedWinnerRoundId(round.id);
-      }
+      });
 
       setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
 
@@ -751,7 +780,7 @@ export default function RoulettePage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#9da2ac]">Play amount</p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex h-10 min-w-[180px] flex-1 items-center gap-2 rounded-md border border-[#353941] bg-[#16191e] px-3">
-            <img src="/assets/coin-dino-original.png" alt="coin" className="h-4 w-4 object-contain" />
+            <img src="/assets/coin-dino-original.png" alt="coin" className="h-5 w-5 object-contain" />
             <input
               value={playAmountInput}
               onChange={(event) => setPlayAmountInput(event.target.value)}
@@ -870,11 +899,12 @@ export default function RoulettePage() {
                         <span className="truncate text-[#eceef2]">{entry.userLabel}</span>
                       </div>
                       <span
-                        className={
+                        className={`inline-flex items-center gap-1 ${
                           showingFlash ? (entry.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#d6d9de]"
-                        }
+                        }`}
                       >
-                        {showingFlash ? formatSignedAmount(entry.net) : formatAmount(entry.amount)}
+                        <img src="/assets/coin-dino-original.png" alt="coin" className="h-3.5 w-3.5 object-contain" />
+                        <span>{showingFlash ? formatSignedAmount(entry.net) : formatAmount(entry.amount)}</span>
                       </span>
                     </div>
                   ))
