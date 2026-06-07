@@ -282,6 +282,12 @@ const getActiveRepeatedIndex = (translate: number, pointerPx: number): number =>
   return hitIndex ?? bestIndex;
 };
 
+const getSettleMix = (progress: number): number => {
+  const clamped = clamp(progress, 0, 1);
+  // Fast launch + smooth, very slow tail near the stop.
+  return 1 - (1 - clamped) ** 5;
+};
+
 export default function RoulettePage() {
   const toast = useToast();
   const laneRef = useRef<HTMLDivElement | null>(null);
@@ -437,13 +443,12 @@ export default function RoulettePage() {
     clearRaf();
     setIsVisualSpinning(true);
     let lastTs = performance.now();
-    const baseSpeed = 870; // px/s
+    const baseSpeed = 940; // px/s
 
     const tick = (ts: number) => {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
-      const pulse = 1 + 0.18 * Math.sin(ts / 170);
-      const raw = spinTranslateRef.current + baseSpeed * pulse * dt;
+      const raw = spinTranslateRef.current + baseSpeed * dt;
       const next = normalizeTranslate(raw, laneWidth);
       spinTranslateRef.current = next;
       setSpinTranslate(next);
@@ -466,9 +471,10 @@ export default function RoulettePage() {
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
       const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
       const targetRepeatedIndex = currentRepeatedIndex + stepsToWinner + extraLoops;
-      const durationMs = 2900;
+      const durationMs = 4300;
       const startedAt = performance.now();
-      let endPhase = targetRepeatedIndex * SLOT_STRIDE + SLOT_SIZE / 2 - pointerPx;
+      const landingOffset = SLOT_SIZE * (0.18 + Math.random() * 0.64);
+      let endPhase = targetRepeatedIndex * SLOT_STRIDE + landingOffset - pointerPx;
 
       while (endPhase > TRACK_WIDTH - laneWidth - CYCLE_WIDTH * 4) {
         startPhase -= CYCLE_WIDTH * 20;
@@ -481,9 +487,7 @@ export default function RoulettePage() {
 
       const tick = (ts: number) => {
         const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
-        const ease = 1 - (1 - progress) ** 3;
-        const wobble = progress > 0.72 ? Math.sin((progress - 0.72) * 36) * (1 - progress) * 0.025 : 0;
-        const mix = Math.max(0, Math.min(1, ease + wobble));
+        const mix = getSettleMix(progress);
         const next = startPhase + (endPhase - startPhase) * mix;
         spinTranslateRef.current = next;
         setSpinTranslate(next);
