@@ -230,22 +230,27 @@ const walletAvailableCoins = (wallet: Wallet): number => {
   }
 };
 
+const walletBalanceCoins = (wallet: Wallet): number => {
+  const balanceCoins = parseCoinsValue(wallet.balanceCoins);
+  if (balanceCoins !== null) {
+    return Math.max(0, balanceCoins);
+  }
+
+  if (wallet.balanceAtomic && Number.isFinite(Number(wallet.balanceAtomic))) {
+    return Math.max(0, atomicToCoins(wallet.balanceAtomic));
+  }
+
+  return walletAvailableCoins(wallet);
+};
+
 const findWalletByCurrency = (wallets: Wallet[], currency: string): Wallet | undefined =>
   wallets.find((wallet) => wallet.currency.toUpperCase() === currency.toUpperCase());
 
 const pickPrimaryRouletteWallet = (wallets: Wallet[]): Wallet | undefined => {
   if (wallets.length === 0) return undefined;
   const coinsWallet = findWalletByCurrency(wallets, "COINS");
-  const gameWallet = findWalletByCurrency(wallets, CURRENCY);
-
-  if (coinsWallet && walletAvailableCoins(coinsWallet) > 0) return coinsWallet;
-  if (gameWallet && walletAvailableCoins(gameWallet) > 0) return gameWallet;
   if (coinsWallet) return coinsWallet;
-  if (gameWallet) return gameWallet;
-
-  return wallets.reduce((best, candidate) =>
-    walletAvailableCoins(candidate) > walletAvailableCoins(best) ? candidate : best
-  );
+  return wallets[0];
 };
 
 const formatCoinsInput = (value: number): string => {
@@ -407,7 +412,7 @@ export default function RoulettePage() {
       const wallets = await getWallets();
       const primary = pickPrimaryRouletteWallet(wallets);
       if (primary) {
-        const next = walletAvailableCoins(primary);
+        const next = walletBalanceCoins(primary);
         availableCoinsRef.current = next;
         setAvailableCoins(next);
         return next;
