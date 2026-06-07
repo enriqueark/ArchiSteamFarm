@@ -213,6 +213,24 @@ const walletAvailableCoins = (wallet: Wallet): number => {
   }
 };
 
+const findWalletByCurrency = (wallets: Wallet[], currency: string): Wallet | undefined =>
+  wallets.find((wallet) => wallet.currency.toUpperCase() === currency.toUpperCase());
+
+const pickPrimaryRouletteWallet = (wallets: Wallet[]): Wallet | undefined => {
+  if (wallets.length === 0) return undefined;
+  const gameWallet = findWalletByCurrency(wallets, CURRENCY);
+  const coinsWallet = findWalletByCurrency(wallets, "COINS");
+
+  if (gameWallet && walletAvailableCoins(gameWallet) > 0) return gameWallet;
+  if (coinsWallet && walletAvailableCoins(coinsWallet) > 0) return coinsWallet;
+  if (gameWallet) return gameWallet;
+  if (coinsWallet) return coinsWallet;
+
+  return wallets.reduce((best, candidate) =>
+    walletAvailableCoins(candidate) > walletAvailableCoins(best) ? candidate : best
+  );
+};
+
 const formatCoinsInput = (value: number): string => {
   const normalized = Math.max(0, value);
   return normalized.toFixed(8).replace(/\.?0+$/, "") || "0";
@@ -367,18 +385,20 @@ export default function RoulettePage() {
     }
   }, []);
 
-  const loadWalletBalance = useCallback(async () => {
+  const loadWalletBalance = useCallback(async (): Promise<number | null> => {
     try {
       const wallets = await getWallets();
-      const primary = wallets.find((item) => item.currency === CURRENCY) ?? wallets[0];
+      const primary = pickPrimaryRouletteWallet(wallets);
       if (primary) {
         const next = walletAvailableCoins(primary);
         availableCoinsRef.current = next;
         setAvailableCoins(next);
+        return next;
       }
     } catch {
       // Keep last known value on transient errors.
     }
+    return availableCoinsRef.current ?? null;
   }, []);
 
   useEffect(() => {
@@ -676,8 +696,9 @@ export default function RoulettePage() {
   const displayedPanels = flashPanels ?? livePanels;
 
   const applyMaxBet = async () => {
-    await loadWalletBalance();
-    const capped = Math.min(MAX_BET_COINS, Math.max(0, availableCoinsRef.current ?? 0));
+    const refreshed = await loadWalletBalance();
+    const base = refreshed ?? availableCoinsRef.current ?? availableCoins ?? 0;
+    const capped = Math.min(MAX_BET_COINS, Math.max(0, base));
     setPlayAmountInput(formatCoinsInput(capped));
   };
 
@@ -777,7 +798,7 @@ export default function RoulettePage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#9da2ac]">Play amount</p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex h-10 min-w-[180px] flex-1 items-center gap-2 rounded-md border border-[#353941] bg-[#16191e] px-3">
-            <img src="/assets/coin-dino-original.png" alt="coin" className="h-6 w-6 object-contain" />
+            <img src="/assets/coin-dino-original.png" alt="coin" className="h-7 w-7 object-contain" />
             <input
               value={playAmountInput}
               onChange={(event) => setPlayAmountInput(event.target.value)}
@@ -895,7 +916,7 @@ export default function RoulettePage() {
                           showingFlash ? (entry.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#d6d9de]"
                         }`}
                       >
-                        <img src="/assets/coin-dino-original.png" alt="coin" className="h-5 w-5 object-contain" />
+                        <img src="/assets/coin-dino-original.png" alt="coin" className="h-6 w-6 object-contain" />
                         <span>{showingFlash ? formatSignedAmount(entry.net) : formatAmount(entry.amount)}</span>
                       </span>
                     </div>
