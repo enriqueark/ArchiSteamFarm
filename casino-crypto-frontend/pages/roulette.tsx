@@ -58,6 +58,7 @@ const COIN_DECIMALS = 1e8;
 const SLOT_SIZE = 68;
 const SLOT_GAP = 9;
 const SLOT_STRIDE = SLOT_SIZE + SLOT_GAP;
+const CONTINUOUS_SPIN_SPEED = 940; // px/s
 
 // Alternating red/black pattern with BAIT on both sides of green.
 const WHEEL_LAYOUT: WheelSlot[] = [
@@ -282,10 +283,13 @@ const getActiveRepeatedIndex = (translate: number, pointerPx: number): number =>
   return hitIndex ?? bestIndex;
 };
 
-const getSettleMix = (progress: number): number => {
-  const clamped = clamp(progress, 0, 1);
-  // Fast launch + smooth, very slow tail near the stop.
-  return 1 - (1 - clamped) ** 5;
+const getSettleMix = (progress: number, startSlope: number): number => {
+  const t = clamp(progress, 0, 1);
+  // Cubic with C1 continuity: starts at current lane speed, ends with zero speed.
+  const k = clamp(startSlope, 0.6, 1.6);
+  const a = k - 2;
+  const b = 3 - 2 * k;
+  return a * t * t * t + b * t * t + k * t;
 };
 
 export default function RoulettePage() {
@@ -443,12 +447,11 @@ export default function RoulettePage() {
     clearRaf();
     setIsVisualSpinning(true);
     let lastTs = performance.now();
-    const baseSpeed = 940; // px/s
 
     const tick = (ts: number) => {
       const dt = (ts - lastTs) / 1000;
       lastTs = ts;
-      const raw = spinTranslateRef.current + baseSpeed * dt;
+      const raw = spinTranslateRef.current + CONTINUOUS_SPIN_SPEED * dt;
       const next = normalizeTranslate(raw, laneWidth);
       spinTranslateRef.current = next;
       setSpinTranslate(next);
@@ -471,7 +474,7 @@ export default function RoulettePage() {
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
       const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
       const targetRepeatedIndex = currentRepeatedIndex + stepsToWinner + extraLoops;
-      const durationMs = 4300;
+      const durationMs = 5200;
       const startedAt = performance.now();
       const landingOffset = SLOT_SIZE * (0.18 + Math.random() * 0.64);
       let endPhase = targetRepeatedIndex * SLOT_STRIDE + landingOffset - pointerPx;
@@ -484,10 +487,12 @@ export default function RoulettePage() {
         spinTranslateRef.current = startPhase;
         setSpinTranslate(startPhase);
       }
+      const travelDistance = Math.max(1, endPhase - startPhase);
+      const startSlope = (CONTINUOUS_SPIN_SPEED * (durationMs / 1000)) / travelDistance;
 
       const tick = (ts: number) => {
         const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
-        const mix = getSettleMix(progress);
+        const mix = getSettleMix(progress, startSlope);
         const next = startPhase + (endPhase - startPhase) * mix;
         spinTranslateRef.current = next;
         setSpinTranslate(next);
