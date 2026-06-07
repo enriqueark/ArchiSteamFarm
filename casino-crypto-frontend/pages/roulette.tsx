@@ -327,7 +327,6 @@ export default function RoulettePage() {
   const [round, setRound] = useState<RouletteRound | null>(null);
   const [breakdown, setBreakdown] = useState<RouletteBetBreakdown | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [selectedColor, setSelectedColor] = useState<BetColor>("RED");
   const [playAmountInput, setPlayAmountInput] = useState("1");
   const [placing, setPlacing] = useState(false);
   const [availableCoins, setAvailableCoins] = useState<number | null>(null);
@@ -562,22 +561,21 @@ export default function RoulettePage() {
       stopSpinAtWinningNumber(round.winningNumber, () => {
         persistSpinTranslate(spinTranslateRef.current);
         setRevealedWinnerRoundId(round.id);
-      });
+        setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
 
-      setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
-
-      void (async () => {
-        try {
-          const settledBreakdown = await getRouletteBetBreakdownByRoundId(round.id);
-          setFlashPanels(buildPanelsFromBreakdown(settledBreakdown, winnerSlot));
-          if (flashTimerRef.current !== null) {
-            window.clearTimeout(flashTimerRef.current);
+        void (async () => {
+          try {
+            const settledBreakdown = await getRouletteBetBreakdownByRoundId(round.id);
+            setFlashPanels(buildPanelsFromBreakdown(settledBreakdown, winnerSlot));
+            if (flashTimerRef.current !== null) {
+              window.clearTimeout(flashTimerRef.current);
+            }
+            flashTimerRef.current = window.setTimeout(() => setFlashPanels(null), 3000);
+          } catch {
+            // Ignore missing settled breakdown.
           }
-          flashTimerRef.current = window.setTimeout(() => setFlashPanels(null), 3000);
-        } catch {
-          // Ignore missing settled breakdown.
-        }
-      })();
+        })();
+      });
     }
 
     if (status === "OPEN" && previous.status && previous.status !== "OPEN") {
@@ -641,7 +639,6 @@ export default function RoulettePage() {
   };
 
   const placeBet = async (color: BetColor) => {
-    setSelectedColor(color);
     if (!canBetNow) {
       return;
     }
@@ -780,7 +777,7 @@ export default function RoulettePage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#9da2ac]">Play amount</p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex h-10 min-w-[180px] flex-1 items-center gap-2 rounded-md border border-[#353941] bg-[#16191e] px-3">
-            <img src="/assets/coin-dino-original.png" alt="coin" className="h-5 w-5 object-contain" />
+            <img src="/assets/coin-dino-original.png" alt="coin" className="h-6 w-6 object-contain" />
             <input
               value={playAmountInput}
               onChange={(event) => setPlayAmountInput(event.target.value)}
@@ -863,11 +860,6 @@ export default function RoulettePage() {
                   <span className={`h-5 w-5 rounded-full border ${BET_THEME[color].chipClass}`} />
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
-                {selectedColor === color && (
-                  <span className="rounded border border-[#5a5e68] bg-[#24272d] px-1.5 py-0.5 text-[10px] font-semibold text-[#d7dae0]">
-                    SELECTED
-                  </span>
-                )}
               </div>
 
               <button
@@ -903,7 +895,7 @@ export default function RoulettePage() {
                           showingFlash ? (entry.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#d6d9de]"
                         }`}
                       >
-                        <img src="/assets/coin-dino-original.png" alt="coin" className="h-3.5 w-3.5 object-contain" />
+                        <img src="/assets/coin-dino-original.png" alt="coin" className="h-5 w-5 object-contain" />
                         <span>{showingFlash ? formatSignedAmount(entry.net) : formatAmount(entry.amount)}</span>
                       </span>
                     </div>
