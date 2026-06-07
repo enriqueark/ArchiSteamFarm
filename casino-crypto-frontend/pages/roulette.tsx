@@ -553,9 +553,6 @@ export default function RoulettePage() {
 
     if (status === "OPEN" && previous.status && previous.status !== "OPEN") {
       clearFlash();
-      if (rafRef.current === null) {
-        setIsVisualSpinning(false);
-      }
       setRevealedWinnerRoundId(null);
       handledSettledRoundRef.current = null;
     }
@@ -570,7 +567,6 @@ export default function RoulettePage() {
   }, [playAmountInput]);
 
   const maxBetByBalance = Math.min(MAX_BET_COINS, Math.max(0, availableCoins ?? 0));
-  const canBetNow = !!round && round.status === "OPEN" && !isVisualSpinning && !placing;
 
   const nextSpinSeconds = useMemo(() => {
     if (!round) return 0;
@@ -586,9 +582,17 @@ export default function RoulettePage() {
     return Math.max(0, Math.ceil((target - now) / 1000));
   }, [nowMs, round]);
 
+  const shouldKeepSpinUi = useMemo(() => {
+    if (!round) return isVisualSpinning;
+    const waitingReveal =
+      round.status === "SETTLED" && round.winningNumber !== null && revealedWinnerRoundId !== round.id;
+    return isVisualSpinning || round.status === "SPINNING" || waitingReveal;
+  }, [isVisualSpinning, revealedWinnerRoundId, round]);
+  const canBetNow = !!round && round.status === "OPEN" && !shouldKeepSpinUi && !placing;
+
   const statusText = useMemo(() => {
     if (!round) return "Waiting for next spin";
-    if (isVisualSpinning || round.status === "SPINNING") return "Spinning...";
+    if (shouldKeepSpinUi) return "Spinning...";
     if (round.status === "CLOSED") return "Bets closed";
     if (round.status === "SETTLED" && round.winningNumber !== null) {
       if (revealedWinnerRoundId === round.id) {
@@ -597,7 +601,7 @@ export default function RoulettePage() {
       return "Spinning...";
     }
     return "Waiting for next spin";
-  }, [isVisualSpinning, revealedWinnerRoundId, round]);
+  }, [revealedWinnerRoundId, round, shouldKeepSpinUi]);
 
   const pointerPx = laneWidth * 0.5;
   const activeSlotKey = useMemo(() => getActiveRepeatedIndex(spinTranslate, pointerPx), [pointerPx, spinTranslate]);
@@ -706,7 +710,7 @@ export default function RoulettePage() {
           <div className="rounded-lg border border-[#3a3d45] bg-[#16181d] px-3 py-2 text-right">
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9a9ea8]">Next spin</p>
             <p className="font-mono text-lg font-bold text-[#f2f3f6]">
-              {isVisualSpinning || round?.status === "SPINNING" ? "--:--" : toMinutesSeconds(nextSpinSeconds)}
+              {shouldKeepSpinUi ? "--:--" : toMinutesSeconds(nextSpinSeconds)}
             </p>
           </div>
         </div>
@@ -819,8 +823,9 @@ export default function RoulettePage() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {BET_ORDER.map((color) => {
           const panel = displayedPanels[color];
-          const headerValue = showingFlash ? formatSignedAmount(panel.net) : "+0.00";
-          const headerClass = showingFlash ? (panel.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]") : "text-[#56d58f]";
+          const shouldShowNet = showingFlash && panel.plays > 0;
+          const headerValue = shouldShowNet ? formatSignedAmount(panel.net) : null;
+          const headerClass = panel.net >= 0 ? "text-[#56d58f]" : "text-[#ff8080]";
 
           return (
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
@@ -849,7 +854,7 @@ export default function RoulettePage() {
 
               <div className="mb-2 flex items-center justify-between text-xs">
                 <span className="text-[#a2a7b0]">{panel.plays} Plays</span>
-                <span className={`font-semibold ${headerClass}`}>{headerValue}</span>
+                {headerValue ? <span className={`font-semibold ${headerClass}`}>{headerValue}</span> : <span />}
               </div>
 
               <div className="max-h-[210px] space-y-1 overflow-auto pr-1">
