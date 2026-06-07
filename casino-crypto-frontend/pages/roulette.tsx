@@ -58,7 +58,7 @@ const COIN_DECIMALS = 1e8;
 const SLOT_SIZE = 68;
 const SLOT_GAP = 9;
 const SLOT_STRIDE = SLOT_SIZE + SLOT_GAP;
-const CONTINUOUS_SPIN_SPEED = 940; // px/s
+const CONTINUOUS_SPIN_SPEED = 1080; // px/s
 
 // Alternating red/black pattern with BAIT on both sides of green.
 const WHEEL_LAYOUT: WheelSlot[] = [
@@ -286,7 +286,7 @@ const getActiveRepeatedIndex = (translate: number, pointerPx: number): number =>
 const getSettleMix = (progress: number, startSlope: number): number => {
   const t = clamp(progress, 0, 1);
   // Cubic with C1 continuity: starts at current lane speed, ends with zero speed.
-  const k = clamp(startSlope, 0.6, 1.6);
+  const k = clamp(startSlope, 0.8, 2.4);
   const a = k - 2;
   const b = 3 - 2 * k;
   return a * t * t * t + b * t * t + k * t;
@@ -311,6 +311,7 @@ export default function RoulettePage() {
   const [laneWidth, setLaneWidth] = useState(960);
   const [spinTranslate, setSpinTranslate] = useState(INITIAL_TRANSLATE);
   const [isVisualSpinning, setIsVisualSpinning] = useState(false);
+  const [revealedWinnerRoundId, setRevealedWinnerRoundId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
   const [flashPanels, setFlashPanels] = useState<Record<BetColor, ColorPanel> | null>(null);
 
@@ -462,7 +463,7 @@ export default function RoulettePage() {
   }, [clearRaf, laneWidth]);
 
   const stopSpinAtWinningNumber = useCallback(
-    (winningNumber: number) => {
+    (winningNumber: number, onComplete?: () => void) => {
       clearRaf();
       setIsVisualSpinning(true);
 
@@ -472,9 +473,9 @@ export default function RoulettePage() {
       const currentLayout = mod(currentRepeatedIndex, WHEEL_LENGTH);
       const winnerLayout = NUMBER_TO_LAYOUT_INDEX[winningNumber] ?? NUMBER_TO_LAYOUT_INDEX[0];
       const stepsToWinner = mod(winnerLayout - currentLayout, WHEEL_LENGTH);
-      const extraLoops = WHEEL_LENGTH * (2 + Math.floor(Math.random() * 2));
+      const extraLoops = WHEEL_LENGTH * (1 + Math.floor(Math.random() * 2));
       const targetRepeatedIndex = currentRepeatedIndex + stepsToWinner + extraLoops;
-      const durationMs = 5200;
+      const durationMs = 3600;
       const startedAt = performance.now();
       const landingOffset = SLOT_SIZE * (0.18 + Math.random() * 0.64);
       let endPhase = targetRepeatedIndex * SLOT_STRIDE + landingOffset - pointerPx;
@@ -505,6 +506,7 @@ export default function RoulettePage() {
         spinTranslateRef.current = endPhase;
         setSpinTranslate(endPhase);
         setIsVisualSpinning(false);
+        onComplete?.();
         rafRef.current = null;
       };
 
@@ -524,10 +526,13 @@ export default function RoulettePage() {
 
     if (status === "SETTLED" && round.winningNumber !== null && handledSettledRoundRef.current !== round.id) {
       handledSettledRoundRef.current = round.id;
+      setRevealedWinnerRoundId(null);
 
       const winnerSlot = slotByWinningNumber(round.winningNumber);
       if (previous.status === "SPINNING" || isVisualSpinning) {
-        stopSpinAtWinningNumber(round.winningNumber);
+        stopSpinAtWinningNumber(round.winningNumber, () => setRevealedWinnerRoundId(round.id));
+      } else {
+        setRevealedWinnerRoundId(round.id);
       }
 
       setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
@@ -548,7 +553,10 @@ export default function RoulettePage() {
 
     if (status === "OPEN" && previous.status && previous.status !== "OPEN") {
       clearFlash();
-      setIsVisualSpinning(false);
+      if (rafRef.current === null) {
+        setIsVisualSpinning(false);
+      }
+      setRevealedWinnerRoundId(null);
       handledSettledRoundRef.current = null;
     }
 
@@ -582,9 +590,14 @@ export default function RoulettePage() {
     if (!round) return "Waiting for next spin";
     if (isVisualSpinning || round.status === "SPINNING") return "Spinning...";
     if (round.status === "CLOSED") return "Bets closed";
-    if (round.status === "SETTLED" && round.winningNumber !== null) return getWinnerLabel(slotByWinningNumber(round.winningNumber));
+    if (round.status === "SETTLED" && round.winningNumber !== null) {
+      if (revealedWinnerRoundId === round.id) {
+        return getWinnerLabel(slotByWinningNumber(round.winningNumber));
+      }
+      return "Spinning...";
+    }
     return "Waiting for next spin";
-  }, [isVisualSpinning, round]);
+  }, [isVisualSpinning, revealedWinnerRoundId, round]);
 
   const pointerPx = laneWidth * 0.5;
   const activeSlotKey = useMemo(() => getActiveRepeatedIndex(spinTranslate, pointerPx), [pointerPx, spinTranslate]);
