@@ -197,17 +197,34 @@ const emptyPanels = (): Record<BetColor, ColorPanel> => ({
   BAIT: { plays: 0, net: 0, entries: [] }
 });
 
+const parseCoinsValue = (value?: string): number | null => {
+  if (!value) return null;
+  const normalized = value.replace(/[^0-9.-]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+};
+
 const walletAvailableCoins = (wallet: Wallet): number => {
-  if (wallet.availableCoins && Number.isFinite(Number(wallet.availableCoins))) {
-    return Number(wallet.availableCoins);
+  const availableCoins = parseCoinsValue(wallet.availableCoins);
+  if (availableCoins !== null) {
+    return Math.max(0, availableCoins);
   }
-  if (wallet.availableAtomic) {
-    return atomicToCoins(wallet.availableAtomic);
+
+  if (wallet.availableAtomic && Number.isFinite(Number(wallet.availableAtomic))) {
+    return Math.max(0, atomicToCoins(wallet.availableAtomic));
   }
+
+  const balanceCoins = parseCoinsValue(wallet.balanceCoins);
+  const lockedCoins = parseCoinsValue(wallet.lockedCoins) ?? 0;
+  if (balanceCoins !== null) {
+    return Math.max(0, balanceCoins - lockedCoins);
+  }
+
   try {
     const balance = BigInt(wallet.balanceAtomic);
     const locked = BigInt(wallet.lockedAtomic);
-    return Number(balance - locked) / COIN_DECIMALS;
+    return Math.max(0, Number(balance - locked) / COIN_DECIMALS);
   } catch {
     return 0;
   }
@@ -218,13 +235,13 @@ const findWalletByCurrency = (wallets: Wallet[], currency: string): Wallet | und
 
 const pickPrimaryRouletteWallet = (wallets: Wallet[]): Wallet | undefined => {
   if (wallets.length === 0) return undefined;
-  const gameWallet = findWalletByCurrency(wallets, CURRENCY);
   const coinsWallet = findWalletByCurrency(wallets, "COINS");
+  const gameWallet = findWalletByCurrency(wallets, CURRENCY);
 
-  if (gameWallet && walletAvailableCoins(gameWallet) > 0) return gameWallet;
   if (coinsWallet && walletAvailableCoins(coinsWallet) > 0) return coinsWallet;
-  if (gameWallet) return gameWallet;
+  if (gameWallet && walletAvailableCoins(gameWallet) > 0) return gameWallet;
   if (coinsWallet) return coinsWallet;
+  if (gameWallet) return gameWallet;
 
   return wallets.reduce((best, candidate) =>
     walletAvailableCoins(candidate) > walletAvailableCoins(best) ? candidate : best
