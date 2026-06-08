@@ -11,6 +11,7 @@ import {
   type Wallet
 } from "@/lib/api";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
+import { refreshBalance } from "@/lib/refreshBalance";
 import { useToast } from "@/lib/toast";
 
 type BetColor = "RED" | "GREEN" | "BLACK" | "BAIT";
@@ -604,6 +605,8 @@ export default function RoulettePage() {
         persistSpinTranslate(spinTranslateRef.current);
         setRevealedWinnerRoundId(round.id);
         setHistory((current) => [toHistoryEntry(winnerSlot), ...current].slice(0, 100));
+        void loadWalletBalance();
+        refreshBalance();
 
         void (async () => {
           try {
@@ -627,7 +630,7 @@ export default function RoulettePage() {
     }
 
     previousRoundRef.current = { id: round.id, status };
-  }, [clearFlash, isVisualSpinning, round, startContinuousSpin, stopSpinAtWinningNumber]);
+  }, [clearFlash, isVisualSpinning, loadWalletBalance, round, startContinuousSpin, stopSpinAtWinningNumber]);
 
   const currentAmount = useMemo(() => {
     const normalized = Number(playAmountInput.replace(",", "."));
@@ -705,6 +708,7 @@ export default function RoulettePage() {
       }
       const latestBreakdown = await getCurrentRouletteBetBreakdown(CURRENCY);
       setBreakdown(latestBreakdown);
+      refreshBalance();
       toast.showSuccess(`Bet placed on ${BET_THEME[color].label}.`);
     } catch {
       // API layer already emits global error toast.

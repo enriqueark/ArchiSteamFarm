@@ -115,6 +115,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   });
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
+  const walletRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const [cachedUsername, setCachedUsername] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("lastKnownUsername");
@@ -125,15 +126,48 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const hasCashierBootstrappedRef = useRef(false);
 
   const refreshWallets = useCallback(() => {
-    getWallets().then(setWallets).catch(() => {});
+    if (walletRefreshInFlightRef.current) {
+      return walletRefreshInFlightRef.current;
+    }
+    const task = getWallets()
+      .then((nextWallets) => {
+        setWallets(nextWallets);
+      })
+      .catch(() => {
+        // Keep previous balance view on transient failures.
+      })
+      .finally(() => {
+        walletRefreshInFlightRef.current = null;
+      });
+    walletRefreshInFlightRef.current = task;
+    return task;
   }, []);
 
   useEffect(() => {
-    refreshWallets();
-    const interval = setInterval(refreshWallets, 15_000);
-    const onRefresh = () => refreshWallets();
+    void refreshWallets();
+    const interval = window.setInterval(() => {
+      void refreshWallets();
+    }, 4_000);
+    const onRefresh = () => {
+      void refreshWallets();
+    };
+    const onFocus = () => {
+      void refreshWallets();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshWallets();
+      }
+    };
     window.addEventListener("refreshBalance", onRefresh);
-    return () => { clearInterval(interval); window.removeEventListener("refreshBalance", onRefresh); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("refreshBalance", onRefresh);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [refreshWallets]);
 
   const refreshLiveTicker = useCallback(async () => {
@@ -201,13 +235,27 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     const sock = new CasinoSocket("USDT");
     socketRef.current = sock;
     sock.subscribe((ev: SocketEvent) => {
-      if (ev.type === "roulette.round" && ev.data.status === "SETTLED") {
-        void refreshLiveTicker();
+      if (ev.type === "roulette.round") {
+        if (ev.data.status === "SETTLED") {
+          void refreshLiveTicker();
+          void refreshWallets();
+          window.setTimeout(() => {
+            void refreshWallets();
+          }, 600);
+          return;
+        }
+        if (ev.data.status === "OPEN") {
+          void refreshWallets();
+          return;
+        }
+      }
+      if (ev.type === "rain.settled" || ev.type === "chat.userTip") {
+        void refreshWallets();
       }
     });
     sock.connect();
     return () => sock.disconnect();
-  }, [refreshLiveTicker]);
+  }, [refreshLiveTicker, refreshWallets]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
