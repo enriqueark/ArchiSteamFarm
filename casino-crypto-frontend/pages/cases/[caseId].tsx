@@ -61,56 +61,21 @@ const tierColor: Record<(typeof tierOrder)[number], string> = {
 };
 
 const REEL_ITEM_WIDTH = 164;
-const REEL_ITEM_HEIGHT = 188;
+const REEL_ITEM_HEIGHT = 220;
 const REEL_ITEM_GAP = 26;
 const REEL_STRIDE = REEL_ITEM_WIDTH + REEL_ITEM_GAP;
-const REEL_TRACK_REPEATS = 24;
-const REEL_CENTER_REPEAT = Math.floor(REEL_TRACK_REPEATS / 2);
+const REEL_TRACK_LENGTH = 120;
+const REEL_START_INDEX = 10;
 const INITIAL_REEL_PHASE = 0;
-
-const mod = (value: number, size: number): number => ((value % size) + size) % size;
 
 const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
 const getCenterStripIndex = (phase: number, pointerPx: number): number =>
   Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE);
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
-const getActiveRepeatedIndex = (phase: number, pointerPx: number, trackSlotCount: number): number | null => {
-  if (trackSlotCount <= 0) return null;
-  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackSlotCount - 1);
-  let hit: number | null = null;
-  let nearest = approx;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = approx - 4; index <= approx + 4; index += 1) {
-    if (index < 0 || index >= trackSlotCount) continue;
-    const left = index * REEL_STRIDE - phase;
-    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
-      hit = index;
-      break;
-    }
-    const center = left + REEL_ITEM_WIDTH / 2;
-    const distance = Math.abs(center - pointerPx);
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearest = index;
-    }
-  }
-
-  return hit ?? nearest;
-};
-
-const normalizeReelPhase = (phase: number, laneWidth: number, cycleWidth: number, trackWidth: number): number => {
-  if (cycleWidth <= 0) return phase;
-  let next = phase;
-  const min = cycleWidth * 8;
-  const max = Math.max(min + cycleWidth, trackWidth - laneWidth - cycleWidth * 8);
-  const shift = cycleWidth * 20;
-
-  while (next > max) next -= shift;
-  while (next < min) next += shift;
-
-  return next;
+const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
+  if (items.length === 0 || length <= 0) return [];
+  return Array.from({ length }, () => items[Math.floor(Math.random() * items.length)]);
 };
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
@@ -200,6 +165,8 @@ export default function CaseDetailPage() {
   const [isReelSpinning, setIsReelSpinning] = useState(false);
   const [laneWidth, setLaneWidth] = useState(860);
   const [spinPhase, setSpinPhase] = useState(INITIAL_REEL_PHASE);
+  const [reelTrackSlots, setReelTrackSlots] = useState<Array<{ repeatedIndex: number; item: CaseItem }>>([]);
+  const [winnerReveal, setWinnerReveal] = useState<{ index: number; item: CaseItem } | null>(null);
   const [caseDetails, setCaseDetails] = useState<CaseMarketplaceDetails | null>(null);
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
@@ -260,17 +227,6 @@ export default function CaseDetailPage() {
     return [...caseDetails.items].sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
   }, [caseDetails]);
 
-  const reelCycleWidth = useMemo(() => orderedItems.length * REEL_STRIDE, [orderedItems.length]);
-
-  const reelTrackSlots = useMemo(() => {
-    if (orderedItems.length === 0) return [] as Array<{ repeatedIndex: number; item: CaseItem }>;
-    const total = orderedItems.length * REEL_TRACK_REPEATS;
-    return Array.from({ length: total }, (_, repeatedIndex) => ({
-      repeatedIndex,
-      item: orderedItems[repeatedIndex % orderedItems.length]
-    }));
-  }, [orderedItems]);
-
   const reelTrackWidth = useMemo(() => reelTrackSlots.length * REEL_STRIDE, [reelTrackSlots.length]);
 
   useEffect(() => {
@@ -293,27 +249,28 @@ export default function CaseDetailPage() {
 
   useEffect(() => {
     if (orderedItems.length === 0) return;
-    const initial = reelCycleWidth * REEL_CENTER_REPEAT;
+    const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
+    setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+    const pointer = laneWidth * 0.5;
+    const initial = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     spinPhaseRef.current = initial;
     setSpinPhase(initial);
-  }, [orderedItems.length, reelCycleWidth]);
+    setWinnerReveal(null);
+  }, [laneWidth, orderedItems]);
 
   const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
-    return getActiveRepeatedIndex(spinPhase, pointerPx, reelTrackSlots.length);
+    if (reelTrackSlots.length === 0) return null;
+    return clamp(getCenterStripIndex(spinPhase, pointerPx), 0, reelTrackSlots.length - 1);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
-      if (orderedItems.length === 0 || reelTrackSlots.length === 0 || reelCycleWidth <= 0) return;
+      if (orderedItems.length === 0) return;
       clearRaf();
       setIsReelSpinning(true);
-
-      let startPhase = normalizeReelPhase(spinPhaseRef.current, laneWidth, reelCycleWidth, reelTrackWidth);
-      const currentIndex =
-        getActiveRepeatedIndex(startPhase, pointerPx, reelTrackSlots.length) ?? getCenterStripIndex(startPhase, pointerPx);
-      const currentLayout = mod(currentIndex, orderedItems.length);
+      setWinnerReveal(null);
 
       let winnerLayout = orderedItems.findIndex((item) => item.id === winningItem.id);
       if (winnerLayout < 0) {
@@ -323,21 +280,18 @@ export default function CaseDetailPage() {
         winnerLayout = 0;
       }
 
-      const stepsToWinner = mod(winnerLayout - currentLayout, orderedItems.length);
-      const extraLoops = orderedItems.length * (4 + Math.floor(Math.random() * 2));
-      const targetIndex = currentIndex + stepsToWinner + extraLoops;
-      let endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+      const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
+      const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
+      track[targetIndex] = orderedItems[winnerLayout];
+      setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+
+      const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
 
-      while (endPhase > reelTrackWidth - laneWidth - reelCycleWidth * 4) {
-        startPhase -= reelCycleWidth * 20;
-        endPhase -= reelCycleWidth * 20;
-      }
-      if (startPhase !== spinPhaseRef.current) {
-        spinPhaseRef.current = startPhase;
-        setSpinPhase(startPhase);
-      }
+      spinPhaseRef.current = startPhase;
+      setSpinPhase(startPhase);
 
       await new Promise<void>((resolve) => {
         const tick = (ts: number) => {
@@ -352,15 +306,10 @@ export default function CaseDetailPage() {
             return;
           }
 
-          const landedIndex = getActiveRepeatedIndex(endPhase, pointerPx, reelTrackSlots.length) ?? getCenterStripIndex(endPhase, pointerPx);
-          const landedLayout = mod(landedIndex, orderedItems.length);
-          if (landedLayout !== winnerLayout) {
-            const correctionSteps = mod(winnerLayout - landedLayout, orderedItems.length);
-            endPhase += correctionSteps * REEL_STRIDE;
-          }
           spinPhaseRef.current = endPhase;
           setSpinPhase(endPhase);
           setIsReelSpinning(false);
+          setWinnerReveal({ index: targetIndex, item: orderedItems[winnerLayout] });
           rafRef.current = null;
           resolve();
         };
@@ -368,7 +317,7 @@ export default function CaseDetailPage() {
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [clearRaf, laneWidth, orderedItems, pointerPx, reelCycleWidth, reelTrackSlots.length, reelTrackWidth]
+    [clearRaf, orderedItems, pointerPx]
   );
 
   const openCaseNow = async () => {
@@ -522,11 +471,12 @@ export default function CaseDetailPage() {
               >
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
                   const active = activeStripIndex === repeatedIndex;
+                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
-                      className={`z-10 flex shrink-0 items-center justify-center px-2.5 py-2 transition-all duration-100 ${
-                        active
+                      className={`z-10 flex shrink-0 flex-col items-center justify-center px-2.5 py-2 ${
+                        active || isWinnerSlot
                           ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
                           : "opacity-55"
                       }`}
@@ -534,10 +484,23 @@ export default function CaseDetailPage() {
                     >
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.imageUrl} alt={item.name} className="h-[132px] w-[132px] object-contain" />
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className={`h-[132px] w-[132px] object-contain ${isWinnerSlot ? "animate-bounce" : ""}`}
+                        />
                       ) : (
                         <span className="text-xs text-[#5f7894]">No image</span>
                       )}
+                      {isWinnerSlot ? (
+                        <>
+                          <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
+                          <div className="mt-0.5 flex items-center justify-center gap-1 text-[#f5c14f]">
+                            <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
+                            <span className="text-[12px] font-bold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -546,14 +509,7 @@ export default function CaseDetailPage() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.58)_0%,rgba(10,14,20,0.22)_10%,rgba(10,14,20,0.01)_22%,rgba(10,14,20,0.01)_78%,rgba(10,14,20,0.22)_90%,rgba(10,14,20,0.58)_100%)]" />
           </div>
           <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
-            {lastOpening ? (
-              <p className="text-[#d9e6f5]">
-                Won: <span className="font-bold text-white">{lastOpening.item.name}</span> •{" "}
-                <span className="font-bold text-[#f5c14f]">{fmtCoins(lastOpening.item.valueAtomic)} COINS</span>
-              </p>
-            ) : (
-              <p className="text-[#7f95b0]">{isReelSpinning ? "Opening case..." : "Press OPEN FOR to spin the case items."}</p>
-            )}
+            <p className="text-[#7f95b0]">{isReelSpinning ? "Opening case..." : "Press OPEN FOR to spin the case items."}</p>
           </div>
         </div>
       </div>
