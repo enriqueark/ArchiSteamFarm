@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getCaseDetails, getCases, openCase, type CaseItem, type CaseOpeningResult } from "@/lib/api";
 import {
@@ -59,6 +59,17 @@ const tierColor: Record<(typeof tierOrder)[number], string> = {
   H: "#f97316",
   I: "#ef4444"
 };
+
+const REEL_ITEM_WIDTH = 132;
+const REEL_ITEM_HEIGHT = 170;
+const REEL_ITEM_GAP = 22;
+const REEL_STRIDE = REEL_ITEM_WIDTH + REEL_ITEM_GAP;
+const REEL_OVERSCAN = 6;
+const INITIAL_REEL_PHASE = REEL_STRIDE * 4;
+
+const mod = (value: number, size: number): number => ((value % size) + size) % size;
+
+const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
@@ -139,12 +150,29 @@ export default function CaseDetailPage() {
   const router = useRouter();
   const toast = useToast();
   const caseId = typeof router.query.caseId === "string" ? router.query.caseId : null;
+  const laneRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
+  const [isReelSpinning, setIsReelSpinning] = useState(false);
+  const [laneWidth, setLaneWidth] = useState(860);
+  const [spinPhase, setSpinPhase] = useState(INITIAL_REEL_PHASE);
   const [caseDetails, setCaseDetails] = useState<CaseMarketplaceDetails | null>(null);
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
+  const spinPhaseRef = useRef(spinPhase);
+
+  useEffect(() => {
+    spinPhaseRef.current = spinPhase;
+  }, [spinPhase]);
+
+  const clearRaf = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!caseId) return;
@@ -190,6 +218,117 @@ export default function CaseDetailPage() {
     return [...caseDetails.items].sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
   }, [caseDetails]);
 
+  useEffect(() => {
+    if (!laneRef.current || typeof ResizeObserver === "undefined") return;
+    const element = laneRef.current;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setLaneWidth(Math.max(460, Math.floor(entry.contentRect.width)));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearRaf();
+    };
+  }, [clearRaf]);
+
+  const pointerPx = laneWidth * 0.5;
+
+  const activeStripIndex = useMemo(() => {
+    if (orderedItems.length === 0) return null;
+    const approx = Math.floor((spinPhase + pointerPx) / REEL_STRIDE);
+    let best = approx;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = approx - 3; index <= approx + 3; index += 1) {
+      const left = index * REEL_STRIDE - spinPhase;
+      if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+        return index;
+      }
+      const center = left + REEL_ITEM_WIDTH / 2;
+      const distance = Math.abs(center - pointerPx);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    }
+
+    return best;
+  }, [orderedItems.length, pointerPx, spinPhase]);
+
+  const visibleStripSlots = useMemo(() => {
+    if (orderedItems.length === 0) return [] as Array<{ stripIndex: number; item: CaseItem; left: number }>;
+    const start = Math.floor(spinPhase / REEL_STRIDE) - REEL_OVERSCAN;
+    const end = Math.ceil((spinPhase + laneWidth) / REEL_STRIDE) + REEL_OVERSCAN;
+    const slots: Array<{ stripIndex: number; item: CaseItem; left: number }> = [];
+
+    for (let stripIndex = start; stripIndex <= end; stripIndex += 1) {
+      const item = orderedItems[mod(stripIndex, orderedItems.length)];
+      slots.push({
+        stripIndex,
+        item,
+        left: stripIndex * REEL_STRIDE - spinPhase
+      });
+    }
+
+    return slots;
+  }, [laneWidth, orderedItems, spinPhase]);
+
+  const runOpeningAnimation = useCallback(
+    async (winningItem: CaseItem): Promise<void> => {
+      if (orderedItems.length === 0) return;
+      clearRaf();
+      setIsReelSpinning(true);
+
+      const startPhase = spinPhaseRef.current;
+      const currentIndex = activeStripIndex ?? Math.floor((startPhase + pointerPx) / REEL_STRIDE);
+      const currentLayout = mod(currentIndex, orderedItems.length);
+
+      let winnerLayout = orderedItems.findIndex((item) => item.id === winningItem.id);
+      if (winnerLayout < 0) {
+        winnerLayout = orderedItems.findIndex((item) => item.name === winningItem.name);
+      }
+      if (winnerLayout < 0) {
+        winnerLayout = 0;
+      }
+
+      const stepsToWinner = mod(winnerLayout - currentLayout, orderedItems.length);
+      const extraLoops = orderedItems.length * (4 + Math.floor(Math.random() * 2));
+      const targetIndex = currentIndex + stepsToWinner + extraLoops;
+      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+      const durationMs = 5000 + Math.floor(Math.random() * 2000);
+      const startedAt = performance.now();
+
+      await new Promise<void>((resolve) => {
+        const tick = (ts: number) => {
+          const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
+          const mix = getEaseOut(progress);
+          const next = startPhase + (endPhase - startPhase) * mix;
+          spinPhaseRef.current = next;
+          setSpinPhase(next);
+
+          if (progress < 1) {
+            rafRef.current = requestAnimationFrame(tick);
+            return;
+          }
+
+          spinPhaseRef.current = endPhase;
+          setSpinPhase(endPhase);
+          setIsReelSpinning(false);
+          rafRef.current = null;
+          resolve();
+        };
+
+        rafRef.current = requestAnimationFrame(tick);
+      });
+    },
+    [activeStripIndex, clearRaf, orderedItems, pointerPx]
+  );
+
   const openCaseNow = async () => {
     if (!caseDetails || opening) return;
     if (caseDetails.source === "admin-local") {
@@ -199,6 +338,7 @@ export default function CaseDetailPage() {
     setOpening(true);
     try {
       const result = await openCase(caseDetails.id);
+      await runOpeningAnimation(result.item);
       setLastOpening(result);
       requestLiveWinsRefresh();
       toast.showSuccess(`You won ${result.item.name} (${fmtCoins(result.item.valueAtomic)} COINS).`);
@@ -287,13 +427,49 @@ export default function CaseDetailPage() {
           </button>
         </div>
 
-        <div className="rounded-[12px] border border-[#2d3139] bg-[#12161d]">
-          <div className="flex h-[100%] min-h-[250px] items-center justify-center rounded-[12px] bg-gradient-to-b from-[#1a1f27] to-[#0f1218]">
-            {lastOpening?.item?.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={lastOpening.item.imageUrl} alt={lastOpening.item.name} className="h-[120px] w-[120px] object-contain" />
+        <div className="rounded-[12px] border border-[#2d3139] bg-[#12161d] p-3">
+          <div ref={laneRef} className="relative overflow-hidden rounded-[10px] border border-[#27303c] bg-gradient-to-b from-[#10161e] via-[#0f141b] to-[#0a0f15]">
+            <div className="pointer-events-none absolute inset-y-3 left-1/2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
+            <div className="relative h-[260px]">
+              {visibleStripSlots.map(({ stripIndex, item, left }) => {
+                const active = activeStripIndex === stripIndex;
+                return (
+                  <div
+                    key={`${stripIndex}-${item.id}`}
+                    className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center rounded-[10px] border px-2.5 py-2 transition-all duration-150 ${
+                      active
+                        ? "z-20 scale-[1.05] border-[#f5d177]/85 bg-[#19222d] shadow-[0_0_26px_rgba(245,193,79,0.35)]"
+                        : "border-[#2f3845] bg-[#161c25]/85 opacity-55"
+                    }`}
+                    style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
+                  >
+                    <div className="mb-2 flex h-[104px] w-full items-center justify-center">
+                      {item.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.imageUrl} alt={item.name} className="h-[98px] w-[98px] object-contain" />
+                      ) : (
+                        <span className="text-xs text-[#5f7894]">No image</span>
+                      )}
+                    </div>
+                    <p className="line-clamp-2 text-center text-[11px] font-semibold text-white">{item.name}</p>
+                    <div className="mt-1.5 flex items-center gap-1 text-[#f5c14f]">
+                      <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
+                      <span className="text-[12px] font-semibold leading-none">{fmtCoins(item.valueAtomic)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,14,20,0.95)_0%,rgba(10,14,20,0.55)_10%,rgba(10,14,20,0)_22%,rgba(10,14,20,0)_78%,rgba(10,14,20,0.55)_90%,rgba(10,14,20,0.95)_100%)]" />
+          </div>
+          <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
+            {lastOpening ? (
+              <p className="text-[#d9e6f5]">
+                Won: <span className="font-bold text-white">{lastOpening.item.name}</span> •{" "}
+                <span className="font-bold text-[#f5c14f]">{fmtCoins(lastOpening.item.valueAtomic)} COINS</span>
+              </p>
             ) : (
-              <p className="text-sm text-[#5f7894]">Case opening animation area</p>
+              <p className="text-[#7f95b0]">{isReelSpinning ? "Opening case..." : "Press OPEN FOR to spin the case items."}</p>
             )}
           </div>
         </div>
