@@ -180,6 +180,7 @@ export default function CaseDetailPage() {
   const caseId = typeof router.query.caseId === "string" ? router.query.caseId : null;
   const laneRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const laneWidthRef = useRef(860);
 
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
@@ -196,6 +197,10 @@ export default function CaseDetailPage() {
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
   }, [spinPhase]);
+
+  useEffect(() => {
+    laneWidthRef.current = laneWidth;
+  }, [laneWidth]);
 
   const clearRaf = useCallback(() => {
     if (rafRef.current !== null) {
@@ -272,18 +277,27 @@ export default function CaseDetailPage() {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
     setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-    const pointer = laneWidth * 0.5;
+    const pointer = laneWidthRef.current * 0.5;
     const initial = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     spinPhaseRef.current = initial;
     setSpinPhase(initial);
     setWinnerReveal(null);
-  }, [laneWidth, orderedItems]);
+  }, [orderedItems]);
 
   const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
     return resolveActiveIndex(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
+
+  useEffect(() => {
+    if (isReelSpinning || !winnerReveal) return;
+    const pointer = laneWidth * 0.5;
+    const expectedPhase = winnerReveal.index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
+    if (Math.abs(expectedPhase - spinPhaseRef.current) < 0.5) return;
+    spinPhaseRef.current = expectedPhase;
+    setSpinPhase(expectedPhase);
+  }, [isReelSpinning, laneWidth, winnerReveal]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -306,8 +320,9 @@ export default function CaseDetailPage() {
       track[targetIndex] = winnerItem;
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
-      const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
-      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+      const pointerStart = laneWidthRef.current * 0.5;
+      const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
+      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
 
@@ -327,9 +342,10 @@ export default function CaseDetailPage() {
             return;
           }
 
-          let finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+          const pointerEnd = laneWidthRef.current * 0.5;
+          let finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
           for (let attempt = 0; attempt < 3; attempt += 1) {
-            const resolved = resolveActiveIndex(finalPhase, pointerPx, REEL_TRACK_LENGTH);
+            const resolved = resolveActiveIndex(finalPhase, pointerEnd, REEL_TRACK_LENGTH);
             if (resolved === null) break;
             const delta = targetIndex - resolved;
             if (delta === 0) break;
@@ -347,7 +363,7 @@ export default function CaseDetailPage() {
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [clearRaf, orderedItems, pointerPx]
+    [clearRaf, orderedItems]
   );
 
   const openCaseNow = async () => {
@@ -525,7 +541,7 @@ export default function CaseDetailPage() {
                       {isWinnerSlot ? (
                         <>
                           <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
-                          <div className="mt-1 inline-flex items-center justify-center gap-1.5 text-[#f5c14f] leading-none">
+                          <div className="mt-1 flex w-full items-center justify-center gap-2 text-[#f5c14f] leading-none">
                             <img src="/assets/coin-dino-original.png" alt="" className="h-[32px] w-[32px] shrink-0 object-contain" />
                             <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
                           </div>
