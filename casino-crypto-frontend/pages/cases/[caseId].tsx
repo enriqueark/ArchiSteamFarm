@@ -73,6 +73,29 @@ const getCenterStripIndex = (phase: number, pointerPx: number): number =>
   Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE);
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
+const getActiveRepeatedIndex = (phase: number, pointerPx: number, trackLength: number): number | null => {
+  if (trackLength <= 0) return null;
+  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackLength - 1);
+  let best = approx;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = approx - 4; index <= approx + 4; index += 1) {
+    if (index < 0 || index >= trackLength) continue;
+    const left = index * REEL_STRIDE - phase;
+    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+      return index;
+    }
+    const center = left + REEL_ITEM_WIDTH / 2;
+    const distance = Math.abs(center - pointerPx);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
+  }
+
+  return best;
+};
+
 const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
   if (items.length === 0 || length <= 0) return [];
   return Array.from({ length }, () => items[Math.floor(Math.random() * items.length)]);
@@ -261,8 +284,7 @@ export default function CaseDetailPage() {
   const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
-    if (reelTrackSlots.length === 0) return null;
-    return clamp(getCenterStripIndex(spinPhase, pointerPx), 0, reelTrackSlots.length - 1);
+    return getActiveRepeatedIndex(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const runOpeningAnimation = useCallback(
@@ -312,11 +334,14 @@ export default function CaseDetailPage() {
           if (landedIndex !== targetIndex) {
             finalPhase += (targetIndex - landedIndex) * REEL_STRIDE;
           }
+          const finalIndex =
+            getActiveRepeatedIndex(finalPhase, pointerPx, REEL_TRACK_LENGTH) ??
+            clamp(getCenterStripIndex(finalPhase, pointerPx), 0, REEL_TRACK_LENGTH - 1);
 
           spinPhaseRef.current = finalPhase;
           setSpinPhase(finalPhase);
           setIsReelSpinning(false);
-          setWinnerReveal({ index: targetIndex, item: winnerItem });
+          setWinnerReveal({ index: finalIndex, item: winnerItem });
           rafRef.current = null;
           resolve();
         };
@@ -503,8 +528,8 @@ export default function CaseDetailPage() {
                         <>
                           <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
                           <div className="mt-0.5 flex items-center justify-center gap-1 text-[#f5c14f]">
-                            <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
-                            <span className="text-[12px] font-bold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
+                            <img src="/assets/coin-dino-original.png" alt="" className="h-[24px] w-[24px] object-contain" />
+                            <span className="text-[16px] font-bold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
                           </div>
                         </>
                       ) : null}
