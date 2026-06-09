@@ -282,7 +282,8 @@ export default function CaseDetailPage() {
 
       const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
       const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
-      track[targetIndex] = orderedItems[winnerLayout];
+      const winnerItem = orderedItems[winnerLayout] ?? winningItem;
+      track[targetIndex] = winnerItem;
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
@@ -306,10 +307,16 @@ export default function CaseDetailPage() {
             return;
           }
 
-          spinPhaseRef.current = endPhase;
-          setSpinPhase(endPhase);
+          let finalPhase = endPhase;
+          const landedIndex = clamp(getCenterStripIndex(finalPhase, pointerPx), 0, REEL_TRACK_LENGTH - 1);
+          if (landedIndex !== targetIndex) {
+            finalPhase += (targetIndex - landedIndex) * REEL_STRIDE;
+          }
+
+          spinPhaseRef.current = finalPhase;
+          setSpinPhase(finalPhase);
           setIsReelSpinning(false);
-          setWinnerReveal({ index: targetIndex, item: orderedItems[winnerLayout] });
+          setWinnerReveal({ index: targetIndex, item: winnerItem });
           rafRef.current = null;
           resolve();
         };
@@ -460,7 +467,7 @@ export default function CaseDetailPage() {
         <div className="rounded-[12px] border border-[#2d3139] bg-[#12161d] p-3">
           <div ref={laneRef} className="relative overflow-hidden rounded-[10px] border border-[#27303c] bg-gradient-to-b from-[#10161e] via-[#0f141b] to-[#0a0f15]">
             <div className="pointer-events-none absolute inset-y-3 left-1/2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
-            <div className="relative h-[260px]">
+            <div className="relative h-[320px]">
               <div
                 className="absolute left-0 top-1/2 flex will-change-transform"
                 style={{
@@ -471,7 +478,7 @@ export default function CaseDetailPage() {
               >
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
                   const active = activeStripIndex === repeatedIndex;
-                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
+                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex && active;
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
@@ -487,7 +494,7 @@ export default function CaseDetailPage() {
                         <img
                           src={item.imageUrl}
                           alt={item.name}
-                          className={`h-[132px] w-[132px] object-contain ${isWinnerSlot ? "animate-bounce" : ""}`}
+                          className={`h-[148px] w-[148px] object-contain ${isWinnerSlot ? "winner-float" : ""}`}
                         />
                       ) : (
                         <span className="text-xs text-[#5f7894]">No image</span>
@@ -508,9 +515,6 @@ export default function CaseDetailPage() {
             </div>
             <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.58)_0%,rgba(10,14,20,0.22)_10%,rgba(10,14,20,0.01)_22%,rgba(10,14,20,0.01)_78%,rgba(10,14,20,0.22)_90%,rgba(10,14,20,0.58)_100%)]" />
           </div>
-          <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
-            <p className="text-[#7f95b0]">{isReelSpinning ? "Opening case..." : "Press OPEN FOR to spin the case items."}</p>
-          </div>
         </div>
       </div>
 
@@ -527,6 +531,20 @@ export default function CaseDetailPage() {
           }}
         />
       ) : null}
+      <style jsx>{`
+        @keyframes winnerFloat {
+          0%,
+          100% {
+            transform: translateY(-2px);
+          }
+          50% {
+            transform: translateY(4px);
+          }
+        }
+        .winner-float {
+          animation: winnerFloat 1.2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
