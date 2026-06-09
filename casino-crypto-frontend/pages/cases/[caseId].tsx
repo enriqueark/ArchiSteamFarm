@@ -238,28 +238,6 @@ export default function CaseDetailPage() {
 
   const pointerPx = laneWidth * 0.5;
 
-  const activeStripIndex = useMemo(() => {
-    if (orderedItems.length === 0) return null;
-    const approx = Math.floor((spinPhase + pointerPx) / REEL_STRIDE);
-    let best = approx;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (let index = approx - 3; index <= approx + 3; index += 1) {
-      const left = index * REEL_STRIDE - spinPhase;
-      if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
-        return index;
-      }
-      const center = left + REEL_ITEM_WIDTH / 2;
-      const distance = Math.abs(center - pointerPx);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = index;
-      }
-    }
-
-    return best;
-  }, [orderedItems.length, pointerPx, spinPhase]);
-
   const visibleStripSlots = useMemo(() => {
     if (orderedItems.length === 0) return [] as Array<{ stripIndex: number; item: CaseItem; left: number }>;
     const start = Math.floor(spinPhase / REEL_STRIDE) - REEL_OVERSCAN;
@@ -277,6 +255,28 @@ export default function CaseDetailPage() {
 
     return slots;
   }, [laneWidth, orderedItems, spinPhase]);
+
+  const activeStripIndex = useMemo(() => {
+    if (visibleStripSlots.length === 0) return null;
+    let hit: number | null = null;
+    let nearest = visibleStripSlots[0]?.stripIndex ?? 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const slot of visibleStripSlots) {
+      if (pointerPx >= slot.left && pointerPx <= slot.left + REEL_ITEM_WIDTH) {
+        hit = slot.stripIndex;
+        break;
+      }
+      const center = slot.left + REEL_ITEM_WIDTH / 2;
+      const distance = Math.abs(center - pointerPx);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = slot.stripIndex;
+      }
+    }
+
+    return hit ?? nearest;
+  }, [pointerPx, visibleStripSlots]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -436,10 +436,10 @@ export default function CaseDetailPage() {
                 return (
                   <div
                     key={`${stripIndex}-${item.id}`}
-                    className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center rounded-[10px] border px-2.5 py-2 transition-all duration-150 ${
+                    className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center px-2.5 py-2 transition-all duration-150 ${
                       active
-                        ? "z-20 scale-[1.05] border-[#f5d177]/85 bg-[#19222d] shadow-[0_0_26px_rgba(245,193,79,0.35)]"
-                        : "border-[#2f3845] bg-[#161c25]/85 opacity-55"
+                        ? "z-20 scale-[1.06] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
+                        : "opacity-35"
                     }`}
                     style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
                   >
@@ -451,11 +451,7 @@ export default function CaseDetailPage() {
                         <span className="text-xs text-[#5f7894]">No image</span>
                       )}
                     </div>
-                    <p className="line-clamp-2 text-center text-[11px] font-semibold text-white">{item.name}</p>
-                    <div className="mt-1.5 flex items-center gap-1 text-[#f5c14f]">
-                      <img src="/assets/coin-dino-original.png" alt="" className="h-[18px] w-[18px] object-contain" />
-                      <span className="text-[12px] font-semibold leading-none">{fmtCoins(item.valueAtomic)}</span>
-                    </div>
+                    <p className="line-clamp-2 text-center text-[10px] font-semibold text-white/70">{item.name}</p>
                   </div>
                 );
               })}
