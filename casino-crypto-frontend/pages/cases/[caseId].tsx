@@ -69,13 +69,34 @@ const REEL_START_INDEX = 10;
 const INITIAL_REEL_PHASE = 0;
 
 const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
-const getCenterStripIndex = (phase: number, pointerPx: number): number =>
-  Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE);
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
   if (items.length === 0 || length <= 0) return [];
   return Array.from({ length }, () => items[Math.floor(Math.random() * items.length)]);
+};
+
+const resolveActiveIndex = (phase: number, pointerPx: number, trackLength: number): number | null => {
+  if (trackLength <= 0) return null;
+  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackLength - 1);
+  let bestIndex = approx;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = approx - 4; index <= approx + 4; index += 1) {
+    if (index < 0 || index >= trackLength) continue;
+    const left = index * REEL_STRIDE - phase;
+    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+      return index;
+    }
+    const center = left + REEL_ITEM_WIDTH / 2;
+    const distance = Math.abs(center - pointerPx);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
 };
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
@@ -261,8 +282,7 @@ export default function CaseDetailPage() {
   const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
-    if (reelTrackSlots.length === 0) return null;
-    return clamp(getCenterStripIndex(spinPhase, pointerPx), 0, reelTrackSlots.length - 1);
+    return resolveActiveIndex(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const runOpeningAnimation = useCallback(
@@ -307,7 +327,14 @@ export default function CaseDetailPage() {
             return;
           }
 
-          const finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+          let finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            const resolved = resolveActiveIndex(finalPhase, pointerPx, REEL_TRACK_LENGTH);
+            if (resolved === null) break;
+            const delta = targetIndex - resolved;
+            if (delta === 0) break;
+            finalPhase += delta * REEL_STRIDE;
+          }
 
           spinPhaseRef.current = finalPhase;
           setSpinPhase(finalPhase);
@@ -498,9 +525,9 @@ export default function CaseDetailPage() {
                       {isWinnerSlot ? (
                         <>
                           <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
-                          <div className="mt-1 flex items-center justify-center gap-2 text-[#f5c14f]">
-                            <img src="/assets/coin-dino-original.png" alt="" className="h-[30px] w-[30px] object-contain" />
-                            <span className="text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
+                          <div className="mt-1 inline-flex items-center justify-center gap-1.5 text-[#f5c14f] leading-none">
+                            <img src="/assets/coin-dino-original.png" alt="" className="h-[32px] w-[32px] shrink-0 object-contain" />
+                            <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
                           </div>
                         </>
                       ) : null}
@@ -531,14 +558,14 @@ export default function CaseDetailPage() {
         @keyframes winnerFloat {
           0%,
           100% {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
           }
           50% {
-            transform: translateY(4px);
+            transform: translateY(2px);
           }
         }
         .winner-float {
-          animation: winnerFloat 1.2s ease-in-out infinite;
+          animation: winnerFloat 1.6s ease-in-out infinite;
         }
       `}</style>
     </div>
