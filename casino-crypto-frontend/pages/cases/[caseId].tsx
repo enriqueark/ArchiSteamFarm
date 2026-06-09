@@ -60,18 +60,58 @@ const tierColor: Record<(typeof tierOrder)[number], string> = {
   I: "#ef4444"
 };
 
-const REEL_ITEM_WIDTH = 132;
-const REEL_ITEM_HEIGHT = 170;
-const REEL_ITEM_GAP = 22;
+const REEL_ITEM_WIDTH = 164;
+const REEL_ITEM_HEIGHT = 188;
+const REEL_ITEM_GAP = 26;
 const REEL_STRIDE = REEL_ITEM_WIDTH + REEL_ITEM_GAP;
-const REEL_OVERSCAN = 6;
-const INITIAL_REEL_PHASE = REEL_STRIDE * 4;
+const REEL_TRACK_REPEATS = 24;
+const REEL_CENTER_REPEAT = Math.floor(REEL_TRACK_REPEATS / 2);
+const INITIAL_REEL_PHASE = 0;
 
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
 
 const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
 const getCenterStripIndex = (phase: number, pointerPx: number): number =>
   Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE);
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const getActiveRepeatedIndex = (phase: number, pointerPx: number, trackSlotCount: number): number | null => {
+  if (trackSlotCount <= 0) return null;
+  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackSlotCount - 1);
+  let hit: number | null = null;
+  let nearest = approx;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = approx - 4; index <= approx + 4; index += 1) {
+    if (index < 0 || index >= trackSlotCount) continue;
+    const left = index * REEL_STRIDE - phase;
+    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+      hit = index;
+      break;
+    }
+    const center = left + REEL_ITEM_WIDTH / 2;
+    const distance = Math.abs(center - pointerPx);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = index;
+    }
+  }
+
+  return hit ?? nearest;
+};
+
+const normalizeReelPhase = (phase: number, laneWidth: number, cycleWidth: number, trackWidth: number): number => {
+  if (cycleWidth <= 0) return phase;
+  let next = phase;
+  const min = cycleWidth * 8;
+  const max = Math.max(min + cycleWidth, trackWidth - laneWidth - cycleWidth * 8);
+  const shift = cycleWidth * 20;
+
+  while (next > max) next -= shift;
+  while (next < min) next += shift;
+
+  return next;
+};
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
@@ -220,6 +260,19 @@ export default function CaseDetailPage() {
     return [...caseDetails.items].sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
   }, [caseDetails]);
 
+  const reelCycleWidth = useMemo(() => orderedItems.length * REEL_STRIDE, [orderedItems.length]);
+
+  const reelTrackSlots = useMemo(() => {
+    if (orderedItems.length === 0) return [] as Array<{ repeatedIndex: number; item: CaseItem }>;
+    const total = orderedItems.length * REEL_TRACK_REPEATS;
+    return Array.from({ length: total }, (_, repeatedIndex) => ({
+      repeatedIndex,
+      item: orderedItems[repeatedIndex % orderedItems.length]
+    }));
+  }, [orderedItems]);
+
+  const reelTrackWidth = useMemo(() => reelTrackSlots.length * REEL_STRIDE, [reelTrackSlots.length]);
+
   useEffect(() => {
     if (!laneRef.current || typeof ResizeObserver === "undefined") return;
     const element = laneRef.current;
@@ -238,56 +291,28 @@ export default function CaseDetailPage() {
     };
   }, [clearRaf]);
 
+  useEffect(() => {
+    if (orderedItems.length === 0) return;
+    const initial = reelCycleWidth * REEL_CENTER_REPEAT;
+    spinPhaseRef.current = initial;
+    setSpinPhase(initial);
+  }, [orderedItems.length, reelCycleWidth]);
+
   const pointerPx = laneWidth * 0.5;
 
-  const visibleStripSlots = useMemo(() => {
-    if (orderedItems.length === 0) return [] as Array<{ stripIndex: number; item: CaseItem; left: number }>;
-    const start = Math.floor(spinPhase / REEL_STRIDE) - REEL_OVERSCAN;
-    const end = Math.ceil((spinPhase + laneWidth) / REEL_STRIDE) + REEL_OVERSCAN;
-    const slots: Array<{ stripIndex: number; item: CaseItem; left: number }> = [];
-
-    for (let stripIndex = start; stripIndex <= end; stripIndex += 1) {
-      const item = orderedItems[mod(stripIndex, orderedItems.length)];
-      slots.push({
-        stripIndex,
-        item,
-        left: stripIndex * REEL_STRIDE - spinPhase
-      });
-    }
-
-    return slots;
-  }, [laneWidth, orderedItems, spinPhase]);
-
   const activeStripIndex = useMemo(() => {
-    if (visibleStripSlots.length === 0) return null;
-    let hit: number | null = null;
-    let nearest = visibleStripSlots[0].stripIndex;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    for (const slot of visibleStripSlots) {
-      if (pointerPx >= slot.left && pointerPx <= slot.left + REEL_ITEM_WIDTH) {
-        hit = slot.stripIndex;
-        break;
-      }
-      const center = slot.left + REEL_ITEM_WIDTH / 2;
-      const distance = Math.abs(center - pointerPx);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = slot.stripIndex;
-      }
-    }
-
-    return hit ?? nearest;
-  }, [pointerPx, visibleStripSlots]);
+    return getActiveRepeatedIndex(spinPhase, pointerPx, reelTrackSlots.length);
+  }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
-      if (orderedItems.length === 0) return;
+      if (orderedItems.length === 0 || reelTrackSlots.length === 0 || reelCycleWidth <= 0) return;
       clearRaf();
       setIsReelSpinning(true);
 
-      const startPhase = spinPhaseRef.current;
-      const currentIndex = getCenterStripIndex(startPhase, pointerPx);
+      let startPhase = normalizeReelPhase(spinPhaseRef.current, laneWidth, reelCycleWidth, reelTrackWidth);
+      const currentIndex =
+        getActiveRepeatedIndex(startPhase, pointerPx, reelTrackSlots.length) ?? getCenterStripIndex(startPhase, pointerPx);
       const currentLayout = mod(currentIndex, orderedItems.length);
 
       let winnerLayout = orderedItems.findIndex((item) => item.id === winningItem.id);
@@ -305,6 +330,15 @@ export default function CaseDetailPage() {
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
 
+      while (endPhase > reelTrackWidth - laneWidth - reelCycleWidth * 4) {
+        startPhase -= reelCycleWidth * 20;
+        endPhase -= reelCycleWidth * 20;
+      }
+      if (startPhase !== spinPhaseRef.current) {
+        spinPhaseRef.current = startPhase;
+        setSpinPhase(startPhase);
+      }
+
       await new Promise<void>((resolve) => {
         const tick = (ts: number) => {
           const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
@@ -318,7 +352,7 @@ export default function CaseDetailPage() {
             return;
           }
 
-          const landedIndex = getCenterStripIndex(endPhase, pointerPx);
+          const landedIndex = getActiveRepeatedIndex(endPhase, pointerPx, reelTrackSlots.length) ?? getCenterStripIndex(endPhase, pointerPx);
           const landedLayout = mod(landedIndex, orderedItems.length);
           if (landedLayout !== winnerLayout) {
             const correctionSteps = mod(winnerLayout - landedLayout, orderedItems.length);
@@ -334,7 +368,7 @@ export default function CaseDetailPage() {
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [clearRaf, orderedItems, pointerPx]
+    [clearRaf, laneWidth, orderedItems, pointerPx, reelCycleWidth, reelTrackSlots.length, reelTrackWidth]
   );
 
   const openCaseNow = async () => {
@@ -359,6 +393,45 @@ export default function CaseDetailPage() {
       setOpening(false);
     }
   };
+
+  const caseContainsCards = useMemo(
+    () =>
+      orderedItems.map((item) => {
+        const rarity = inferRarityTier(item);
+        const meta = rarityMeta[rarity];
+        const drop = Number(item.dropRate);
+        const dropLabel = Number.isFinite(drop) ? `${drop.toFixed(drop < 1 ? 3 : 2)}%` : "0.00%";
+        return (
+          <div key={item.id} className="relative overflow-hidden rounded-[10px] border border-[#353a43] bg-[#1a1f27] p-1.5">
+            <div className="relative">
+              <div className="mb-1 flex items-center justify-start text-[10px] font-semibold text-[#b8c3d3]">
+                <span>{dropLabel}</span>
+              </div>
+              <div className="mb-2 relative flex h-[110px] items-center justify-center">
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background: `radial-gradient(circle at 50% 48%, ${meta.color}4f 0%, ${meta.color}22 40%, rgba(34,37,45,0.1) 74%, rgba(26,31,39,0.0) 100%)`
+                  }}
+                />
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.imageUrl} alt={item.name} className="relative z-[1] h-[102px] w-[102px] object-contain" />
+                ) : (
+                  <span className="text-xs text-[#617a96]">No image</span>
+                )}
+              </div>
+              <p className="line-clamp-2 text-[12px] font-semibold text-white">{item.name}</p>
+              <div className="mt-1 flex items-center gap-1.5 text-[#f5c14f]">
+                <img src="/assets/coin-dino-original.png" alt="" className="h-[22px] w-[22px] object-contain" />
+                <span className="text-[16px] font-semibold leading-none">{fmtCoins(item.valueAtomic)}</span>
+              </div>
+            </div>
+          </div>
+        );
+      }),
+    [orderedItems]
+  );
 
   if (loading) {
     return <div className="rounded-[12px] border border-[#1f3450] bg-[#07131f] p-4 text-sm text-[#9db3cc]">Loading case...</div>;
@@ -439,32 +512,38 @@ export default function CaseDetailPage() {
           <div ref={laneRef} className="relative overflow-hidden rounded-[10px] border border-[#27303c] bg-gradient-to-b from-[#10161e] via-[#0f141b] to-[#0a0f15]">
             <div className="pointer-events-none absolute inset-y-3 left-1/2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
             <div className="relative h-[260px]">
-              {visibleStripSlots.map(({ stripIndex, item, left }) => {
-                const active = activeStripIndex === stripIndex;
-                return (
-                  <div
-                    key={`${stripIndex}-${item.id}`}
-                    className={`absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center px-2.5 py-2 transition-all duration-150 ${
-                      active
-                        ? "z-20 scale-[1.06] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
-                        : "opacity-80"
-                    }`}
-                    style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
-                  >
-                    <div className="mb-2 flex h-[104px] w-full items-center justify-center">
+              <div
+                className="absolute left-0 top-1/2 flex will-change-transform"
+                style={{
+                  width: reelTrackWidth,
+                  gap: `${REEL_ITEM_GAP}px`,
+                  transform: `translate3d(${-spinPhase}px, -50%, 0)`
+                }}
+              >
+                {reelTrackSlots.map(({ repeatedIndex, item }) => {
+                  const active = activeStripIndex === repeatedIndex;
+                  return (
+                    <div
+                      key={`${repeatedIndex}-${item.id}`}
+                      className={`z-10 flex shrink-0 items-center justify-center px-2.5 py-2 transition-all duration-100 ${
+                        active
+                          ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
+                          : "opacity-55"
+                      }`}
+                      style={{ width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
+                    >
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.imageUrl} alt={item.name} className="h-[98px] w-[98px] object-contain" />
+                        <img src={item.imageUrl} alt={item.name} className="h-[132px] w-[132px] object-contain" />
                       ) : (
                         <span className="text-xs text-[#5f7894]">No image</span>
                       )}
                     </div>
-                    <p className="line-clamp-2 text-center text-[10px] font-semibold text-white/70">{item.name}</p>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.78)_0%,rgba(10,14,20,0.35)_10%,rgba(10,14,20,0.02)_22%,rgba(10,14,20,0.02)_78%,rgba(10,14,20,0.35)_90%,rgba(10,14,20,0.78)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.58)_0%,rgba(10,14,20,0.22)_10%,rgba(10,14,20,0.01)_22%,rgba(10,14,20,0.01)_78%,rgba(10,14,20,0.22)_90%,rgba(10,14,20,0.58)_100%)]" />
           </div>
           <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
             {lastOpening ? (
@@ -481,45 +560,7 @@ export default function CaseDetailPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-bold uppercase text-[#bfd0e4]">Case Contain</h2>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-9">
-          {orderedItems.map((item) => {
-            const rarity = inferRarityTier(item);
-            const meta = rarityMeta[rarity];
-            const drop = Number(item.dropRate);
-            const dropLabel = Number.isFinite(drop) ? `${drop.toFixed(drop < 1 ? 3 : 2)}%` : "0.00%";
-            return (
-              <div
-                key={item.id}
-                className="relative overflow-hidden rounded-[10px] border border-[#353a43] bg-[#1a1f27] p-1.5"
-              >
-                <div className="relative">
-                  <div className="mb-1 flex items-center justify-start text-[10px] font-semibold text-[#b8c3d3]">
-                    <span>{dropLabel}</span>
-                  </div>
-                  <div className="mb-2 relative flex h-[110px] items-center justify-center">
-                    <div
-                      className="pointer-events-none absolute inset-0"
-                      style={{
-                        background: `radial-gradient(circle at 50% 48%, ${meta.color}4f 0%, ${meta.color}22 40%, rgba(34,37,45,0.1) 74%, rgba(26,31,39,0.0) 100%)`
-                      }}
-                    />
-                    {item.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt={item.name} className="relative z-[1] h-[102px] w-[102px] object-contain" />
-                    ) : (
-                      <span className="text-xs text-[#617a96]">No image</span>
-                    )}
-                  </div>
-                  <p className="line-clamp-2 text-[12px] font-semibold text-white">{item.name}</p>
-                  <div className="mt-1 flex items-center gap-1.5 text-[#f5c14f]">
-                    <img src="/assets/coin-dino-original.png" alt="" className="h-[22px] w-[22px] object-contain" />
-                    <span className="text-[16px] font-semibold leading-none">{fmtCoins(item.valueAtomic)}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-9">{caseContainsCards}</div>
       </div>
 
       {topTierModal ? (
