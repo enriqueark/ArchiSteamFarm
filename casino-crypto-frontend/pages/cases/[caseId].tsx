@@ -70,6 +70,8 @@ const INITIAL_REEL_PHASE = REEL_STRIDE * 4;
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
 
 const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
+const getCenterStripIndex = (phase: number, pointerPx: number): number =>
+  Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE);
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
@@ -257,26 +259,9 @@ export default function CaseDetailPage() {
   }, [laneWidth, orderedItems, spinPhase]);
 
   const activeStripIndex = useMemo(() => {
-    if (visibleStripSlots.length === 0) return null;
-    let hit: number | null = null;
-    let nearest = visibleStripSlots[0]?.stripIndex ?? 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    for (const slot of visibleStripSlots) {
-      if (pointerPx >= slot.left && pointerPx <= slot.left + REEL_ITEM_WIDTH) {
-        hit = slot.stripIndex;
-        break;
-      }
-      const center = slot.left + REEL_ITEM_WIDTH / 2;
-      const distance = Math.abs(center - pointerPx);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = slot.stripIndex;
-      }
-    }
-
-    return hit ?? nearest;
-  }, [pointerPx, visibleStripSlots]);
+    if (orderedItems.length === 0) return null;
+    return getCenterStripIndex(spinPhase, pointerPx);
+  }, [orderedItems.length, pointerPx, spinPhase]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -285,7 +270,7 @@ export default function CaseDetailPage() {
       setIsReelSpinning(true);
 
       const startPhase = spinPhaseRef.current;
-      const currentIndex = activeStripIndex ?? Math.floor((startPhase + pointerPx) / REEL_STRIDE);
+      const currentIndex = getCenterStripIndex(startPhase, pointerPx);
       const currentLayout = mod(currentIndex, orderedItems.length);
 
       let winnerLayout = orderedItems.findIndex((item) => item.id === winningItem.id);
@@ -326,7 +311,7 @@ export default function CaseDetailPage() {
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [activeStripIndex, clearRaf, orderedItems, pointerPx]
+    [clearRaf, orderedItems, pointerPx]
   );
 
   const openCaseNow = async () => {
@@ -436,10 +421,10 @@ export default function CaseDetailPage() {
                 return (
                   <div
                     key={`${stripIndex}-${item.id}`}
-                    className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center px-2.5 py-2 transition-all duration-150 ${
+                    className={`absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center px-2.5 py-2 transition-all duration-150 ${
                       active
                         ? "z-20 scale-[1.06] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
-                        : "opacity-35"
+                        : "opacity-55"
                     }`}
                     style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
                   >
@@ -456,7 +441,7 @@ export default function CaseDetailPage() {
                 );
               })}
             </div>
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,14,20,0.95)_0%,rgba(10,14,20,0.55)_10%,rgba(10,14,20,0)_22%,rgba(10,14,20,0)_78%,rgba(10,14,20,0.55)_90%,rgba(10,14,20,0.95)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.95)_0%,rgba(10,14,20,0.55)_10%,rgba(10,14,20,0)_22%,rgba(10,14,20,0)_78%,rgba(10,14,20,0.55)_90%,rgba(10,14,20,0.95)_100%)]" />
           </div>
           <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
             {lastOpening ? (
