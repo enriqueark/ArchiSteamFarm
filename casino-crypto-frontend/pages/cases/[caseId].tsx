@@ -259,9 +259,26 @@ export default function CaseDetailPage() {
   }, [laneWidth, orderedItems, spinPhase]);
 
   const activeStripIndex = useMemo(() => {
-    if (orderedItems.length === 0) return null;
-    return getCenterStripIndex(spinPhase, pointerPx);
-  }, [orderedItems.length, pointerPx, spinPhase]);
+    if (visibleStripSlots.length === 0) return null;
+    let hit: number | null = null;
+    let nearest = visibleStripSlots[0].stripIndex;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const slot of visibleStripSlots) {
+      if (pointerPx >= slot.left && pointerPx <= slot.left + REEL_ITEM_WIDTH) {
+        hit = slot.stripIndex;
+        break;
+      }
+      const center = slot.left + REEL_ITEM_WIDTH / 2;
+      const distance = Math.abs(center - pointerPx);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = slot.stripIndex;
+      }
+    }
+
+    return hit ?? nearest;
+  }, [pointerPx, visibleStripSlots]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -284,7 +301,7 @@ export default function CaseDetailPage() {
       const stepsToWinner = mod(winnerLayout - currentLayout, orderedItems.length);
       const extraLoops = orderedItems.length * (4 + Math.floor(Math.random() * 2));
       const targetIndex = currentIndex + stepsToWinner + extraLoops;
-      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+      let endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
 
@@ -301,6 +318,12 @@ export default function CaseDetailPage() {
             return;
           }
 
+          const landedIndex = getCenterStripIndex(endPhase, pointerPx);
+          const landedLayout = mod(landedIndex, orderedItems.length);
+          if (landedLayout !== winnerLayout) {
+            const correctionSteps = mod(winnerLayout - landedLayout, orderedItems.length);
+            endPhase += correctionSteps * REEL_STRIDE;
+          }
           spinPhaseRef.current = endPhase;
           setSpinPhase(endPhase);
           setIsReelSpinning(false);
@@ -424,7 +447,7 @@ export default function CaseDetailPage() {
                     className={`absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center px-2.5 py-2 transition-all duration-150 ${
                       active
                         ? "z-20 scale-[1.06] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
-                        : "opacity-55"
+                        : "opacity-80"
                     }`}
                     style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
                   >
@@ -441,7 +464,7 @@ export default function CaseDetailPage() {
                 );
               })}
             </div>
-            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.95)_0%,rgba(10,14,20,0.55)_10%,rgba(10,14,20,0)_22%,rgba(10,14,20,0)_78%,rgba(10,14,20,0.55)_90%,rgba(10,14,20,0.95)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(90deg,rgba(10,14,20,0.78)_0%,rgba(10,14,20,0.35)_10%,rgba(10,14,20,0.02)_22%,rgba(10,14,20,0.02)_78%,rgba(10,14,20,0.35)_90%,rgba(10,14,20,0.78)_100%)]" />
           </div>
           <div className="mt-3 rounded-[9px] border border-[#2c3340] bg-[#0f141b] px-3 py-2 text-sm">
             {lastOpening ? (
