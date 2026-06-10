@@ -259,7 +259,7 @@ export default function CaseDetailPage() {
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      setLaneWidth(Math.max(460, Math.floor(entry.contentRect.width)));
+      setLaneWidth(Math.max(460, Math.floor(element.clientWidth)));
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -526,7 +526,7 @@ export default function CaseDetailPage() {
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
-                      className={`absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center px-2.5 py-2 ${
+                      className={`absolute top-1/2 z-10 box-border flex -translate-y-1/2 flex-col items-center justify-center ${
                         active || isWinnerSlot
                           ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
                           : "opacity-55"
