@@ -76,27 +76,9 @@ const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
   return Array.from({ length }, () => items[Math.floor(Math.random() * items.length)]);
 };
 
-const resolveActiveIndex = (phase: number, pointerPx: number, trackLength: number): number | null => {
+const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number): number | null => {
   if (trackLength <= 0) return null;
-  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackLength - 1);
-  let bestIndex = approx;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = approx - 4; index <= approx + 4; index += 1) {
-    if (index < 0 || index >= trackLength) continue;
-    const left = index * REEL_STRIDE - phase;
-    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
-      return index;
-    }
-    const center = left + REEL_ITEM_WIDTH / 2;
-    const distance = Math.abs(center - pointerPx);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
-    }
-  }
-
-  return bestIndex;
+  return clamp(Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE), 0, trackLength - 1);
 };
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
@@ -271,31 +253,42 @@ export default function CaseDetailPage() {
     };
   }, [clearRaf]);
 
+  const getPointerPxNow = useCallback(() => {
+    const measured = laneRef.current?.clientWidth;
+    if (typeof measured === "number" && measured > 0) {
+      laneWidthRef.current = measured;
+      return measured * 0.5;
+    }
+    return laneWidthRef.current * 0.5;
+  }, []);
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
     setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-    const pointer = laneWidthRef.current * 0.5;
+    const pointer = getPointerPxNow();
     const initial = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     spinPhaseRef.current = initial;
     setSpinPhase(initial);
     setWinnerReveal(null);
-  }, [orderedItems]);
+  }, [getPointerPxNow, orderedItems]);
 
   const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
-    return resolveActiveIndex(spinPhase, pointerPx, reelTrackSlots.length);
+    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
+
+  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
 
   useEffect(() => {
     if (isReelSpinning || !winnerReveal) return;
-    const pointer = laneWidth * 0.5;
+    const pointer = getPointerPxNow();
     const expectedPhase = winnerReveal.index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     if (Math.abs(expectedPhase - spinPhaseRef.current) < 0.5) return;
     spinPhaseRef.current = expectedPhase;
     setSpinPhase(expectedPhase);
-  }, [isReelSpinning, laneWidth, winnerReveal]);
+  }, [getPointerPxNow, isReelSpinning, laneWidth, winnerReveal]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -318,7 +311,7 @@ export default function CaseDetailPage() {
       track[targetIndex] = winnerItem;
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
-      const pointerStart = laneWidthRef.current * 0.5;
+      const pointerStart = getPointerPxNow();
       const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
       const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
@@ -340,33 +333,13 @@ export default function CaseDetailPage() {
             return;
           }
 
-          const pointerEnd = laneWidthRef.current * 0.5;
-          let finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
-          for (let attempt = 0; attempt < 3; attempt += 1) {
-            const resolved = resolveActiveIndex(finalPhase, pointerEnd, REEL_TRACK_LENGTH);
-            if (resolved === null) break;
-            const delta = targetIndex - resolved;
-            if (delta === 0) break;
-            finalPhase += delta * REEL_STRIDE;
-          }
-
-          const resolvedIndex = clamp(
-            Math.round((finalPhase + pointerEnd - REEL_ITEM_WIDTH / 2) / REEL_STRIDE),
-            0,
-            REEL_TRACK_LENGTH - 1
-          );
-          finalPhase = resolvedIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
-
-          if (resolvedIndex !== targetIndex) {
-            const patchedTrack = [...track];
-            patchedTrack[resolvedIndex] = winnerItem;
-            setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-          }
+          const pointerEnd = getPointerPxNow();
+          const finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
 
           spinPhaseRef.current = finalPhase;
           setSpinPhase(finalPhase);
           setIsReelSpinning(false);
-          setWinnerReveal({ index: resolvedIndex, item: winnerItem });
+          setWinnerReveal({ index: targetIndex, item: winnerItem });
           rafRef.current = null;
           resolve();
         };
@@ -374,7 +347,7 @@ export default function CaseDetailPage() {
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [clearRaf, orderedItems]
+    [clearRaf, getPointerPxNow, orderedItems]
   );
 
   const openCaseNow = async () => {
@@ -520,8 +493,8 @@ export default function CaseDetailPage() {
             <div className="relative h-[320px]">
               <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
-                  const active = activeStripIndex === repeatedIndex;
-                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex && active;
+                  const active = highlightedStripIndex === repeatedIndex;
+                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
                   const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
                     <div
