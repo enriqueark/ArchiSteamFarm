@@ -81,6 +81,8 @@ const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number
   return clamp(Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE), 0, trackLength - 1);
 };
 
+const getPhaseForIndex = (index: number, pointerPx: number): number => index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
   const [ticker, setTicker] = useState(0);
@@ -344,8 +346,11 @@ export default function CaseDetailPage() {
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointerStart = getPointerPxNow();
-      const startPhase = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
-      const endPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerStart;
+      const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
+      const suspenseEnabled = Math.random() < 0.65;
+      const suspenseSide = Math.random() < 0.5 ? -0.5 : 0.5;
+      const suspenseIndex = suspenseEnabled ? targetIndex + suspenseSide : targetIndex;
+      const endPhase = getPhaseForIndex(suspenseIndex, pointerStart);
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
 
@@ -365,30 +370,57 @@ export default function CaseDetailPage() {
             return;
           }
 
+          const completeWithDomLock = () => {
+            rafRef.current = requestAnimationFrame(() => {
+              const renderedIndex = resolveRenderedIndexAtPointer();
+              const winnerIndex = renderedIndex ?? targetIndex;
+
+              if (winnerIndex !== targetIndex) {
+                const patchedTrack = [...track];
+                patchedTrack[winnerIndex] = winnerItem;
+                setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+              }
+
+              const lockPointer = getPointerPxNow();
+              const lockPhase = getPhaseForIndex(winnerIndex, lockPointer);
+              spinPhaseRef.current = lockPhase;
+              setSpinPhase(lockPhase);
+              setIsReelSpinning(false);
+              setWinnerReveal({ index: winnerIndex, item: winnerItem });
+              rafRef.current = null;
+              resolve();
+            });
+          };
+
           const pointerEnd = getPointerPxNow();
-          const finalPhase = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
+          const suspensePhase = getPhaseForIndex(suspenseIndex, pointerEnd);
+          const finalPhase = getPhaseForIndex(targetIndex, pointerEnd);
 
-          spinPhaseRef.current = finalPhase;
-          setSpinPhase(finalPhase);
-          rafRef.current = requestAnimationFrame(() => {
-            const renderedIndex = resolveRenderedIndexAtPointer();
-            const winnerIndex = renderedIndex ?? targetIndex;
+          spinPhaseRef.current = suspensePhase;
+          setSpinPhase(suspensePhase);
 
-            if (winnerIndex !== targetIndex) {
-              const patchedTrack = [...track];
-              patchedTrack[winnerIndex] = winnerItem;
-              setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+          if (!suspenseEnabled) {
+            completeWithDomLock();
+            return;
+          }
+
+          const settleDurationMs = 240 + Math.floor(Math.random() * 220);
+          const settleStartedAt = performance.now();
+          const settleTick = (settleTs: number) => {
+            const settleProgress = Math.max(0, Math.min(1, (settleTs - settleStartedAt) / settleDurationMs));
+            const settleMix = getEaseOut(settleProgress);
+            const settlePhase = suspensePhase + (finalPhase - suspensePhase) * settleMix;
+            spinPhaseRef.current = settlePhase;
+            setSpinPhase(settlePhase);
+            if (settleProgress < 1) {
+              rafRef.current = requestAnimationFrame(settleTick);
+              return;
             }
-
-            const lockPointer = getPointerPxNow();
-            const lockPhase = winnerIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - lockPointer;
-            spinPhaseRef.current = lockPhase;
-            setSpinPhase(lockPhase);
-            setIsReelSpinning(false);
-            setWinnerReveal({ index: winnerIndex, item: winnerItem });
-            rafRef.current = null;
-            resolve();
-          });
+            spinPhaseRef.current = finalPhase;
+            setSpinPhase(finalPhase);
+            completeWithDomLock();
+          };
+          rafRef.current = requestAnimationFrame(settleTick);
         };
 
         rafRef.current = requestAnimationFrame(tick);
@@ -574,7 +606,7 @@ export default function CaseDetailPage() {
                         <>
                           <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
                           <div className="mt-1 flex w-full items-center justify-center gap-1 text-[#f5c14f] leading-none">
-                            <img src="/assets/coin-dino-original.png" alt="" className="h-[34px] w-[34px] shrink-0 object-contain" />
+                            <img src="/assets/coin-dino-original.png" alt="" className="h-[30px] w-[30px] shrink-0 object-contain" />
                             <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
                           </div>
                         </>
