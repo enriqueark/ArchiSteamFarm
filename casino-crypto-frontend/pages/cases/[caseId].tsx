@@ -163,6 +163,7 @@ export default function CaseDetailPage() {
   const laneRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const laneWidthRef = useRef(860);
+  const slotNodeRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
@@ -171,6 +172,7 @@ export default function CaseDetailPage() {
   const [spinPhase, setSpinPhase] = useState(INITIAL_REEL_PHASE);
   const [reelTrackSlots, setReelTrackSlots] = useState<Array<{ repeatedIndex: number; item: CaseItem }>>([]);
   const [winnerReveal, setWinnerReveal] = useState<{ index: number; item: CaseItem } | null>(null);
+  const [renderedPointerIndex, setRenderedPointerIndex] = useState<number | null>(null);
   const [caseDetails, setCaseDetails] = useState<CaseMarketplaceDetails | null>(null);
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
@@ -262,6 +264,29 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
+  const resolveRenderedIndexAtPointer = useCallback((): number | null => {
+    const lane = laneRef.current;
+    if (!lane || slotNodeRefs.current.size === 0) return null;
+    const laneRect = lane.getBoundingClientRect();
+    const pointerX = laneRect.left + laneRect.width * 0.5;
+    const entries = Array.from(slotNodeRefs.current.entries());
+    let bestIndex: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const [index, node] of entries) {
+      const rect = node.getBoundingClientRect();
+      if (pointerX >= rect.left && pointerX <= rect.right) {
+        return index;
+      }
+      const center = rect.left + rect.width * 0.5;
+      const distance = Math.abs(center - pointerX);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+    return bestIndex;
+  }, []);
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -279,7 +304,14 @@ export default function CaseDetailPage() {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setRenderedPointerIndex(resolveRenderedIndexAtPointer());
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase]);
+
+  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
 
   useEffect(() => {
     if (isReelSpinning || !winnerReveal) return;
@@ -338,16 +370,31 @@ export default function CaseDetailPage() {
 
           spinPhaseRef.current = finalPhase;
           setSpinPhase(finalPhase);
-          setIsReelSpinning(false);
-          setWinnerReveal({ index: targetIndex, item: winnerItem });
-          rafRef.current = null;
-          resolve();
+          rafRef.current = requestAnimationFrame(() => {
+            const renderedIndex = resolveRenderedIndexAtPointer();
+            const winnerIndex = renderedIndex ?? targetIndex;
+
+            if (winnerIndex !== targetIndex) {
+              const patchedTrack = [...track];
+              patchedTrack[winnerIndex] = winnerItem;
+              setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+            }
+
+            const lockPointer = getPointerPxNow();
+            const lockPhase = winnerIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - lockPointer;
+            spinPhaseRef.current = lockPhase;
+            setSpinPhase(lockPhase);
+            setIsReelSpinning(false);
+            setWinnerReveal({ index: winnerIndex, item: winnerItem });
+            rafRef.current = null;
+            resolve();
+          });
         };
 
         rafRef.current = requestAnimationFrame(tick);
       });
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
   );
 
   const openCaseNow = async () => {
@@ -499,6 +546,13 @@ export default function CaseDetailPage() {
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
+                      ref={(node) => {
+                        if (node) {
+                          slotNodeRefs.current.set(repeatedIndex, node);
+                        } else {
+                          slotNodeRefs.current.delete(repeatedIndex);
+                        }
+                      }}
                       className={`absolute top-1/2 z-10 box-border flex -translate-y-1/2 flex-col items-center justify-center ${
                         active || isWinnerSlot
                           ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
