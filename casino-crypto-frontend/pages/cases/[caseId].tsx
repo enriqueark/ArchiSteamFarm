@@ -253,8 +253,6 @@ export default function CaseDetailPage() {
     return [...caseDetails.items].sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
   }, [caseDetails]);
 
-  const reelTrackWidth = useMemo(() => reelTrackSlots.length * REEL_STRIDE, [reelTrackSlots.length]);
-
   useEffect(() => {
     if (!laneRef.current || typeof ResizeObserver === "undefined") return;
     const element = laneRef.current;
@@ -507,26 +505,20 @@ export default function CaseDetailPage() {
           <div ref={laneRef} className="relative overflow-hidden rounded-[10px] border border-[#27303c] bg-gradient-to-b from-[#10161e] via-[#0f141b] to-[#0a0f15]">
             <div className="pointer-events-none absolute inset-y-3 left-1/2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
             <div className="relative h-[320px]">
-              <div
-                className="absolute left-0 top-1/2 flex will-change-transform"
-                style={{
-                  width: reelTrackWidth,
-                  gap: `${REEL_ITEM_GAP}px`,
-                  transform: `translate3d(${-spinPhase}px, -50%, 0)`
-                }}
-              >
+              <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
                   const active = activeStripIndex === repeatedIndex;
                   const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex && active;
+                  const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
-                      className={`z-10 flex shrink-0 flex-col items-center justify-center px-2.5 py-2 ${
+                      className={`absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center px-2.5 py-2 ${
                         active || isWinnerSlot
                           ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
                           : "opacity-55"
                       }`}
-                      style={{ width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
+                      style={{ left, width: REEL_ITEM_WIDTH, height: REEL_ITEM_HEIGHT }}
                     >
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
