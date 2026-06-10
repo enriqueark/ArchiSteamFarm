@@ -350,10 +350,23 @@ export default function CaseDetailPage() {
             finalPhase += delta * REEL_STRIDE;
           }
 
+          const resolvedIndex = clamp(
+            Math.round((finalPhase + pointerEnd - REEL_ITEM_WIDTH / 2) / REEL_STRIDE),
+            0,
+            REEL_TRACK_LENGTH - 1
+          );
+          finalPhase = resolvedIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerEnd;
+
+          if (resolvedIndex !== targetIndex) {
+            const patchedTrack = [...track];
+            patchedTrack[resolvedIndex] = winnerItem;
+            setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+          }
+
           spinPhaseRef.current = finalPhase;
           setSpinPhase(finalPhase);
           setIsReelSpinning(false);
-          setWinnerReveal({ index: targetIndex, item: winnerItem });
+          setWinnerReveal({ index: resolvedIndex, item: winnerItem });
           rafRef.current = null;
           resolve();
         };
@@ -533,8 +546,8 @@ export default function CaseDetailPage() {
                       {isWinnerSlot ? (
                         <>
                           <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
-                          <div className="mt-1 flex w-full items-center justify-center gap-2 text-[#f5c14f] leading-none">
-                            <img src="/assets/coin-dino-original.png" alt="" className="h-[32px] w-[32px] shrink-0 object-contain" />
+                          <div className="mt-1 flex w-full items-center justify-center gap-1 text-[#f5c14f] leading-none">
+                            <img src="/assets/coin-dino-original.png" alt="" className="h-[34px] w-[34px] shrink-0 object-contain" />
                             <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
                           </div>
                         </>
