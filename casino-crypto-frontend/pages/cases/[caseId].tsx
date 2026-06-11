@@ -327,15 +327,6 @@ export default function CaseDetailPage() {
 
   const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
 
-  useEffect(() => {
-    if (isReelSpinning || !winnerReveal) return;
-    const pointer = getPointerPxNow();
-    const expectedPhase = winnerReveal.index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
-    if (Math.abs(expectedPhase - spinPhaseRef.current) < 0.5) return;
-    spinPhaseRef.current = expectedPhase;
-    setSpinPhase(expectedPhase);
-  }, [getPointerPxNow, isReelSpinning, laneWidth, winnerReveal]);
-
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
       if (orderedItems.length === 0) return;
