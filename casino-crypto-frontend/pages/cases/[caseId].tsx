@@ -357,7 +357,6 @@ export default function CaseDetailPage() {
       const preBaitPhase = boundaryPhase - REEL_STRIDE * (0.42 + Math.random() * 0.13);
       const boundaryMargin = REEL_STRIDE * (0.016 + Math.random() * 0.02);
       const baitPhase = passEnabled ? boundaryPhase + boundaryMargin : boundaryPhase - boundaryMargin;
-      const finalPhaseGuess = getPhaseForIndex(targetIndex, pointerEnd);
       const cruiseDurationMs = 4400 + Math.floor(Math.random() * 1100);
       const baitDurationMs = 760 + Math.floor(Math.random() * 340);
       const settleDurationMs = passEnabled
@@ -391,14 +390,14 @@ export default function CaseDetailPage() {
         });
       };
 
-      const measureCenteredTargetPhase = async (fallbackPhase: number): Promise<number> => {
+      const measureCenteredTargetPhase = async (index: number, fallbackPhase: number): Promise<number> => {
         await new Promise<void>((resolve) => {
           rafRef.current = requestAnimationFrame(() => {
             rafRef.current = null;
             resolve();
           });
         });
-        const correctionPx = resolveCenterCorrectionForIndex(targetIndex);
+        const correctionPx = resolveCenterCorrectionForIndex(index);
         if (correctionPx === null || !Number.isFinite(correctionPx)) {
           return fallbackPhase;
         }
@@ -416,13 +415,26 @@ export default function CaseDetailPage() {
 
       await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
-      const settleTargetPhase = await measureCenteredTargetPhase(finalPhaseGuess);
-      await animateSegment(baitPhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.4));
+
+      const decisionPointer = getPointerPxNow();
+      const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
+      const renderedDecisionIndex = resolveRenderedIndexAtPointer();
+      const finalIndex = clamp(renderedDecisionIndex ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+
+      if (finalIndex !== targetIndex) {
+        const patchedTrack = [...track];
+        patchedTrack[finalIndex] = winnerItem;
+        setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
+
+      const finalPhaseGuess = getPhaseForIndex(finalIndex, decisionPointer);
+      const settleTargetPhase = await measureCenteredTargetPhase(finalIndex, finalPhaseGuess);
+      await animateSegment(spinPhaseRef.current, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.4));
 
       setIsReelSpinning(false);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      setWinnerReveal({ index: finalIndex, item: winnerItem });
     },
-    [clearRaf, getPointerPxNow, orderedItems, resolveCenterCorrectionForIndex]
+    [clearRaf, getPointerPxNow, orderedItems, resolveCenterCorrectionForIndex, resolveRenderedIndexAtPointer]
   );
 
   const openCaseNow = async () => {
