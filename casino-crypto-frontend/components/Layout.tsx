@@ -21,6 +21,7 @@ import {
   withdrawVault
 } from "@/lib/api";
 import { LIVE_WINS_REFRESH_EVENT } from "@/lib/liveWinsTicker";
+import { CASE_OPEN_BALANCE_SYNC_EVENT, type CaseOpenBalanceSyncDetail } from "@/lib/refreshBalance";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 import { useToast } from "@/lib/toast";
 
@@ -51,6 +52,22 @@ const atomicToCoinsString = (atomic: string, decimals = 2): string => {
   if (!Number.isFinite(value)) return "0.00";
   return (value / 1e8).toFixed(decimals);
 };
+
+const parseFormattedCoins = (value: string): number => {
+  const parsed = Number(value.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCoinsFixed = (value: number): string =>
+  value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const atomicToCoinsNumber = (atomic: string): number => {
+  const parsed = Number(atomic);
+  if (!Number.isFinite(parsed)) return 0;
+  return parsed / 1e8;
+};
+
+const pickPrimaryWallet = (wallets: Wallet[]): Wallet | undefined => wallets.find((wallet) => wallet.currency === "COINS") ?? wallets[0];
 
 const formatVaultUnlockCountdown = (unlockAt: string | Date, nowMs: number): string => {
   const unlockMs = new Date(unlockAt).getTime();
@@ -114,8 +131,12 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     return localStorage.getItem("notifSeen") !== "true";
   });
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
+  const [forcedBalance, setForcedBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
   const walletRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const balanceFreezeRef = useRef(false);
+  const queuedWalletsRef = useRef<Wallet[] | null>(null);
+  const releaseBalanceTimeoutRef = useRef<number | null>(null);
   const [cachedUsername, setCachedUsername] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("lastKnownUsername");
@@ -131,6 +152,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     }
     const task = getWallets()
       .then((nextWallets) => {
+        if (balanceFreezeRef.current) {
+          queuedWalletsRef.current = nextWallets;
+          return;
+        }
         setWallets(nextWallets);
       })
       .catch(() => {
@@ -169,6 +194,81 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [refreshWallets]);
+
+  useEffect(() => {
+    const getBaseVisibleBalance = () => {
+      if (forcedBalance) return forcedBalance;
+      if (displayBalance) return displayBalance;
+      const wallet = pickPrimaryWallet(wallets);
+      return formatCoins(wallet?.balanceCoins, wallet?.balanceAtomic);
+    };
+
+    const clearReleaseTimer = () => {
+      if (releaseBalanceTimeoutRef.current !== null) {
+        window.clearTimeout(releaseBalanceTimeoutRef.current);
+        releaseBalanceTimeoutRef.current = null;
+      }
+    };
+
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<CaseOpenBalanceSyncDetail>;
+      const detail = custom.detail;
+      if (!detail) return;
+
+      if (detail.type === "start") {
+        clearReleaseTimer();
+        const base = parseFormattedCoins(getBaseVisibleBalance());
+        const next = Math.max(0, base - atomicToCoinsNumber(detail.costAtomic));
+        const nextFormatted = formatCoinsFixed(next);
+        balanceFreezeRef.current = true;
+        queuedWalletsRef.current = null;
+        setBalanceFlash("down");
+        setForcedBalance(nextFormatted);
+        setDisplayBalance(nextFormatted);
+        prevBalanceRef.current = nextFormatted;
+        window.setTimeout(() => setBalanceFlash(null), 900);
+        return;
+      }
+
+      if (detail.type === "end") {
+        clearReleaseTimer();
+        const base = parseFormattedCoins(getBaseVisibleBalance());
+        const next = Math.max(0, base + atomicToCoinsNumber(detail.payoutAtomic));
+        const nextFormatted = formatCoinsFixed(next);
+        setBalanceFlash("up");
+        setForcedBalance(nextFormatted);
+        setDisplayBalance(nextFormatted);
+        prevBalanceRef.current = nextFormatted;
+        releaseBalanceTimeoutRef.current = window.setTimeout(() => {
+          balanceFreezeRef.current = false;
+          const queued = queuedWalletsRef.current;
+          queuedWalletsRef.current = null;
+          setForcedBalance(null);
+          if (queued) {
+            setWallets(queued);
+          } else {
+            void refreshWallets();
+          }
+          setBalanceFlash(null);
+          releaseBalanceTimeoutRef.current = null;
+        }, 300);
+        return;
+      }
+
+      clearReleaseTimer();
+      balanceFreezeRef.current = false;
+      queuedWalletsRef.current = null;
+      setForcedBalance(null);
+      setBalanceFlash(null);
+      void refreshWallets();
+    };
+
+    window.addEventListener(CASE_OPEN_BALANCE_SYNC_EVENT, handler);
+    return () => {
+      window.removeEventListener(CASE_OPEN_BALANCE_SYNC_EVENT, handler);
+      clearReleaseTimer();
+    };
+  }, [displayBalance, forcedBalance, refreshWallets, wallets]);
 
   const refreshLiveTicker = useCallback(async () => {
     try {
@@ -284,7 +384,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     }
   }, [userEmail]);
 
-  const primaryWallet = wallets.find((w) => w.currency === "COINS") || wallets[0];
+  const primaryWallet = pickPrimaryWallet(wallets);
 
   useEffect(() => {
     if (!primaryWallet) return;
@@ -319,7 +419,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   }, [primaryWallet]);
   const displayUsername = (userEmail?.split("@")[0] || cachedUsername || "").slice(0, 20).trim();
   const avatarInitial = getInitialFromLabel(displayUsername);
-  const visibleBalance = displayBalance || formatCoins(primaryWallet?.balanceCoins, primaryWallet?.balanceAtomic);
+  const visibleBalance = forcedBalance ?? displayBalance ?? formatCoins(primaryWallet?.balanceCoins, primaryWallet?.balanceAtomic);
   const integerDigitsCount = visibleBalance.replace(/,/g, "").split(".")[0]?.replace(/\D/g, "").length || 0;
   const isFourDigitBalance = integerDigitsCount === 4;
 

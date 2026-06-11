@@ -10,6 +10,7 @@ import {
   type CaseMarketplaceDetails
 } from "@/lib/caseAdminStore";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
+import { syncCaseOpenBalance } from "@/lib/refreshBalance";
 import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
@@ -383,12 +384,37 @@ export default function CaseDetailPage() {
 
               const lockPointer = getPointerPxNow();
               const lockPhase = getPhaseForIndex(winnerIndex, lockPointer);
-              spinPhaseRef.current = lockPhase;
-              setSpinPhase(lockPhase);
-              setIsReelSpinning(false);
-              setWinnerReveal({ index: winnerIndex, item: winnerItem });
-              rafRef.current = null;
-              resolve();
+              const correctionStart = spinPhaseRef.current;
+              const delta = Math.abs(lockPhase - correctionStart);
+              const finalize = () => {
+                spinPhaseRef.current = lockPhase;
+                setSpinPhase(lockPhase);
+                setIsReelSpinning(false);
+                setWinnerReveal({ index: winnerIndex, item: winnerItem });
+                rafRef.current = null;
+                resolve();
+              };
+
+              if (delta < 0.35) {
+                finalize();
+                return;
+              }
+
+              const correctionDurationMs = 200 + Math.floor(Math.random() * 140);
+              const correctionStartedAt = performance.now();
+              const correctionTick = (correctionTs: number) => {
+                const progress = Math.max(0, Math.min(1, (correctionTs - correctionStartedAt) / correctionDurationMs));
+                const mix = getEaseOut(progress);
+                const correctedPhase = correctionStart + (lockPhase - correctionStart) * mix;
+                spinPhaseRef.current = correctedPhase;
+                setSpinPhase(correctedPhase);
+                if (progress < 1) {
+                  rafRef.current = requestAnimationFrame(correctionTick);
+                  return;
+                }
+                finalize();
+              };
+              rafRef.current = requestAnimationFrame(correctionTick);
             });
           };
 
@@ -436,9 +462,15 @@ export default function CaseDetailPage() {
       return;
     }
     setOpening(true);
+    let balanceSyncStarted = false;
+    let balanceSyncCompleted = false;
     try {
+      syncCaseOpenBalance({ type: "start", costAtomic: caseDetails.priceAtomic });
+      balanceSyncStarted = true;
       const result = await openCase(caseDetails.id);
       await runOpeningAnimation(result.item);
+      syncCaseOpenBalance({ type: "end", payoutAtomic: result.payoutAtomic });
+      balanceSyncCompleted = true;
       setLastOpening(result);
       requestLiveWinsRefresh();
       toast.showSuccess(`You won ${result.item.name} (${fmtCoins(result.item.valueAtomic)} COINS).`);
@@ -446,6 +478,9 @@ export default function CaseDetailPage() {
         setTopTierModal(result);
       }
     } catch (error) {
+      if (balanceSyncStarted && !balanceSyncCompleted) {
+        syncCaseOpenBalance({ type: "cancel" });
+      }
       toast.showError(error instanceof Error ? error.message : "Failed to open case.");
     } finally {
       setOpening(false);
