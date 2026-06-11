@@ -354,18 +354,15 @@ export default function CaseDetailPage() {
       const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
       const pointerEnd = getPointerPxNow();
       const boundaryPhase = getPhaseForIndex(boundaryBaseIndex + 0.5, pointerEnd);
-      const preBaitPhase = boundaryPhase - REEL_STRIDE * (0.46 + Math.random() * 0.14);
-      // Keep the "decision border" on the true gap midpoint, but bias a bit more to the right
-      // when passing so the crossing is visually clear.
-      const rightPassMargin = REEL_STRIDE * (0.045 + Math.random() * 0.025);
-      const leftStayMargin = REEL_STRIDE * (0.008 + Math.random() * 0.012);
-      const baitPhase = passEnabled ? boundaryPhase + rightPassMargin : boundaryPhase - leftStayMargin;
+      const preBaitPhase = boundaryPhase - REEL_STRIDE * (0.42 + Math.random() * 0.13);
+      const boundaryMargin = REEL_STRIDE * (0.016 + Math.random() * 0.02);
+      const baitPhase = passEnabled ? boundaryPhase + boundaryMargin : boundaryPhase - boundaryMargin;
       const finalPhaseGuess = getPhaseForIndex(targetIndex, pointerEnd);
       const cruiseDurationMs = 4400 + Math.floor(Math.random() * 1100);
-      const baitDurationMs = 980 + Math.floor(Math.random() * 480);
+      const baitDurationMs = 760 + Math.floor(Math.random() * 340);
       const settleDurationMs = passEnabled
-        ? 1320 + Math.floor(Math.random() * 460)
-        : 1120 + Math.floor(Math.random() * 360);
+        ? 980 + Math.floor(Math.random() * 360)
+        : 860 + Math.floor(Math.random() * 300);
 
       const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
@@ -413,9 +410,9 @@ export default function CaseDetailPage() {
       setSpinPhase(startPhase);
 
       await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
-      await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
+      await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
       const settleTargetPhase = await measureCenteredTargetPhase(finalPhaseGuess);
-      await animateSegment(baitPhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 4.2));
+      await animateSegment(baitPhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5));
 
       setIsReelSpinning(false);
       setWinnerReveal({ index: targetIndex, item: winnerItem });
