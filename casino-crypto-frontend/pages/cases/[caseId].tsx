@@ -361,8 +361,8 @@ export default function CaseDetailPage() {
       const cruiseDurationMs = 4400 + Math.floor(Math.random() * 1100);
       const baitDurationMs = 760 + Math.floor(Math.random() * 340);
       const settleDurationMs = passEnabled
-        ? 980 + Math.floor(Math.random() * 360)
-        : 860 + Math.floor(Math.random() * 300);
+        ? 860 + Math.floor(Math.random() * 280)
+        : 780 + Math.floor(Math.random() * 240);
 
       const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
@@ -403,7 +403,12 @@ export default function CaseDetailPage() {
           return fallbackPhase;
         }
         const from = spinPhaseRef.current;
-        return from + correctionPx;
+        const measuredTarget = from + correctionPx;
+        // Safety clamp: keep the correction inside the same skin neighborhood,
+        // so the final easing can never cross into a different slot.
+        const neighborhoodLimit = REEL_STRIDE * 0.22;
+        const boundedDelta = clamp(measuredTarget - fallbackPhase, -neighborhoodLimit, neighborhoodLimit);
+        return fallbackPhase + boundedDelta;
       };
 
       spinPhaseRef.current = startPhase;
@@ -412,7 +417,7 @@ export default function CaseDetailPage() {
       await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
       const settleTargetPhase = await measureCenteredTargetPhase(finalPhaseGuess);
-      await animateSegment(baitPhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5));
+      await animateSegment(baitPhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.4));
 
       setIsReelSpinning(false);
       setWinnerReveal({ index: targetIndex, item: winnerItem });
