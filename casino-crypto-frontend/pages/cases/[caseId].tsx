@@ -348,9 +348,10 @@ export default function CaseDetailPage() {
 
       const pointerStart = getPointerPxNow();
       const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
-      const suspenseEnabled = Math.random() < 0.65;
-      const suspenseSide = Math.random() < 0.5 ? -0.5 : 0.5;
-      const suspenseIndex = suspenseEnabled ? targetIndex + suspenseSide : targetIndex;
+      const suspenseEnabled = Math.random() < 0.85;
+      const suspenseSide = Math.random() < 0.5 ? -1 : 1;
+      const suspenseOffset = 0.42 + Math.random() * 0.16;
+      const suspenseIndex = suspenseEnabled ? targetIndex + suspenseSide * suspenseOffset : targetIndex;
       const endPhase = getPhaseForIndex(suspenseIndex, pointerStart);
       const durationMs = 5000 + Math.floor(Math.random() * 2000);
       const startedAt = performance.now();
@@ -430,23 +431,40 @@ export default function CaseDetailPage() {
             return;
           }
 
-          const settleDurationMs = 240 + Math.floor(Math.random() * 220);
-          const settleStartedAt = performance.now();
-          const settleTick = (settleTs: number) => {
-            const settleProgress = Math.max(0, Math.min(1, (settleTs - settleStartedAt) / settleDurationMs));
-            const settleMix = getEaseOut(settleProgress);
-            const settlePhase = suspensePhase + (finalPhase - suspensePhase) * settleMix;
-            spinPhaseRef.current = settlePhase;
-            setSpinPhase(settlePhase);
-            if (settleProgress < 1) {
-              rafRef.current = requestAnimationFrame(settleTick);
+          const lingerDurationMs = 260 + Math.floor(Math.random() * 260);
+          const lingerAmplitude = REEL_STRIDE * (0.014 + Math.random() * 0.012);
+          const lingerStartedAt = performance.now();
+          const lingerTick = (lingerTs: number) => {
+            const lingerProgress = Math.max(0, Math.min(1, (lingerTs - lingerStartedAt) / lingerDurationMs));
+            const wobble = Math.sin(lingerProgress * Math.PI * 2.1) * lingerAmplitude;
+            const lingerPhase = suspensePhase + wobble;
+            spinPhaseRef.current = lingerPhase;
+            setSpinPhase(lingerPhase);
+            if (lingerProgress < 1) {
+              rafRef.current = requestAnimationFrame(lingerTick);
               return;
             }
-            spinPhaseRef.current = finalPhase;
-            setSpinPhase(finalPhase);
-            completeWithDomLock();
+
+            const settleDurationMs = 640 + Math.floor(Math.random() * 420);
+            const settleStartedAt = performance.now();
+            const settleTick = (settleTs: number) => {
+              const settleProgress = Math.max(0, Math.min(1, (settleTs - settleStartedAt) / settleDurationMs));
+              // Slower tail than regular ease-out to keep uncertainty longer.
+              const settleMix = 1 - Math.pow(1 - settleProgress, 5);
+              const settlePhase = suspensePhase + (finalPhase - suspensePhase) * settleMix;
+              spinPhaseRef.current = settlePhase;
+              setSpinPhase(settlePhase);
+              if (settleProgress < 1) {
+                rafRef.current = requestAnimationFrame(settleTick);
+                return;
+              }
+              spinPhaseRef.current = finalPhase;
+              setSpinPhase(finalPhase);
+              completeWithDomLock();
+            };
+            rafRef.current = requestAnimationFrame(settleTick);
           };
-          rafRef.current = requestAnimationFrame(settleTick);
+          rafRef.current = requestAnimationFrame(lingerTick);
         };
 
         rafRef.current = requestAnimationFrame(tick);
