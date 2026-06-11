@@ -351,22 +351,17 @@ export default function CaseDetailPage() {
       const pointerStart = getPointerPxNow();
       const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
       const pointerEnd = getPointerPxNow();
-      const finalPhase = getPhaseForIndex(targetIndex, pointerEnd);
-      const suspenseEnabled = Math.random() < 0.88;
-      const passEnabled = suspenseEnabled && Math.random() < 0.75;
+      const finalPhaseGuess = getPhaseForIndex(targetIndex, pointerEnd);
+      const suspenseEnabled = Math.random() < 0.9;
+      const passEnabled = suspenseEnabled && Math.random() < 0.72;
       const suspenseDistance = passEnabled
-        ? REEL_STRIDE * (0.56 + Math.random() * 0.12)
-        : REEL_STRIDE * (0.30 + Math.random() * 0.14);
-      const suspensePhase = finalPhase - suspenseDistance;
-      const borderPhase = finalPhase - REEL_STRIDE * 0.5;
-      const nearEdgePhase = passEnabled
-        ? borderPhase - REEL_STRIDE * (0.015 + Math.random() * 0.018)
-        : finalPhase - REEL_STRIDE * (0.10 + Math.random() * 0.05);
+        ? REEL_STRIDE * (0.54 + Math.random() * 0.08)
+        : REEL_STRIDE * (0.22 + Math.random() * 0.14);
+      const suspensePhase = finalPhaseGuess - suspenseDistance;
       const cruiseDurationMs = 4400 + Math.floor(Math.random() * 1100);
-      const edgeDurationMs = 620 + Math.floor(Math.random() * 350);
       const settleDurationMs = passEnabled
-        ? 850 + Math.floor(Math.random() * 380)
-        : 580 + Math.floor(Math.random() * 280);
+        ? 1280 + Math.floor(Math.random() * 420)
+        : 900 + Math.floor(Math.random() * 320);
 
       const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
@@ -414,15 +409,8 @@ export default function CaseDetailPage() {
       setSpinPhase(startPhase);
 
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getEaseOut);
-
-      let settleFromPhase = suspensePhase;
-      if (suspenseEnabled) {
-        await animateSegment(suspensePhase, nearEdgePhase, edgeDurationMs, (progress) => Math.pow(progress, 1.32));
-        settleFromPhase = nearEdgePhase;
-      }
-
-      const settleTargetPhase = await measureCenteredTargetPhase(finalPhase);
-      await animateSegment(settleFromPhase, settleTargetPhase, settleDurationMs, (progress) => progress * progress * (3 - 2 * progress));
+      const settleTargetPhase = await measureCenteredTargetPhase(finalPhaseGuess);
+      await animateSegment(suspensePhase, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5));
 
       setIsReelSpinning(false);
       setWinnerReveal({ index: targetIndex, item: winnerItem });
