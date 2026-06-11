@@ -290,6 +290,17 @@ export default function CaseDetailPage() {
     return bestIndex;
   }, []);
 
+  const resolveCenterCorrectionForIndex = useCallback((index: number): number | null => {
+    const lane = laneRef.current;
+    const node = slotNodeRefs.current.get(index);
+    if (!lane || !node) return null;
+    const laneRect = lane.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const pointerX = laneRect.left + laneRect.width * 0.5;
+    const nodeCenterX = nodeRect.left + nodeRect.width * 0.5;
+    return nodeCenterX - pointerX;
+  }, []);
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -348,129 +359,99 @@ export default function CaseDetailPage() {
 
       const pointerStart = getPointerPxNow();
       const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
-      const suspenseEnabled = Math.random() < 0.85;
-      const suspenseSide = Math.random() < 0.5 ? -1 : 1;
-      const suspenseOffset = 0.42 + Math.random() * 0.16;
-      const suspenseIndex = suspenseEnabled ? targetIndex + suspenseSide * suspenseOffset : targetIndex;
-      const endPhase = getPhaseForIndex(suspenseIndex, pointerStart);
-      const durationMs = 5000 + Math.floor(Math.random() * 2000);
-      const startedAt = performance.now();
+      const pointerEnd = getPointerPxNow();
+      const finalPhase = getPhaseForIndex(targetIndex, pointerEnd);
+      const suspenseEnabled = Math.random() < 0.88;
+      const passEnabled = suspenseEnabled && Math.random() < 0.75;
+      const suspenseDistance = passEnabled
+        ? REEL_STRIDE * (0.56 + Math.random() * 0.12)
+        : REEL_STRIDE * (0.30 + Math.random() * 0.14);
+      const suspensePhase = finalPhase - suspenseDistance;
+      const borderPhase = finalPhase - REEL_STRIDE * 0.5;
+      const nearEdgePhase = passEnabled
+        ? borderPhase - REEL_STRIDE * (0.015 + Math.random() * 0.018)
+        : finalPhase - REEL_STRIDE * (0.10 + Math.random() * 0.05);
+      const cruiseDurationMs = 4400 + Math.floor(Math.random() * 1100);
+      const edgeDurationMs = 620 + Math.floor(Math.random() * 350);
+      const settleDurationMs = passEnabled
+        ? 850 + Math.floor(Math.random() * 380)
+        : 580 + Math.floor(Math.random() * 280);
+
+      const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
+        if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
+          spinPhaseRef.current = to;
+          setSpinPhase(to);
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          const startedAt = performance.now();
+          const tick = (ts: number) => {
+            const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
+            const mix = easing(progress);
+            const next = from + (to - from) * mix;
+            spinPhaseRef.current = next;
+            setSpinPhase(next);
+            if (progress < 1) {
+              rafRef.current = requestAnimationFrame(tick);
+              return;
+            }
+            spinPhaseRef.current = to;
+            setSpinPhase(to);
+            rafRef.current = null;
+            resolve();
+          };
+          rafRef.current = requestAnimationFrame(tick);
+        });
+      };
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
 
+      await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getEaseOut);
+
+      let settleFromPhase = suspensePhase;
+      if (suspenseEnabled) {
+        await animateSegment(suspensePhase, nearEdgePhase, edgeDurationMs, (progress) => Math.pow(progress, 1.32));
+        settleFromPhase = nearEdgePhase;
+      }
+
+      await animateSegment(settleFromPhase, finalPhase, settleDurationMs, (progress) => progress * progress * (3 - 2 * progress));
+
       await new Promise<void>((resolve) => {
-        const tick = (ts: number) => {
-          const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
-          const mix = getEaseOut(progress);
-          const next = startPhase + (endPhase - startPhase) * mix;
-          spinPhaseRef.current = next;
-          setSpinPhase(next);
-
-          if (progress < 1) {
-            rafRef.current = requestAnimationFrame(tick);
+        rafRef.current = requestAnimationFrame(() => {
+          const correctionPx = resolveCenterCorrectionForIndex(targetIndex) ?? 0;
+          if (Math.abs(correctionPx) < 0.35) {
+            rafRef.current = null;
+            resolve();
             return;
           }
-
-          const completeWithDomLock = () => {
-            rafRef.current = requestAnimationFrame(() => {
-              const renderedIndex = resolveRenderedIndexAtPointer();
-              const winnerIndex = renderedIndex ?? targetIndex;
-
-              if (winnerIndex !== targetIndex) {
-                const patchedTrack = [...track];
-                patchedTrack[winnerIndex] = winnerItem;
-                setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-              }
-
-              const lockPointer = getPointerPxNow();
-              const lockPhase = getPhaseForIndex(winnerIndex, lockPointer);
-              const correctionStart = spinPhaseRef.current;
-              const delta = Math.abs(lockPhase - correctionStart);
-              const finalize = () => {
-                spinPhaseRef.current = lockPhase;
-                setSpinPhase(lockPhase);
-                setIsReelSpinning(false);
-                setWinnerReveal({ index: winnerIndex, item: winnerItem });
-                rafRef.current = null;
-                resolve();
-              };
-
-              if (delta < 0.35) {
-                finalize();
-                return;
-              }
-
-              const correctionDurationMs = 200 + Math.floor(Math.random() * 140);
-              const correctionStartedAt = performance.now();
-              const correctionTick = (correctionTs: number) => {
-                const progress = Math.max(0, Math.min(1, (correctionTs - correctionStartedAt) / correctionDurationMs));
-                const mix = getEaseOut(progress);
-                const correctedPhase = correctionStart + (lockPhase - correctionStart) * mix;
-                spinPhaseRef.current = correctedPhase;
-                setSpinPhase(correctedPhase);
-                if (progress < 1) {
-                  rafRef.current = requestAnimationFrame(correctionTick);
-                  return;
-                }
-                finalize();
-              };
+          const from = spinPhaseRef.current;
+          const to = from + correctionPx;
+          const correctionDurationMs = 220 + Math.floor(Math.min(420, Math.abs(correctionPx) * 2));
+          const correctionStartedAt = performance.now();
+          const correctionTick = (correctionTs: number) => {
+            const progress = Math.max(0, Math.min(1, (correctionTs - correctionStartedAt) / correctionDurationMs));
+            const mix = progress * progress * (3 - 2 * progress);
+            const correctedPhase = from + (to - from) * mix;
+            spinPhaseRef.current = correctedPhase;
+            setSpinPhase(correctedPhase);
+            if (progress < 1) {
               rafRef.current = requestAnimationFrame(correctionTick);
-            });
-          };
-
-          const pointerEnd = getPointerPxNow();
-          const suspensePhase = getPhaseForIndex(suspenseIndex, pointerEnd);
-          const finalPhase = getPhaseForIndex(targetIndex, pointerEnd);
-
-          spinPhaseRef.current = suspensePhase;
-          setSpinPhase(suspensePhase);
-
-          if (!suspenseEnabled) {
-            completeWithDomLock();
-            return;
-          }
-
-          const lingerDurationMs = 260 + Math.floor(Math.random() * 260);
-          const lingerAmplitude = REEL_STRIDE * (0.014 + Math.random() * 0.012);
-          const lingerStartedAt = performance.now();
-          const lingerTick = (lingerTs: number) => {
-            const lingerProgress = Math.max(0, Math.min(1, (lingerTs - lingerStartedAt) / lingerDurationMs));
-            const wobble = Math.sin(lingerProgress * Math.PI * 2.1) * lingerAmplitude;
-            const lingerPhase = suspensePhase + wobble;
-            spinPhaseRef.current = lingerPhase;
-            setSpinPhase(lingerPhase);
-            if (lingerProgress < 1) {
-              rafRef.current = requestAnimationFrame(lingerTick);
               return;
             }
-
-            const settleDurationMs = 640 + Math.floor(Math.random() * 420);
-            const settleStartedAt = performance.now();
-            const settleTick = (settleTs: number) => {
-              const settleProgress = Math.max(0, Math.min(1, (settleTs - settleStartedAt) / settleDurationMs));
-              // Slower tail than regular ease-out to keep uncertainty longer.
-              const settleMix = 1 - Math.pow(1 - settleProgress, 5);
-              const settlePhase = suspensePhase + (finalPhase - suspensePhase) * settleMix;
-              spinPhaseRef.current = settlePhase;
-              setSpinPhase(settlePhase);
-              if (settleProgress < 1) {
-                rafRef.current = requestAnimationFrame(settleTick);
-                return;
-              }
-              spinPhaseRef.current = finalPhase;
-              setSpinPhase(finalPhase);
-              completeWithDomLock();
-            };
-            rafRef.current = requestAnimationFrame(settleTick);
+            spinPhaseRef.current = to;
+            setSpinPhase(to);
+            rafRef.current = null;
+            resolve();
           };
-          rafRef.current = requestAnimationFrame(lingerTick);
-        };
-
-        rafRef.current = requestAnimationFrame(tick);
+          rafRef.current = requestAnimationFrame(correctionTick);
+        });
       });
+
+      setIsReelSpinning(false);
+      setWinnerReveal({ index: targetIndex, item: winnerItem });
     },
-    [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
+    [clearRaf, getPointerPxNow, orderedItems, resolveCenterCorrectionForIndex]
   );
 
   const openCaseNow = async () => {
