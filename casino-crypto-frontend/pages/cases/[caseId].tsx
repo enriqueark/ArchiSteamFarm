@@ -395,6 +395,21 @@ export default function CaseDetailPage() {
         });
       };
 
+      const measureCenteredTargetPhase = async (fallbackPhase: number): Promise<number> => {
+        await new Promise<void>((resolve) => {
+          rafRef.current = requestAnimationFrame(() => {
+            rafRef.current = null;
+            resolve();
+          });
+        });
+        const correctionPx = resolveCenterCorrectionForIndex(targetIndex);
+        if (correctionPx === null || !Number.isFinite(correctionPx)) {
+          return fallbackPhase;
+        }
+        const from = spinPhaseRef.current;
+        return from + correctionPx;
+      };
+
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
 
@@ -406,8 +421,7 @@ export default function CaseDetailPage() {
         settleFromPhase = nearEdgePhase;
       }
 
-      const settleCorrectionPx = resolveCenterCorrectionForIndex(targetIndex) ?? 0;
-      const settleTargetPhase = finalPhase + settleCorrectionPx;
+      const settleTargetPhase = await measureCenteredTargetPhase(finalPhase);
       await animateSegment(settleFromPhase, settleTargetPhase, settleDurationMs, (progress) => progress * progress * (3 - 2 * progress));
 
       setIsReelSpinning(false);
