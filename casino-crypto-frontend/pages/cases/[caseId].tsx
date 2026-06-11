@@ -415,38 +415,9 @@ export default function CaseDetailPage() {
         settleFromPhase = nearEdgePhase;
       }
 
-      await animateSegment(settleFromPhase, finalPhase, settleDurationMs, (progress) => progress * progress * (3 - 2 * progress));
-
-      await new Promise<void>((resolve) => {
-        rafRef.current = requestAnimationFrame(() => {
-          const correctionPx = resolveCenterCorrectionForIndex(targetIndex) ?? 0;
-          if (Math.abs(correctionPx) < 0.35) {
-            rafRef.current = null;
-            resolve();
-            return;
-          }
-          const from = spinPhaseRef.current;
-          const to = from + correctionPx;
-          const correctionDurationMs = 220 + Math.floor(Math.min(420, Math.abs(correctionPx) * 2));
-          const correctionStartedAt = performance.now();
-          const correctionTick = (correctionTs: number) => {
-            const progress = Math.max(0, Math.min(1, (correctionTs - correctionStartedAt) / correctionDurationMs));
-            const mix = progress * progress * (3 - 2 * progress);
-            const correctedPhase = from + (to - from) * mix;
-            spinPhaseRef.current = correctedPhase;
-            setSpinPhase(correctedPhase);
-            if (progress < 1) {
-              rafRef.current = requestAnimationFrame(correctionTick);
-              return;
-            }
-            spinPhaseRef.current = to;
-            setSpinPhase(to);
-            rafRef.current = null;
-            resolve();
-          };
-          rafRef.current = requestAnimationFrame(correctionTick);
-        });
-      });
+      const settleCorrectionPx = resolveCenterCorrectionForIndex(targetIndex) ?? 0;
+      const settleTargetPhase = finalPhase + settleCorrectionPx;
+      await animateSegment(settleFromPhase, settleTargetPhase, settleDurationMs, (progress) => progress * progress * (3 - 2 * progress));
 
       setIsReelSpinning(false);
       setWinnerReveal({ index: targetIndex, item: winnerItem });
