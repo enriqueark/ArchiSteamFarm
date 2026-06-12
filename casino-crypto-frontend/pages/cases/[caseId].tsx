@@ -419,7 +419,15 @@ export default function CaseDetailPage() {
       const decisionPointer = getPointerPxNow();
       const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
       const renderedDecisionIndex = resolveRenderedIndexAtPointer();
-      const finalIndex = clamp(renderedDecisionIndex ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      let finalIndex = clamp(renderedDecisionIndex ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      let finalPhaseGuess = getPhaseForIndex(finalIndex, decisionPointer);
+      const minForwardDelta = 0.35;
+      // Never reverse direction in the last segment; if the chosen index center is behind
+      // the current phase, move to the next index so the finish remains natural.
+      if (finalPhaseGuess <= spinPhaseRef.current + minForwardDelta && finalIndex < REEL_TRACK_LENGTH - 1) {
+        finalIndex += 1;
+        finalPhaseGuess = getPhaseForIndex(finalIndex, decisionPointer);
+      }
 
       if (finalIndex !== targetIndex) {
         const patchedTrack = [...track];
@@ -427,8 +435,8 @@ export default function CaseDetailPage() {
         setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
       }
 
-      const finalPhaseGuess = getPhaseForIndex(finalIndex, decisionPointer);
-      const settleTargetPhase = await measureCenteredTargetPhase(finalIndex, finalPhaseGuess);
+      const measuredSettleTarget = await measureCenteredTargetPhase(finalIndex, finalPhaseGuess);
+      const settleTargetPhase = Math.max(spinPhaseRef.current + minForwardDelta, measuredSettleTarget);
       await animateSegment(spinPhaseRef.current, settleTargetPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.4));
 
       setIsReelSpinning(false);
