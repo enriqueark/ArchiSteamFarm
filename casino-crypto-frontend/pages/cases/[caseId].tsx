@@ -314,7 +314,7 @@ export default function CaseDetailPage() {
     return () => cancelAnimationFrame(frame);
   }, [laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
+  const highlightedStripIndex = renderedPointerIndex ?? activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -392,19 +392,13 @@ export default function CaseDetailPage() {
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
       await animateSegment(baitPhase, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
-      await new Promise<void>((resolve) => {
-        rafRef.current = requestAnimationFrame(() => {
-          rafRef.current = null;
-          resolve();
-        });
-      });
       const finalPointer = getPointerPxNow();
       const renderedFinalIndex = resolveRenderedIndexAtPointer();
       const approxFinalIndex = getIndexAtPointer(spinPhaseRef.current, finalPointer, REEL_TRACK_LENGTH);
       const resolvedFinalIndex = clamp(renderedFinalIndex ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
 
-      setIsReelSpinning(false);
       setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
+      setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
   );
