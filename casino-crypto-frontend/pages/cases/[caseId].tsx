@@ -332,9 +332,17 @@ export default function CaseDetailPage() {
       }
 
       const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
-      const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
+      const decisionBaseIndex = REEL_TRACK_LENGTH - 17 - Math.floor(Math.random() * 3);
+      const passEnabled = Math.random() < 0.68;
+      const targetIndex = passEnabled ? decisionBaseIndex + 1 : decisionBaseIndex;
       const winnerItem = orderedItems[winnerLayout] ?? winningItem;
       track[targetIndex] = winnerItem;
+      if (decisionBaseIndex >= 0 && decisionBaseIndex < REEL_TRACK_LENGTH) {
+        track[decisionBaseIndex] = winnerItem;
+      }
+      if (decisionBaseIndex + 1 >= 0 && decisionBaseIndex + 1 < REEL_TRACK_LENGTH) {
+        track[decisionBaseIndex + 1] = winnerItem;
+      }
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointerStart = getPointerPxNow();
@@ -346,7 +354,7 @@ export default function CaseDetailPage() {
       const preBaitPhase = baitPhase - REEL_STRIDE * (0.32 + Math.random() * 0.18);
       const cruiseDurationMs = 4300 + Math.floor(Math.random() * 1000);
       const baitDurationMs = 760 + Math.floor(Math.random() * 360);
-      const settleDurationMs = 960 + Math.floor(Math.random() * 420);
+      const settleDurationMs = 760 + Math.floor(Math.random() * 260);
 
       const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
@@ -382,10 +390,15 @@ export default function CaseDetailPage() {
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
       await animateSegment(baitPhase, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
+      const finalPointer = getPointerPxNow();
+      const renderedFinalIndex = resolveRenderedIndexAtPointer();
+      const approxFinalIndex = getIndexAtPointer(spinPhaseRef.current, finalPointer, REEL_TRACK_LENGTH);
+      const resolvedFinalIndex = clamp(renderedFinalIndex ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+
       setIsReelSpinning(false);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
   );
 
   const openCaseNow = async () => {
