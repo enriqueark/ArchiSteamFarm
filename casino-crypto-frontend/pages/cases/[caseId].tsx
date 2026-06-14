@@ -180,6 +180,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
+  const renderedPointerIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -309,7 +310,9 @@ export default function CaseDetailPage() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      setRenderedPointerIndex(resolveRenderedIndexAtPointer());
+      const nextIndex = resolveRenderedIndexAtPointer();
+      renderedPointerIndexRef.current = nextIndex;
+      setRenderedPointerIndex(nextIndex);
     });
     return () => cancelAnimationFrame(frame);
   }, [laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase]);
@@ -384,7 +387,15 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = finalPhase;
       setSpinPhase(finalPhase);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      const finalPointer = getPointerPxNow();
+      const approxFinalIndex = getIndexAtPointer(finalPhase, finalPointer, REEL_TRACK_LENGTH);
+      const finalIndex = clamp(renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      if (finalIndex !== targetIndex) {
+        const patchedTrack = [...track];
+        patchedTrack[finalIndex] = winnerItem;
+        setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
+      setWinnerReveal({ index: finalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
