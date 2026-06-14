@@ -180,6 +180,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
+  const renderedPointerIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -308,14 +309,18 @@ export default function CaseDetailPage() {
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   useEffect(() => {
+    if (!isReelSpinning && winnerReveal) {
+      return;
+    }
     const frame = requestAnimationFrame(() => {
       const nextIndex = resolveRenderedIndexAtPointer();
+      renderedPointerIndexRef.current = nextIndex;
       setRenderedPointerIndex(nextIndex);
     });
     return () => cancelAnimationFrame(frame);
-  }, [laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase]);
+  }, [isReelSpinning, laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase, winnerReveal]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
+  const highlightedStripIndex = renderedPointerIndex ?? activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -385,7 +390,12 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = finalPhase;
       setSpinPhase(finalPhase);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      const finalPointer = getPointerPxNow();
+      const approxFinalIndex = getIndexAtPointer(finalPhase, finalPointer, REEL_TRACK_LENGTH);
+      const finalIndex = clamp(renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      renderedPointerIndexRef.current = finalIndex;
+      setRenderedPointerIndex(finalIndex);
+      setWinnerReveal({ index: finalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
