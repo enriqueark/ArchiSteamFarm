@@ -180,8 +180,6 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
-  const renderedPointerIndexRef = useRef<number | null>(null);
-  const visibleHighlightIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -312,17 +310,12 @@ export default function CaseDetailPage() {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const nextIndex = resolveRenderedIndexAtPointer();
-      renderedPointerIndexRef.current = nextIndex;
       setRenderedPointerIndex(nextIndex);
     });
     return () => cancelAnimationFrame(frame);
   }, [laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase]);
 
   const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
-
-  useEffect(() => {
-    visibleHighlightIndexRef.current = renderedPointerIndex ?? activeStripIndex;
-  }, [activeStripIndex, renderedPointerIndex]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -343,12 +336,6 @@ export default function CaseDetailPage() {
       const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
       const winnerItem = orderedItems[winnerLayout] ?? winningItem;
       track[targetIndex] = winnerItem;
-      if (targetIndex - 1 >= 0) {
-        track[targetIndex - 1] = winnerItem;
-      }
-      if (targetIndex + 1 < REEL_TRACK_LENGTH) {
-        track[targetIndex + 1] = winnerItem;
-      }
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointerStart = getPointerPxNow();
@@ -398,14 +385,7 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = finalPhase;
       setSpinPhase(finalPhase);
-      const finalPointer = getPointerPxNow();
-      const approxFinalIndex = getIndexAtPointer(finalPhase, finalPointer, REEL_TRACK_LENGTH);
-      const finalIndex = clamp(
-        visibleHighlightIndexRef.current ?? renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex,
-        0,
-        REEL_TRACK_LENGTH - 1
-      );
-      setWinnerReveal({ index: finalIndex, item: winnerItem });
+      setWinnerReveal({ index: targetIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
