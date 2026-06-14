@@ -181,6 +181,7 @@ export default function CaseDetailPage() {
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
   const renderedPointerIndexRef = useRef<number | null>(null);
+  const visibleHighlightIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -319,6 +320,10 @@ export default function CaseDetailPage() {
 
   const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
 
+  useEffect(() => {
+    visibleHighlightIndexRef.current = renderedPointerIndex ?? activeStripIndex;
+  }, [activeStripIndex, renderedPointerIndex]);
+
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
       if (orderedItems.length === 0) return;
@@ -395,7 +400,11 @@ export default function CaseDetailPage() {
       setSpinPhase(finalPhase);
       const finalPointer = getPointerPxNow();
       const approxFinalIndex = getIndexAtPointer(finalPhase, finalPointer, REEL_TRACK_LENGTH);
-      const finalIndex = clamp(renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      const finalIndex = clamp(
+        visibleHighlightIndexRef.current ?? renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex,
+        0,
+        REEL_TRACK_LENGTH - 1
+      );
       setWinnerReveal({ index: finalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
