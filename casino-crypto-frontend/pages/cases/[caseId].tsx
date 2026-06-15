@@ -341,6 +341,12 @@ export default function CaseDetailPage() {
       const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
       const winnerItem = orderedItems[winnerLayout] ?? winningItem;
       track[targetIndex] = winnerItem;
+      for (let offset = -2; offset <= 2; offset += 1) {
+        const idx = targetIndex + offset;
+        if (idx >= 0 && idx < REEL_TRACK_LENGTH) {
+          track[idx] = winnerItem;
+        }
+      }
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointerStart = getPointerPxNow();
@@ -389,11 +395,6 @@ export default function CaseDetailPage() {
       const decisionPointer = getPointerPxNow();
       const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
       const lockedFinalIndex = clamp(renderedPointerIndexRef.current ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
-      if (lockedFinalIndex !== targetIndex) {
-        const patchedTrack = [...track];
-        patchedTrack[lockedFinalIndex] = winnerItem;
-        setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-      }
 
       const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
       await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
