@@ -346,9 +346,9 @@ export default function CaseDetailPage() {
       const pointerStart = getPointerPxNow();
       const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
       const pointerEnd = getPointerPxNow();
-      const finalPhase = getPhaseForIndex(targetIndex, pointerEnd);
+      const targetPhase = getPhaseForIndex(targetIndex, pointerEnd);
       // Keep final path monotonic (always forward) to avoid any perceived teleport.
-      const baitPhase = finalPhase - REEL_STRIDE * (0.46 + Math.random() * 0.1);
+      const baitPhase = targetPhase - REEL_STRIDE * (0.46 + Math.random() * 0.1);
       const preBaitPhase = baitPhase - REEL_STRIDE * (0.32 + Math.random() * 0.18);
       const cruiseDurationMs = 4300 + Math.floor(Math.random() * 1000);
       const baitDurationMs = 760 + Math.floor(Math.random() * 360);
@@ -386,16 +386,23 @@ export default function CaseDetailPage() {
 
       await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
-      await animateSegment(baitPhase, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
+      const decisionPointer = getPointerPxNow();
+      const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
+      const lockedFinalIndex = clamp(renderedPointerIndexRef.current ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      if (lockedFinalIndex !== targetIndex) {
+        const patchedTrack = [...track];
+        patchedTrack[lockedFinalIndex] = winnerItem;
+        setReelTrackSlots(patchedTrack.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
+
+      const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
+      await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
       spinPhaseRef.current = finalPhase;
       setSpinPhase(finalPhase);
-      const finalPointer = getPointerPxNow();
-      const approxFinalIndex = getIndexAtPointer(finalPhase, finalPointer, REEL_TRACK_LENGTH);
-      const finalIndex = clamp(renderedPointerIndexRef.current ?? approxFinalIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
-      renderedPointerIndexRef.current = finalIndex;
-      setRenderedPointerIndex(finalIndex);
-      setWinnerReveal({ index: finalIndex, item: winnerItem });
+      renderedPointerIndexRef.current = lockedFinalIndex;
+      setRenderedPointerIndex(lockedFinalIndex);
+      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
