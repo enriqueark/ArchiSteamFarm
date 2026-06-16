@@ -390,9 +390,12 @@ export default function CaseDetailPage() {
       const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
       await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
-      renderedPointerIndexRef.current = lockedFinalIndex;
-      setRenderedPointerIndex(lockedFinalIndex);
-      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
+      const finalPointer = getPointerPxNow();
+      const approxFinalIndex = getIndexAtPointer(spinPhaseRef.current, finalPointer, REEL_TRACK_LENGTH);
+      const resolvedFinalIndex = clamp(renderedPointerIndexRef.current ?? approxFinalIndex ?? lockedFinalIndex, 0, REEL_TRACK_LENGTH - 1);
+      renderedPointerIndexRef.current = resolvedFinalIndex;
+      setRenderedPointerIndex(resolvedFinalIndex);
+      setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
