@@ -771,7 +771,7 @@ export default function RoulettePage() {
               <img
                 src={BET_BADGE_ASSET_SRC[color]}
                 alt={BET_THEME[color].label}
-                className="h-4 w-4 rounded-[4px] border border-white/15 object-cover"
+                className="h-4 w-4 object-contain"
               />
               <span>{historyCount[color]}</span>
             </div>
@@ -782,15 +782,13 @@ export default function RoulettePage() {
           style={{ gridTemplateColumns: `repeat(${Math.min(10, last10.length || 10)}, minmax(0, 1fr))`, maxWidth: "460px" }}
         >
           {last10.map((entry, index) => (
-            <span
+            <img
               key={`${entry.color}-${entry.isBait}-${index}`}
-              className={`relative h-7 w-full overflow-hidden rounded border border-[#3e434d] ${
-                entry.isBait ? "ring-1 ring-[#d3b96a]/75" : ""
-              }`}
+              src={getHistoryAssetSrc(entry)}
+              alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
+              className="h-7 w-full object-contain"
               title={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
-            >
-              <img src={getHistoryAssetSrc(entry)} alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color} className="h-full w-full object-cover" />
-            </span>
+            />
           ))}
         </div>
       </div>
@@ -824,14 +822,14 @@ export default function RoulettePage() {
                 return (
                   <div
                     key={`${repeatedIndex}-${slot.number}`}
-                    className={`relative overflow-hidden rounded-md border border-[#3f444f] transition-all duration-100 ${
+                    className={`relative transition-all duration-100 ${
                       isActive
-                        ? "z-20 scale-[1.03] opacity-100 brightness-110 ring-1 ring-white/30 shadow-[0_0_16px_rgba(255,255,255,0.16)]"
-                        : "opacity-45 saturate-75"
+                        ? "z-20 scale-[1.02] opacity-100 brightness-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]"
+                        : "opacity-55 saturate-90"
                     }`}
                     style={{ width: SLOT_SIZE, height: SLOT_SIZE, flex: "0 0 auto" }}
                   >
-                    <img src={getTileAssetSrc(slot)} alt={slot.kind} className="h-full w-full object-cover" />
+                    <img src={getTileAssetSrc(slot)} alt={slot.kind} className="h-full w-full object-contain" draggable={false} />
                   </div>
                 );
               })}
@@ -924,7 +922,7 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 rounded-[4px] border border-white/15 object-cover" />
+                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-contain" />
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
               </div>
