@@ -778,16 +778,13 @@ export default function RoulettePage() {
             </div>
           ))}
         </div>
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: `repeat(${Math.min(10, last10.length || 10)}, minmax(0, 1fr))`, maxWidth: "460px" }}
-        >
+        <div className="flex max-w-[460px] flex-wrap items-center gap-2">
           {last10.map((entry, index) => (
             <img
               key={`${entry.color}-${entry.isBait}-${index}`}
               src={getHistoryAssetSrc(entry)}
               alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
-              className="h-7 w-full rounded-md object-cover"
+              className="h-7 w-7 rounded-full object-cover"
               title={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
             />
           ))}
