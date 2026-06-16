@@ -125,12 +125,13 @@ const BET_THEME: Record<
   }
 };
 
+const ROULETTE_ASSET_VERSION = "20260616v2";
 const TILE_ASSET_SRC: Record<WheelSlotKind, string> = {
-  RED: "/assets/ROJO-Photoroom.png",
-  BLACK: "/assets/NEGRO-Photoroom.png",
-  GREEN: "/assets/VERDE-Photoroom.png",
-  BAIT_BLACK: "/assets/BAIT1-Photoroom.png",
-  BAIT_RED: "/assets/BAIT2-Photoroom.png"
+  RED: `/assets/ROJO-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
+  BLACK: `/assets/NEGRO-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
+  GREEN: `/assets/VERDE-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
+  BAIT_BLACK: `/assets/BAIT1-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
+  BAIT_RED: `/assets/BAIT2-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`
 };
 
 const BET_BADGE_ASSET_SRC: Record<BetColor, string> = {
@@ -771,7 +772,7 @@ export default function RoulettePage() {
               <img
                 src={BET_BADGE_ASSET_SRC[color]}
                 alt={BET_THEME[color].label}
-                className="h-4 w-4 object-contain"
+                className="h-4 w-4 object-cover"
               />
               <span>{historyCount[color]}</span>
             </div>
@@ -786,7 +787,7 @@ export default function RoulettePage() {
               key={`${entry.color}-${entry.isBait}-${index}`}
               src={getHistoryAssetSrc(entry)}
               alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
-              className="h-7 w-full object-contain"
+              className="h-7 w-full object-cover"
               title={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
             />
           ))}
@@ -824,12 +825,12 @@ export default function RoulettePage() {
                     key={`${repeatedIndex}-${slot.number}`}
                     className={`relative transition-all duration-100 ${
                       isActive
-                        ? "z-20 scale-[1.02] opacity-100 brightness-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]"
-                        : "opacity-55 saturate-90"
+                        ? "z-20 scale-[1.02] opacity-100 brightness-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.22)]"
+                        : "opacity-58 saturate-95"
                     }`}
                     style={{ width: SLOT_SIZE, height: SLOT_SIZE, flex: "0 0 auto" }}
                   >
-                    <img src={getTileAssetSrc(slot)} alt={slot.kind} className="h-full w-full object-contain" draggable={false} />
+                    <img src={getTileAssetSrc(slot)} alt={slot.kind} className="h-full w-full object-cover" draggable={false} />
                   </div>
                 );
               })}
@@ -922,7 +923,7 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-contain" />
+                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-cover" />
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
               </div>
