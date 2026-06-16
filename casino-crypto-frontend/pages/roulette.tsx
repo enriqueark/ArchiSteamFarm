@@ -787,7 +787,7 @@ export default function RoulettePage() {
               key={`${entry.color}-${entry.isBait}-${index}`}
               src={getHistoryAssetSrc(entry)}
               alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
-              className="h-7 w-full object-cover"
+              className="h-7 w-full rounded-md object-cover"
               title={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
             />
           ))}
