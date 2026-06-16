@@ -407,15 +407,13 @@ export default function CaseDetailPage() {
       const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
       const lockedFinalIndex = clamp(renderedPointerIndexRef.current ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
 
-      const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
-      await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
-
-      const finalAlignOffset = resolveCenterOffsetForIndex(lockedFinalIndex);
-      if (finalAlignOffset !== null && Math.abs(finalAlignOffset) > 0.35) {
-        const maxAdjust = REEL_STRIDE * 0.35;
-        const alignedPhase = spinPhaseRef.current + clamp(finalAlignOffset, -maxAdjust, maxAdjust);
-        await animateSegment(spinPhaseRef.current, alignedPhase, 180, (progress) => 1 - Math.pow(1 - progress, 3));
-      }
+      const baseFinalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
+      const centerOffsetNow = resolveCenterOffsetForIndex(lockedFinalIndex);
+      const centeredFinalPhase =
+        centerOffsetNow !== null && Number.isFinite(centerOffsetNow)
+          ? spinPhaseRef.current + centerOffsetNow
+          : baseFinalPhase;
+      await animateSegment(spinPhaseRef.current, centeredFinalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
       renderedPointerIndexRef.current = lockedFinalIndex;
       setRenderedPointerIndex(lockedFinalIndex);
