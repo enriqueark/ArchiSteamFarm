@@ -772,7 +772,7 @@ export default function RoulettePage() {
               <img
                 src={BET_BADGE_ASSET_SRC[color]}
                 alt={BET_THEME[color].label}
-                className="h-4 w-4 object-cover"
+                className="h-4 w-4 rounded-full object-cover"
               />
               <span>{historyCount[color]}</span>
             </div>
