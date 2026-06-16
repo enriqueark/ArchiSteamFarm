@@ -125,7 +125,7 @@ const BET_THEME: Record<
   }
 };
 
-const ROULETTE_ASSET_VERSION = "20260616v2";
+const ROULETTE_ASSET_VERSION = "20260616v3";
 const TILE_ASSET_SRC: Record<WheelSlotKind, string> = {
   RED: `/assets/ROJO-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
   BLACK: `/assets/NEGRO-Photoroom.png?v=${ROULETTE_ASSET_VERSION}`,
