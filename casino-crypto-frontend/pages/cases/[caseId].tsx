@@ -320,7 +320,7 @@ export default function CaseDetailPage() {
     return () => cancelAnimationFrame(frame);
   }, [isReelSpinning, laneWidth, reelTrackSlots.length, resolveRenderedIndexAtPointer, spinPhase, winnerReveal]);
 
-  const highlightedStripIndex = renderedPointerIndex ?? activeStripIndex;
+  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : renderedPointerIndex ?? activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -392,9 +392,7 @@ export default function CaseDetailPage() {
 
       await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
       await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
-      const decisionPointer = getPointerPxNow();
-      const approxDecisionIndex = getIndexAtPointer(spinPhaseRef.current, decisionPointer, REEL_TRACK_LENGTH);
-      const lockedFinalIndex = clamp(renderedPointerIndexRef.current ?? approxDecisionIndex ?? targetIndex, 0, REEL_TRACK_LENGTH - 1);
+      const lockedFinalIndex = targetIndex;
 
       const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
       await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
