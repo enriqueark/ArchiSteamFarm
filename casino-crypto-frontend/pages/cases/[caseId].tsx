@@ -79,7 +79,27 @@ const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
 
 const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number): number | null => {
   if (trackLength <= 0) return null;
-  return clamp(Math.round((phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE), 0, trackLength - 1);
+  const approx = clamp(Math.floor((phase + pointerPx) / REEL_STRIDE), 0, trackLength - 1);
+  let hitIndex: number | null = null;
+  let bestIndex = approx;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = approx - 3; index <= approx + 3; index += 1) {
+    if (index < 0 || index >= trackLength) continue;
+    const left = index * REEL_STRIDE - phase;
+    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+      hitIndex = index;
+      break;
+    }
+    const centerX = left + REEL_ITEM_WIDTH / 2;
+    const distance = Math.abs(centerX - pointerPx);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+
+  return hitIndex ?? bestIndex;
 };
 
 const getPhaseForIndex = (index: number, pointerPx: number): number => index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
@@ -276,7 +296,7 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = laneWidth * 0.5;
+  const pointerPx = getPointerPxNow();
 
   const activeStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
@@ -352,7 +372,8 @@ export default function CaseDetailPage() {
       const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
       await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
 
-      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
+      const resolvedFinalIndex = getIndexAtPointer(finalPhase, getPointerPxNow(), track.length) ?? lockedFinalIndex;
+      setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
