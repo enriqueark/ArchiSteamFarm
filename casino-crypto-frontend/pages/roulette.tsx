@@ -70,9 +70,9 @@ const WHEEL_LAYOUT: WheelSlot[] = [
   { number: 5, kind: "RED", color: "RED", isBait: false },
   { number: 6, kind: "BLACK", color: "BLACK", isBait: false },
   { number: 7, kind: "RED", color: "RED", isBait: false },
-  { number: 14, kind: "BAIT_RED", color: "RED", isBait: true },
+  { number: 14, kind: "BAIT_BLACK", color: "BLACK", isBait: true },
   { number: 0, kind: "GREEN", color: "GREEN", isBait: false },
-  { number: 1, kind: "BAIT_BLACK", color: "BLACK", isBait: true },
+  { number: 1, kind: "BAIT_RED", color: "RED", isBait: true },
   { number: 8, kind: "BLACK", color: "BLACK", isBait: false },
   { number: 9, kind: "RED", color: "RED", isBait: false },
   { number: 10, kind: "BLACK", color: "BLACK", isBait: false },
@@ -123,6 +123,21 @@ const BET_THEME: Record<
     actionClass:
       "bg-gradient-to-r from-[#cb5a5a] to-[#666f81] hover:from-[#e16f6f] hover:to-[#79859c] shadow-[0_0_22px_rgba(214,183,108,0.58)]"
   }
+};
+
+const TILE_ASSET_SRC: Record<WheelSlotKind, string> = {
+  RED: "/assets/ROJO-Photoroom.png",
+  BLACK: "/assets/NEGRO-Photoroom.png",
+  GREEN: "/assets/VERDE-Photoroom.png",
+  BAIT_BLACK: "/assets/BAIT1-Photoroom.png",
+  BAIT_RED: "/assets/BAIT2-Photoroom.png"
+};
+
+const BET_BADGE_ASSET_SRC: Record<BetColor, string> = {
+  RED: TILE_ASSET_SRC.RED,
+  GREEN: TILE_ASSET_SRC.GREEN,
+  BLACK: TILE_ASSET_SRC.BLACK,
+  BAIT: TILE_ASSET_SRC.BAIT_BLACK
 };
 
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
@@ -178,14 +193,15 @@ const getWinnerLabel = (slot: WheelSlot): string => {
   return `${slot.color} won`;
 };
 
-const getTileClass = (slot: WheelSlot): string => {
-  if (slot.color === "RED") {
-    return `bg-gradient-to-b from-[#b04f4f] to-[#712f2f] border-[#894141] ${slot.isBait ? "ring-2 ring-[#dabf72]/85" : ""}`;
+const getTileAssetSrc = (slot: WheelSlot): string => TILE_ASSET_SRC[slot.kind];
+
+const getHistoryAssetSrc = (entry: HistoryEntry): string => {
+  if (entry.isBait) {
+    return entry.baitColor === "RED" ? TILE_ASSET_SRC.BAIT_RED : TILE_ASSET_SRC.BAIT_BLACK;
   }
-  if (slot.color === "GREEN") {
-    return "bg-gradient-to-b from-[#28a861] to-[#1a6c40] border-[#329b61]";
-  }
-  return `bg-gradient-to-b from-[#454b55] to-[#2a2f36] border-[#555c68] ${slot.isBait ? "ring-2 ring-[#dabf72]/85" : ""}`;
+  if (entry.color === "RED") return TILE_ASSET_SRC.RED;
+  if (entry.color === "GREEN") return TILE_ASSET_SRC.GREEN;
+  return TILE_ASSET_SRC.BLACK;
 };
 
 const slotByWinningNumber = (winningNumber: number): WheelSlot =>
@@ -752,7 +768,11 @@ export default function RoulettePage() {
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8a8e98]">Last 100</span>
           {BET_ORDER.map((color) => (
             <div key={color} className="flex items-center gap-1.5">
-              <span className={`h-4 w-4 rounded-full border ${BET_THEME[color].chipClass}`} />
+              <img
+                src={BET_BADGE_ASSET_SRC[color]}
+                alt={BET_THEME[color].label}
+                className="h-4 w-4 rounded-[4px] border border-white/15 object-cover"
+              />
               <span>{historyCount[color]}</span>
             </div>
           ))}
@@ -764,15 +784,13 @@ export default function RoulettePage() {
           {last10.map((entry, index) => (
             <span
               key={`${entry.color}-${entry.isBait}-${index}`}
-              className={`h-7 w-full rounded border ${
-                entry.color === "RED"
-                  ? "bg-[#b64f4f] border-[#df7c7c]"
-                  : entry.color === "GREEN"
-                  ? "bg-[#21894f] border-[#4bc57d]"
-                  : "bg-[#3a3f48] border-[#707988]"
-              } ${entry.isBait ? "ring-2 ring-[#d3b96a]/80" : ""}`}
+              className={`relative h-7 w-full overflow-hidden rounded border border-[#3e434d] ${
+                entry.isBait ? "ring-1 ring-[#d3b96a]/75" : ""
+              }`}
               title={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color}
-            />
+            >
+              <img src={getHistoryAssetSrc(entry)} alt={entry.isBait ? `BAIT ${entry.baitColor}` : entry.color} className="h-full w-full object-cover" />
+            </span>
           ))}
         </div>
       </div>
@@ -806,12 +824,14 @@ export default function RoulettePage() {
                 return (
                   <div
                     key={`${repeatedIndex}-${slot.number}`}
-                    className={`relative rounded-md border transition-all duration-100 ${getTileClass(slot)} ${
-                      isActive ? "z-20 scale-[1.08] opacity-100 brightness-125 shadow-[0_0_24px_rgba(255,255,255,0.24)]" : "opacity-35"
+                    className={`relative overflow-hidden rounded-md border border-[#3f444f] transition-all duration-100 ${
+                      isActive
+                        ? "z-20 scale-[1.03] opacity-100 brightness-110 ring-1 ring-white/30 shadow-[0_0_16px_rgba(255,255,255,0.16)]"
+                        : "opacity-45 saturate-75"
                     }`}
                     style={{ width: SLOT_SIZE, height: SLOT_SIZE, flex: "0 0 auto" }}
                   >
-                    {slot.isBait && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ebcf7f]" />}
+                    <img src={getTileAssetSrc(slot)} alt={slot.kind} className="h-full w-full object-cover" />
                   </div>
                 );
               })}
@@ -904,7 +924,7 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className={`h-5 w-5 rounded-full border ${BET_THEME[color].chipClass}`} />
+                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 rounded-[4px] border border-white/15 object-cover" />
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
               </div>
