@@ -770,7 +770,6 @@ export default function RoulettePage() {
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8a8e98]">Last 100</span>
           <div className="flex items-center gap-1">
             <img src={TILE_ASSET_SRC.RED} alt="RED" className="h-4 w-4 rounded-full object-cover" />
-            <img src={TILE_ASSET_SRC.BAIT_RED} alt="BAIT RED" className="h-4 w-4 rounded-full object-cover" />
             <span className="ml-0.5">{historyCount.RED}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -779,7 +778,6 @@ export default function RoulettePage() {
           </div>
           <div className="flex items-center gap-1">
             <img src={TILE_ASSET_SRC.BLACK} alt="BLACK" className="h-4 w-4 rounded-full object-cover" />
-            <img src={TILE_ASSET_SRC.BAIT_BLACK} alt="BAIT BLACK" className="h-4 w-4 rounded-full object-cover" />
             <span className="ml-0.5">{historyCount.BLACK}</span>
           </div>
           <div className="flex items-center gap-1">
