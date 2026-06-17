@@ -831,7 +831,7 @@ export default function RoulettePage() {
                     key={`${repeatedIndex}-${slot.number}`}
                     className={`relative transition-all duration-100 ${
                       isActive
-                        ? "z-20 scale-[1.02] opacity-100 brightness-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.22)]"
+                        ? "z-20 scale-[1.08] opacity-100 brightness-125 drop-shadow-[0_0_16px_rgba(255,255,255,0.28)]"
                         : "opacity-58 saturate-95"
                     }`}
                     style={{ width: SLOT_SIZE, height: SLOT_SIZE, flex: "0 0 auto" }}
