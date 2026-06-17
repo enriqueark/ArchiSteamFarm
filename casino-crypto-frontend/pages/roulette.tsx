@@ -141,6 +141,19 @@ const BET_BADGE_ASSET_SRC: Record<BetColor, string> = {
   BAIT: TILE_ASSET_SRC.BAIT_BLACK
 };
 
+const BaitSplitIcon = ({ className }: { className: string }) => (
+  <span className={`relative inline-flex overflow-hidden ${className}`} aria-label="BAIT">
+    <span
+      className="h-full w-1/2 bg-cover bg-left bg-no-repeat"
+      style={{ backgroundImage: `url(${TILE_ASSET_SRC.BAIT_BLACK})` }}
+    />
+    <span
+      className="h-full w-1/2 bg-cover bg-right bg-no-repeat"
+      style={{ backgroundImage: `url(${TILE_ASSET_SRC.BAIT_RED})` }}
+    />
+  </span>
+);
+
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
 const randomId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -769,11 +782,15 @@ export default function RoulettePage() {
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8a8e98]">Last 100</span>
           {BET_ORDER.map((color) => (
             <div key={color} className="flex items-center gap-1.5">
-              <img
-                src={BET_BADGE_ASSET_SRC[color]}
-                alt={BET_THEME[color].label}
-                className="h-4 w-4 rounded-full object-cover"
-              />
+              {color === "BAIT" ? (
+                <BaitSplitIcon className="h-4 w-4 rounded-full" />
+              ) : (
+                <img
+                  src={BET_BADGE_ASSET_SRC[color]}
+                  alt={BET_THEME[color].label}
+                  className="h-4 w-4 rounded-full object-cover"
+                />
+              )}
               <span>{historyCount[color]}</span>
             </div>
           ))}
@@ -920,7 +937,11 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-cover" />
+                  {color === "BAIT" ? (
+                    <BaitSplitIcon className="h-5 w-5 rounded-[4px]" />
+                  ) : (
+                    <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-cover" />
+                  )}
                   <span className={`text-sm font-bold ${BET_THEME[color].accentClass}`}>Win {BET_THEME[color].multiplier}x</span>
                 </div>
               </div>
