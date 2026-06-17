@@ -141,19 +141,6 @@ const BET_BADGE_ASSET_SRC: Record<BetColor, string> = {
   BAIT: TILE_ASSET_SRC.BAIT_BLACK
 };
 
-const BaitSplitIcon = ({ className }: { className: string }) => (
-  <span className={`relative inline-flex overflow-hidden ${className}`} aria-label="BAIT">
-    <span
-      className="h-full w-1/2 bg-cover bg-left bg-no-repeat"
-      style={{ backgroundImage: `url(${TILE_ASSET_SRC.BAIT_BLACK})` }}
-    />
-    <span
-      className="h-full w-1/2 bg-cover bg-right bg-no-repeat"
-      style={{ backgroundImage: `url(${TILE_ASSET_SRC.BAIT_RED})` }}
-    />
-  </span>
-);
-
 const mod = (value: number, size: number): number => ((value % size) + size) % size;
 const randomId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -767,10 +754,11 @@ export default function RoulettePage() {
           if (item.color === "RED") acc.RED += 1;
           if (item.color === "GREEN") acc.GREEN += 1;
           if (item.color === "BLACK") acc.BLACK += 1;
-          if (item.isBait) acc.BAIT += 1;
+          if (item.isBait && item.baitColor === "RED") acc.BAIT_RED += 1;
+          if (item.isBait && item.baitColor === "BLACK") acc.BAIT_BLACK += 1;
           return acc;
         },
-        { RED: 0, GREEN: 0, BLACK: 0, BAIT: 0 }
+        { RED: 0, GREEN: 0, BLACK: 0, BAIT_RED: 0, BAIT_BLACK: 0 }
       ),
     [last100]
   );
@@ -780,20 +768,26 @@ export default function RoulettePage() {
       <div className="rounded-xl border border-[#2d3037] bg-[#1a1c21] p-4 shadow-[0_10px_32px_rgba(0,0,0,0.4)]">
         <div className="mb-2 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#b4b7bf]">
           <span className="text-[11px] uppercase tracking-[0.14em] text-[#8a8e98]">Last 100</span>
-          {BET_ORDER.map((color) => (
-            <div key={color} className="flex items-center gap-1.5">
-              {color === "BAIT" ? (
-                <BaitSplitIcon className="h-4 w-4 rounded-full" />
-              ) : (
-                <img
-                  src={BET_BADGE_ASSET_SRC[color]}
-                  alt={BET_THEME[color].label}
-                  className="h-4 w-4 rounded-full object-cover"
-                />
-              )}
-              <span>{historyCount[color]}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-1">
+            <img src={TILE_ASSET_SRC.RED} alt="RED" className="h-4 w-4 rounded-full object-cover" />
+            <img src={TILE_ASSET_SRC.BAIT_RED} alt="BAIT RED" className="h-4 w-4 rounded-full object-cover" />
+            <span className="ml-0.5">{historyCount.RED}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <img src={TILE_ASSET_SRC.GREEN} alt="GREEN" className="h-4 w-4 rounded-full object-cover" />
+            <span className="ml-0.5">{historyCount.GREEN}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <img src={TILE_ASSET_SRC.BLACK} alt="BLACK" className="h-4 w-4 rounded-full object-cover" />
+            <img src={TILE_ASSET_SRC.BAIT_BLACK} alt="BAIT BLACK" className="h-4 w-4 rounded-full object-cover" />
+            <span className="ml-0.5">{historyCount.BLACK}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <img src={TILE_ASSET_SRC.BAIT_RED} alt="BAIT RED" className="h-4 w-4 rounded-full object-cover" />
+            <span>{historyCount.BAIT_RED}</span>
+            <img src={TILE_ASSET_SRC.BAIT_BLACK} alt="BAIT BLACK" className="ml-1 h-4 w-4 rounded-full object-cover" />
+            <span>{historyCount.BAIT_BLACK}</span>
+          </div>
         </div>
         <div className="flex max-w-[460px] flex-wrap items-center gap-2">
           {last10.map((entry, index) => (
@@ -937,8 +931,21 @@ export default function RoulettePage() {
             <div key={color} className="rounded-xl border border-[#33363f] bg-[#1b1d22] p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {color === "BAIT" ? (
-                    <BaitSplitIcon className="h-5 w-5 rounded-[4px]" />
+                  {color === "RED" ? (
+                    <div className="flex items-center gap-1">
+                      <img src={TILE_ASSET_SRC.RED} alt="RED" className="h-5 w-5 object-cover" />
+                      <img src={TILE_ASSET_SRC.BAIT_RED} alt="BAIT RED" className="h-5 w-5 object-cover" />
+                    </div>
+                  ) : color === "BLACK" ? (
+                    <div className="flex items-center gap-1">
+                      <img src={TILE_ASSET_SRC.BLACK} alt="BLACK" className="h-5 w-5 object-cover" />
+                      <img src={TILE_ASSET_SRC.BAIT_BLACK} alt="BAIT BLACK" className="h-5 w-5 object-cover" />
+                    </div>
+                  ) : color === "BAIT" ? (
+                    <div className="flex items-center gap-1">
+                      <img src={TILE_ASSET_SRC.BAIT_BLACK} alt="BAIT BLACK" className="h-5 w-5 object-cover" />
+                      <img src={TILE_ASSET_SRC.BAIT_RED} alt="BAIT RED" className="h-5 w-5 object-cover" />
+                    </div>
                   ) : (
                     <img src={BET_BADGE_ASSET_SRC[color]} alt={BET_THEME[color].label} className="h-5 w-5 object-cover" />
                   )}
