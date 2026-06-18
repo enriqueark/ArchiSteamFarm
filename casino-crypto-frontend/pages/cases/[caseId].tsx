@@ -65,12 +65,12 @@ const REEL_ITEM_WIDTH = 164;
 const REEL_ITEM_HEIGHT = 220;
 const REEL_ITEM_GAP = 26;
 const REEL_STRIDE = REEL_ITEM_WIDTH + REEL_ITEM_GAP;
-const REEL_TRACK_LENGTH = 120;
-const REEL_START_INDEX = 10;
+const REEL_TRACK_LENGTH = 180;
+const REEL_START_INDEX = 8;
 const INITIAL_REEL_PHASE = 0;
 
-const getEaseOut = (progress: number): number => 1 - Math.pow(1 - progress, 4);
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const getSpinEase = (progress: number): number => 1 - Math.pow(1 - clamp(progress, 0, 1), 4.25);
 
 const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
   if (items.length === 0 || length <= 0) return [];
@@ -296,13 +296,13 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = getPointerPxNow();
+  const pointerPx = laneWidth * 0.5;
 
   const activeStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
+  const highlightedStripIndex = activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -320,59 +320,46 @@ export default function CaseDetailPage() {
       }
 
       const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
-      const targetIndex = REEL_TRACK_LENGTH - 16 - Math.floor(Math.random() * 3);
+      const targetIndex = Math.floor(REEL_TRACK_LENGTH * 0.82) + Math.floor(Math.random() * 4);
       const winnerItem = orderedItems[winnerLayout] ?? winningItem;
       track[targetIndex] = winnerItem;
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
-      const pointerStart = getPointerPxNow();
-      const startPhase = getPhaseForIndex(REEL_START_INDEX, pointerStart);
-      const pointerEnd = getPointerPxNow();
-      const targetPhase = getPhaseForIndex(targetIndex, pointerEnd);
-      // Keep final path monotonic (always forward) to avoid any perceived teleport.
-      const baitPhase = targetPhase - REEL_STRIDE * (0.46 + Math.random() * 0.1);
-      const preBaitPhase = baitPhase - REEL_STRIDE * (0.32 + Math.random() * 0.18);
-      const cruiseDurationMs = 4300 + Math.floor(Math.random() * 1000);
-      const baitDurationMs = 760 + Math.floor(Math.random() * 360);
-      const settleDurationMs = 760 + Math.floor(Math.random() * 260);
-
-      const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
-        if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
-          spinPhaseRef.current = to;
-          setSpinPhase(to);
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          const startedAt = performance.now();
-          const tick = (ts: number) => {
-            const progress = Math.max(0, Math.min(1, (ts - startedAt) / durationMs));
-            const mix = easing(progress);
-            const next = from + (to - from) * mix;
-            spinPhaseRef.current = next;
-            setSpinPhase(next);
-            if (progress < 1) {
-              rafRef.current = requestAnimationFrame(tick);
-              return;
-            }
-            spinPhaseRef.current = to;
-            setSpinPhase(to);
-            rafRef.current = null;
-            resolve();
-          };
-          rafRef.current = requestAnimationFrame(tick);
-        });
-      };
+      const pointer = getPointerPxNow();
+      const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
+      const startPhase = getPhaseForIndex(startIndex, pointer);
+      const endPhase = getPhaseForIndex(targetIndex, pointer);
+      const durationMs = 5200 + Math.floor(Math.random() * 900);
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
 
-      await animateSegment(startPhase, preBaitPhase, cruiseDurationMs, getEaseOut);
-      await animateSegment(preBaitPhase, baitPhase, baitDurationMs, (progress) => 1 - Math.pow(1 - progress, 4));
-      const lockedFinalIndex = targetIndex;
-      const finalPhase = getPhaseForIndex(lockedFinalIndex, getPointerPxNow());
-      await animateSegment(spinPhaseRef.current, finalPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 3.6));
+      await new Promise<void>((resolve) => {
+        const startedAt = performance.now();
+        const tick = (ts: number) => {
+          const progress = clamp((ts - startedAt) / durationMs, 0, 1);
+          const mix = getSpinEase(progress);
+          const next = startPhase + (endPhase - startPhase) * mix;
+          spinPhaseRef.current = next;
+          setSpinPhase(next);
+          if (progress < 1) {
+            rafRef.current = requestAnimationFrame(tick);
+            return;
+          }
+          spinPhaseRef.current = endPhase;
+          setSpinPhase(endPhase);
+          rafRef.current = null;
+          resolve();
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      });
 
-      const resolvedFinalIndex = getIndexAtPointer(finalPhase, getPointerPxNow(), track.length) ?? lockedFinalIndex;
+      const resolvedFinalIndex = getIndexAtPointer(endPhase, getPointerPxNow(), track.length) ?? targetIndex;
+      if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
+        track[resolvedFinalIndex] = winnerItem;
+        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
+
       setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
