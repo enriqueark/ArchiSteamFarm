@@ -87,13 +87,13 @@ const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number
   for (let index = approx - 3; index <= approx + 3; index += 1) {
     if (index < 0 || index >= trackLength) continue;
     const left = index * REEL_STRIDE - phase;
-    if (pointerPx >= left && pointerPx <= left + REEL_ITEM_WIDTH) {
+    if (pointerPx >= left && pointerPx < left + REEL_ITEM_WIDTH) {
       hitIndex = index;
       break;
     }
     const centerX = left + REEL_ITEM_WIDTH / 2;
     const distance = Math.abs(centerX - pointerPx);
-    if (distance < bestDistance) {
+    if (distance < bestDistance || (distance === bestDistance && index > bestIndex)) {
       bestDistance = distance;
       bestIndex = index;
     }
@@ -296,11 +296,9 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = laneWidth * 0.5;
-
   const activeStripIndex = useMemo(() => {
-    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
-  }, [pointerPx, reelTrackSlots.length, spinPhase]);
+    return getIndexAtPointer(spinPhase, getPointerPxNow(), reelTrackSlots.length);
+  }, [getPointerPxNow, reelTrackSlots.length, spinPhase]);
 
   const highlightedStripIndex = activeStripIndex;
 
