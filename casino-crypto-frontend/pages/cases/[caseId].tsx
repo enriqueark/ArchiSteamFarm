@@ -326,31 +326,52 @@ export default function CaseDetailPage() {
       const pointer = getPointerPxNow();
       const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
       const startPhase = getPhaseForIndex(startIndex, pointer);
-      const endPhase = getPhaseForIndex(targetIndex, pointer);
-      const durationMs = 5200 + Math.floor(Math.random() * 900);
+      const useEdgeLanding = Math.random() < 0.65;
+      const edgeInset = REEL_ITEM_WIDTH * (0.02 + Math.random() * 0.04);
+      const centerLanding = REEL_ITEM_WIDTH * (0.44 + Math.random() * 0.12);
+      const landingX = useEdgeLanding ? (Math.random() < 0.5 ? edgeInset : REEL_ITEM_WIDTH - edgeInset) : centerLanding;
+      const endPhase = targetIndex * REEL_STRIDE + landingX - pointer;
+      const suspensePhaseRaw = endPhase - REEL_STRIDE * (0.52 + Math.random() * 0.26);
+      const suspensePhase = clamp(
+        suspensePhaseRaw,
+        startPhase + REEL_STRIDE * 8,
+        endPhase - REEL_STRIDE * 0.14
+      );
+      const cruiseDurationMs = 3600 + Math.floor(Math.random() * 900);
+      const settleDurationMs = 1300 + Math.floor(Math.random() * 900);
+
+      const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
+        if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
+          spinPhaseRef.current = to;
+          setSpinPhase(to);
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          const startedAt = performance.now();
+          const tick = (ts: number) => {
+            const progress = clamp((ts - startedAt) / durationMs, 0, 1);
+            const mix = easing(progress);
+            const next = from + (to - from) * mix;
+            spinPhaseRef.current = next;
+            setSpinPhase(next);
+            if (progress < 1) {
+              rafRef.current = requestAnimationFrame(tick);
+              return;
+            }
+            spinPhaseRef.current = to;
+            setSpinPhase(to);
+            rafRef.current = null;
+            resolve();
+          };
+          rafRef.current = requestAnimationFrame(tick);
+        });
+      };
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
 
-      await new Promise<void>((resolve) => {
-        const startedAt = performance.now();
-        const tick = (ts: number) => {
-          const progress = clamp((ts - startedAt) / durationMs, 0, 1);
-          const mix = getSpinEase(progress);
-          const next = startPhase + (endPhase - startPhase) * mix;
-          spinPhaseRef.current = next;
-          setSpinPhase(next);
-          if (progress < 1) {
-            rafRef.current = requestAnimationFrame(tick);
-            return;
-          }
-          spinPhaseRef.current = endPhase;
-          setSpinPhase(endPhase);
-          rafRef.current = null;
-          resolve();
-        };
-        rafRef.current = requestAnimationFrame(tick);
-      });
+      await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
+      await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
 
       const resolvedFinalIndex = getIndexAtPointer(endPhase, getPointerPxNow(), track.length) ?? targetIndex;
       if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
