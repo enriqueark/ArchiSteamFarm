@@ -300,7 +300,7 @@ export default function CaseDetailPage() {
     return getIndexAtPointer(spinPhase, getPointerPxNow(), reelTrackSlots.length);
   }, [getPointerPxNow, reelTrackSlots.length, spinPhase]);
 
-  const highlightedStripIndex = activeStripIndex;
+  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -373,7 +373,7 @@ export default function CaseDetailPage() {
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
 
-      const resolvedFinalIndex = getIndexAtPointer(endPhase, getPointerPxNow(), track.length) ?? targetIndex;
+      const resolvedFinalIndex = getIndexAtPointer(spinPhaseRef.current, getPointerPxNow(), track.length) ?? targetIndex;
       if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
         track[resolvedFinalIndex] = winnerItem;
         setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
