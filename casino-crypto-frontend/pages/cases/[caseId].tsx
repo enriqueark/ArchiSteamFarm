@@ -198,7 +198,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
-  const activeStripIndexRef = useRef<number | null>(null);
+  const lastVisibleIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -297,13 +297,10 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
+  const pointerPx = laneWidth * 0.5;
   const activeStripIndex = useMemo(() => {
-    return getIndexAtPointer(spinPhase, getPointerPxNow(), reelTrackSlots.length);
-  }, [getPointerPxNow, reelTrackSlots.length, spinPhase]);
-
-  useEffect(() => {
-    activeStripIndexRef.current = activeStripIndex;
-  }, [activeStripIndex]);
+    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
+  }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
 
@@ -349,6 +346,7 @@ export default function CaseDetailPage() {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
           spinPhaseRef.current = to;
           setSpinPhase(to);
+          lastVisibleIndexRef.current = getIndexAtPointer(to, pointer, track.length);
           return;
         }
         await new Promise<void>((resolve) => {
@@ -359,12 +357,14 @@ export default function CaseDetailPage() {
             const next = from + (to - from) * mix;
             spinPhaseRef.current = next;
             setSpinPhase(next);
+            lastVisibleIndexRef.current = getIndexAtPointer(next, pointer, track.length);
             if (progress < 1) {
               rafRef.current = requestAnimationFrame(tick);
               return;
             }
             spinPhaseRef.current = to;
             setSpinPhase(to);
+            lastVisibleIndexRef.current = getIndexAtPointer(to, pointer, track.length);
             rafRef.current = null;
             resolve();
           };
@@ -374,12 +374,13 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
+      lastVisibleIndexRef.current = getIndexAtPointer(startPhase, pointer, track.length);
 
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
 
-      const lockedVisibleIndex = activeStripIndexRef.current;
-      const resolvedFinalIndex = lockedVisibleIndex ?? getIndexAtPointer(spinPhaseRef.current, getPointerPxNow(), track.length) ?? targetIndex;
+      const lockedVisibleIndex = lastVisibleIndexRef.current;
+      const resolvedFinalIndex = lockedVisibleIndex ?? getIndexAtPointer(spinPhaseRef.current, pointer, track.length) ?? targetIndex;
       if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
         track[resolvedFinalIndex] = winnerItem;
         setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
