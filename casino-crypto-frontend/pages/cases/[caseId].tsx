@@ -302,7 +302,7 @@ export default function CaseDetailPage() {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
+  const highlightedStripIndex = activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -328,11 +328,7 @@ export default function CaseDetailPage() {
       const pointer = getPointerPxNow();
       const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
       const startPhase = getPhaseForIndex(startIndex, pointer);
-      const useEdgeLanding = Math.random() < 0.65;
-      const edgeInset = REEL_ITEM_WIDTH * (0.02 + Math.random() * 0.04);
-      const centerLanding = REEL_ITEM_WIDTH * (0.44 + Math.random() * 0.12);
-      const landingX = useEdgeLanding ? (Math.random() < 0.5 ? edgeInset : REEL_ITEM_WIDTH - edgeInset) : centerLanding;
-      const endPhase = targetIndex * REEL_STRIDE + landingX - pointer;
+      const endPhase = getPhaseForIndex(targetIndex, pointer);
       const suspensePhaseRaw = endPhase - REEL_STRIDE * (0.52 + Math.random() * 0.26);
       const suspensePhase = clamp(
         suspensePhaseRaw,
