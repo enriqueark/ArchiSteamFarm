@@ -179,6 +179,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
+  const finalHighlightedIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -277,9 +278,14 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
+  const pointerPx = laneWidth * 0.5;
   const activeStripIndex = useMemo(() => {
-    return getIndexAtPointer(spinPhase, getPointerPxNow(), reelTrackSlots.length);
-  }, [getPointerPxNow, reelTrackSlots.length, spinPhase]);
+    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
+  }, [pointerPx, reelTrackSlots.length, spinPhase]);
+
+  useEffect(() => {
+    finalHighlightedIndexRef.current = activeStripIndex;
+  }, [activeStripIndex]);
 
   const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
 
@@ -321,6 +327,7 @@ export default function CaseDetailPage() {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
           spinPhaseRef.current = to;
           setSpinPhase(to);
+          finalHighlightedIndexRef.current = getIndexAtPointer(to, pointer, track.length);
           return;
         }
         await new Promise<void>((resolve) => {
@@ -331,12 +338,14 @@ export default function CaseDetailPage() {
             const next = from + (to - from) * mix;
             spinPhaseRef.current = next;
             setSpinPhase(next);
+            finalHighlightedIndexRef.current = getIndexAtPointer(next, pointer, track.length);
             if (progress < 1) {
               rafRef.current = requestAnimationFrame(tick);
               return;
             }
             spinPhaseRef.current = to;
             setSpinPhase(to);
+            finalHighlightedIndexRef.current = getIndexAtPointer(to, pointer, track.length);
             rafRef.current = null;
             resolve();
           };
@@ -346,12 +355,13 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
+      finalHighlightedIndexRef.current = getIndexAtPointer(startPhase, pointer, track.length);
 
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
 
-      const finalPointer = getPointerPxNow();
-      const resolvedFinalIndex = getIndexAtPointer(spinPhaseRef.current, finalPointer, track.length) ?? targetIndex;
+      const resolvedFinalIndex =
+        finalHighlightedIndexRef.current ?? getIndexAtPointer(spinPhaseRef.current, pointer, track.length) ?? targetIndex;
       if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
         track[resolvedFinalIndex] = winnerItem;
         setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
