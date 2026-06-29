@@ -173,7 +173,13 @@ export const createOxaPayStaticAddress = async (input: {
   method: CashierMethod;
   callbackUrl: string;
 }): Promise<{ trackId: string; address: string; networkLabel: string; qrCodeUrl: string | null }> => {
-  const currencies = await getOxaPaySupportedCurrencies();
+  let currencies: Record<string, OxaCurrencyInfo> = {};
+  try {
+    currencies = await getOxaPaySupportedCurrencies();
+  } catch {
+    // Fallback to deterministic network mapping when currencies endpoint is unavailable.
+    currencies = {};
+  }
   const network = resolveNetworkName(input.method, currencies);
   const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", {
     network: network.networkValue,
@@ -205,7 +211,13 @@ export const createOxaPayPayout = async (input: {
   callbackUrl: string;
   description: string;
 }): Promise<{ trackId: string; status: string }> => {
-  const currencies = await getOxaPaySupportedCurrencies();
+  let currencies: Record<string, OxaCurrencyInfo> = {};
+  try {
+    currencies = await getOxaPaySupportedCurrencies();
+  } catch {
+    // Fallback to deterministic network mapping when currencies endpoint is unavailable.
+    currencies = {};
+  }
   const network = resolveNetworkName(input.method, currencies);
   const data = await doOxaRequest<OxaPayoutData>("/payout", "payout", {
     address: input.destinationAddress,
