@@ -184,6 +184,8 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     }
   });
   const byPair = new Map(existing.map((entry) => [`${entry.asset}:${entry.network}`, true]));
+  const hadAnyAddresses = existing.length > 0;
+  let createdAnyAddress = false;
 
   const callbackUrl = `${env.OXAPAY_CALLBACK_BASE_URL!.replace(/\/+$/, "")}/api/v1/cashier/webhooks/oxapay/payment`;
   for (const method of getCashierMethods()) {
@@ -191,13 +193,13 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     if (byPair.has(pair)) {
       continue;
     }
-    const remote = await createOxaPayStaticAddress({
-      userId,
-      email: user.email,
-      method,
-      callbackUrl
-    });
     try {
+      const remote = await createOxaPayStaticAddress({
+        userId,
+        email: user.email,
+        method,
+        callbackUrl
+      });
       await prisma.paymentAddress.create({
         data: {
           userId,
@@ -211,10 +213,15 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
           qrCodeUrl: remote.qrCodeUrl
         }
       });
+      byPair.set(pair, true);
+      createdAnyAddress = true;
     } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-        throw error;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        byPair.set(pair, true);
+        continue;
       }
+      // Allow partial availability if one provider/network fails.
+      continue;
     }
   }
 
@@ -233,6 +240,13 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     },
     orderBy: [{ asset: "asc" }, { network: "asc" }]
   });
+  if (refreshed.length === 0 && !hadAnyAddresses && !createdAnyAddress) {
+    throw new AppError(
+      "Deposit addresses are temporarily unavailable. Please try again in a few minutes.",
+      503,
+      "DEPOSIT_ADDRESSES_UNAVAILABLE"
+    );
+  }
   return refreshed.map(toAddressDto);
 };
 
