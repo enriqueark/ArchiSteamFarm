@@ -121,7 +121,7 @@ const networkHintsByMethod = (method: CashierMethod): string[] => {
   if (method.network === "solana") {
     return ["solana", "solana network", "sol"];
   }
-  return ["ethereum", "erc20", "ethereum network", "eth"];
+  return ["ethereum", "erc20", "erc-20", "ethereum network", "eth"];
 };
 
 const resolveNetworkName = (
@@ -146,12 +146,12 @@ const resolveNetworkName = (
   }
 
   if (method.network === "bitcoin") {
-    return { networkValue: "bitcoin", networkLabel: "Bitcoin Network" };
+    return { networkValue: "BTC", networkLabel: "Bitcoin Network" };
   }
   if (method.network === "solana") {
-    return { networkValue: "solana", networkLabel: "Solana Network" };
+    return { networkValue: "SOL", networkLabel: "Solana Network" };
   }
-  return { networkValue: "ethereum", networkLabel: "Ethereum Network" };
+  return { networkValue: "ERC20", networkLabel: "ERC-20" };
 };
 
 export const getOxaPaySupportedCurrencies = async (): Promise<Record<string, OxaCurrencyInfo>> => {
@@ -182,8 +182,8 @@ export const createOxaPayStaticAddress = async (input: {
   }
   const network = resolveNetworkName(input.method, currencies);
   const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", {
+    currency: input.method.asset,
     network: network.networkValue,
-    to_currency: "USDT",
     callback_url: input.callbackUrl,
     email: input.email,
     order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
