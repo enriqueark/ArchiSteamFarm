@@ -251,6 +251,10 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     orderBy: [{ asset: "asc" }, { network: "asc" }]
   });
   if (refreshed.length === 0 && !hadAnyAddresses && !createdAnyAddress) {
+    const reasonHint =
+      typeof firstFailureMessage === "string" && firstFailureMessage.trim().length > 0
+        ? ` (${firstFailureMessage.trim().slice(0, 160)})`
+        : "";
     if (firstFailureMessage) {
       console.warn("cashier.deposit_address_creation_unavailable", {
         userId,
@@ -258,7 +262,7 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       });
     }
     throw new AppError(
-      "Deposit addresses are temporarily unavailable. Please try again in a few minutes.",
+      `Deposit addresses are temporarily unavailable. Please try again in a few minutes.${reasonHint}`,
       503,
       "DEPOSIT_ADDRESSES_UNAVAILABLE"
     );
