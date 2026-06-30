@@ -64,6 +64,14 @@ type OxaLegacyResponse<T extends Record<string, unknown>> = T & {
   message?: string;
 };
 
+type OxaLegacyStaticAddressEntry = {
+  trackId?: string | number;
+  address?: string;
+  network?: string;
+  qrCode?: string;
+  qr_code?: string;
+};
+
 class OxaRequestError extends Error {
   statusCode?: number;
 
@@ -220,6 +228,41 @@ const normalizeStaticAddressData = (
   };
 };
 
+const normalizeLegacyStaticAddressEntry = (
+  entry: OxaLegacyStaticAddressEntry | Record<string, unknown>
+): { trackId: string; address: string; networkLabel?: string; qrCodeUrl: string | null } | null =>
+  normalizeStaticAddressData(entry as Record<string, unknown>);
+
+const findLegacyStaticAddressByOrderId = async (input: {
+  orderId: string;
+  method: CashierMethod;
+}): Promise<{ trackId: string; address: string; networkLabel?: string; qrCodeUrl: string | null } | null> => {
+  const canonicalNetwork =
+    input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
+  const filters: Record<string, unknown>[] = [
+    { orderId: input.orderId, network: canonicalNetwork, currency: input.method.asset, size: 5, page: 1 },
+    { orderId: input.orderId, size: 5, page: 1 }
+  ];
+  for (const filter of filters) {
+    try {
+      const payload = await doOxaLegacyMerchantRequest<Record<string, unknown>>(
+        "/merchants/list/staticaddress",
+        filter
+      );
+      const data = Array.isArray(payload.data) ? (payload.data as OxaLegacyStaticAddressEntry[]) : [];
+      const found = data
+        .map((entry) => normalizeLegacyStaticAddressEntry(entry))
+        .find((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+      if (found) {
+        return found;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
 const withOptionalEmail = (
   payload: Record<string, unknown>,
   email: string | undefined
@@ -304,6 +347,19 @@ export const createOxaPayStaticAddress = async (input: {
   const callbackUrl = input.callbackUrl.trim();
   const orderId = `user:${input.userId}:${input.method.asset}:${input.method.network}`;
   const description = `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`;
+
+  const existingLegacy = await findLegacyStaticAddressByOrderId({
+    orderId,
+    method: input.method
+  });
+  if (existingLegacy) {
+    return {
+      trackId: existingLegacy.trackId,
+      address: existingLegacy.address,
+      networkLabel: existingLegacy.networkLabel || input.method.networkLabel,
+      qrCodeUrl: existingLegacy.qrCodeUrl
+    };
+  }
   const basePayloadWithCallback = {
     callback_url: callbackUrl,
     order_id: orderId,
@@ -322,18 +378,20 @@ export const createOxaPayStaticAddress = async (input: {
 
   const canonicalNetwork =
     input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
-  const networkCandidates = Array.from(new Set([network.networkValue, canonicalNetwork]))
+  const networkCandidates = Array.from(new Set([canonicalNetwork, network.networkValue]))
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 
   const payloads: Record<string, unknown>[] = [];
-  for (const payloadBase of basePayloadCandidates) {
-    for (const networkValue of networkCandidates) {
-      payloads.push({ ...payloadBase, network: networkValue, to_currency: input.method.asset });
-    }
+  for (const networkValue of networkCandidates.slice(0, 1)) {
+    const payloadBase = basePayloadCandidates[0] ?? basePayloadWithCallback;
+    payloads.push({ ...payloadBase, network: networkValue, to_currency: input.method.asset });
+    payloads.push({ ...basePayloadWithCallback, network: networkValue, to_currency: input.method.asset });
+    payloads.push({ ...basePayloadWithoutCallback, network: networkValue, to_currency: input.method.asset });
   }
 
   let lastError: unknown = null;
+  let sawRateLimit = false;
   for (const payload of payloads) {
     try {
       const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", payload);
@@ -350,14 +408,15 @@ export const createOxaPayStaticAddress = async (input: {
     } catch (error) {
       lastError = error;
       if (isRateLimitedError(error)) {
-        throw error;
+        sawRateLimit = true;
+        break;
       }
     }
   }
 
   const legacyPayloads: Record<string, unknown>[] = [];
   const legacyEmail = input.email?.trim() || undefined;
-  for (const networkValue of networkCandidates) {
+  for (const networkValue of networkCandidates.slice(0, 1)) {
     const baseLegacy = {
       network: networkValue,
       currency: input.method.asset,
@@ -390,9 +449,14 @@ export const createOxaPayStaticAddress = async (input: {
     } catch (error) {
       lastError = error;
       if (isRateLimitedError(error)) {
-        throw error;
+        sawRateLimit = true;
+        break;
       }
     }
+  }
+
+  if (sawRateLimit) {
+    throw new OxaRequestError("OxaPay request failed (429)", 429);
   }
 
   if (lastError instanceof Error) {

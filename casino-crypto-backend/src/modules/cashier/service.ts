@@ -244,6 +244,10 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
         network: method.network,
         reason: error instanceof Error ? error.message : "Unknown provider error"
       });
+      if (!hadAnyAddresses) {
+        // Avoid hammering provider for brand-new users.
+        break;
+      }
       if (error instanceof Error && (error.message.includes("429") || error.message.toLowerCase().includes("rate limit"))) {
         break;
       }
