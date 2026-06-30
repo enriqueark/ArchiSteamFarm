@@ -4,10 +4,10 @@ import { env } from "../../config/env";
 
 export const CASHIER_PROVIDER = "OXAPAY";
 
-export const CASHIER_ASSETS = ["BTC", "ETH", "USDT", "USDC", "SOL"] as const;
+export const CASHIER_ASSETS = ["BTC", "ETH", "USDT", "USDC", "SOL", "LTC"] as const;
 export type CashierAsset = (typeof CASHIER_ASSETS)[number];
 
-export const CASHIER_NETWORKS = ["bitcoin", "erc20", "solana"] as const;
+export const CASHIER_NETWORKS = ["bitcoin", "erc20", "trc20", "solana", "litecoin"] as const;
 export type CashierNetwork = (typeof CASHIER_NETWORKS)[number];
 
 export type CashierMethod = {
@@ -20,8 +20,10 @@ const CASHIER_METHODS: CashierMethod[] = [
   { asset: "BTC", network: "bitcoin", networkLabel: "Bitcoin" },
   { asset: "ETH", network: "erc20", networkLabel: "ERC-20" },
   { asset: "USDT", network: "erc20", networkLabel: "ERC-20" },
+  { asset: "USDT", network: "trc20", networkLabel: "TRC-20" },
   { asset: "USDC", network: "erc20", networkLabel: "ERC-20" },
-  { asset: "SOL", network: "solana", networkLabel: "Solana" }
+  { asset: "SOL", network: "solana", networkLabel: "Solana" },
+  { asset: "LTC", network: "litecoin", networkLabel: "Litecoin" }
 ];
 
 export const getCashierMethods = (): CashierMethod[] => [...CASHIER_METHODS];
@@ -238,7 +240,15 @@ const findLegacyStaticAddressByOrderId = async (input: {
   method: CashierMethod;
 }): Promise<{ trackId: string; address: string; networkLabel?: string; qrCodeUrl: string | null } | null> => {
   const canonicalNetwork =
-    input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
+    input.method.network === "bitcoin"
+      ? "BTC"
+      : input.method.network === "solana"
+        ? "SOL"
+        : input.method.network === "trc20"
+          ? "TRC20"
+          : input.method.network === "litecoin"
+            ? "LTC"
+            : "ERC20";
   const filters: Record<string, unknown>[] = [
     { orderId: input.orderId, network: canonicalNetwork, currency: input.method.asset, size: 5, page: 1 },
     { orderId: input.orderId, size: 5, page: 1 }
@@ -267,8 +277,14 @@ const networkHintsByMethod = (method: CashierMethod): string[] => {
   if (method.network === "bitcoin") {
     return ["bitcoin", "bitcoin network", "btc"];
   }
+  if (method.network === "litecoin") {
+    return ["litecoin", "ltc", "litecoin network"];
+  }
   if (method.network === "solana") {
     return ["solana", "solana network", "sol"];
+  }
+  if (method.network === "trc20") {
+    return ["trc20", "trc-20", "tron", "trx", "tron network"];
   }
   return ["ethereum", "erc20", "erc-20", "ethereum network", "eth"];
 };
@@ -301,8 +317,14 @@ const resolveNetworkName = (
   if (method.network === "bitcoin") {
     return { networkValue: "BTC", networkLabel: "Bitcoin Network" };
   }
+  if (method.network === "litecoin") {
+    return { networkValue: "LTC", networkLabel: "Litecoin Network" };
+  }
   if (method.network === "solana") {
     return { networkValue: "SOL", networkLabel: "Solana Network" };
+  }
+  if (method.network === "trc20") {
+    return { networkValue: "TRC20", networkLabel: "TRC-20" };
   }
   return { networkValue: "ERC20", networkLabel: "ERC-20" };
 };
@@ -333,7 +355,6 @@ export const createOxaPayStaticAddress = async (input: {
     currencies = {};
   }
   const network = resolveNetworkName(input.method, currencies);
-  const callbackUrl = input.callbackUrl.trim();
   const orderId = `user:${input.userId}:${input.method.asset}:${input.method.network}`;
 
   const existingLegacy = await findLegacyStaticAddressByOrderId({
@@ -349,24 +370,27 @@ export const createOxaPayStaticAddress = async (input: {
     };
   }
   const canonicalNetwork =
-    input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
+    input.method.network === "bitcoin"
+      ? "BTC"
+      : input.method.network === "solana"
+        ? "SOL"
+        : input.method.network === "trc20"
+          ? "TRC20"
+          : input.method.network === "litecoin"
+            ? "LTC"
+            : "ERC20";
   const networkCandidates = Array.from(
     new Set([network.networkValue, canonicalNetwork, input.method.network])
   )
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-  const shortlistedNetworkCandidates = networkCandidates.slice(0, 2);
+  const shortlistedNetworkCandidates = networkCandidates.slice(0, 1);
 
   const payloads: Record<string, unknown>[] = [];
   for (const networkValue of shortlistedNetworkCandidates) {
     payloads.push({
       network: networkValue,
       to_currency: input.method.asset
-    });
-    payloads.push({
-      network: networkValue,
-      to_currency: input.method.asset,
-      callback_url: callbackUrl
     });
   }
 
@@ -399,11 +423,6 @@ export const createOxaPayStaticAddress = async (input: {
     legacyPayloads.push({
       network: networkValue,
       currency: input.method.asset
-    });
-    legacyPayloads.push({
-      network: networkValue,
-      currency: input.method.asset,
-      callbackUrl
     });
   }
 

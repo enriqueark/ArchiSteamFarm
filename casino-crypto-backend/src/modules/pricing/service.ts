@@ -1,4 +1,4 @@
-type ExternalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL";
+type ExternalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL" | "LTC";
 
 const COINS_ATOMIC_DECIMALS = 8;
 const USD_PER_COIN = 0.7;
@@ -8,13 +8,14 @@ const ASSET_ATOMIC_DECIMALS: Record<ExternalAsset, number> = {
   ETH: 18,
   USDT: 6,
   USDC: 6,
-  SOL: 9
+  SOL: 9,
+  LTC: 8
 };
 
 const toDecimalAmount = (atomic: bigint, decimals: number): number => Number(atomic) / 10 ** decimals;
 const toAtomic = (amount: number, decimals: number): bigint => BigInt(Math.floor(amount * 10 ** decimals));
 
-export const getSupportedExternalAssets = (): ExternalAsset[] => ["BTC", "ETH", "USDT", "USDC", "SOL"];
+export const getSupportedExternalAssets = (): ExternalAsset[] => ["BTC", "ETH", "USDT", "USDC", "SOL", "LTC"];
 
 export const getUsdRates = async (_forceRefresh = false): Promise<{ rates: Record<ExternalAsset, number>; fetchedAt: number }> => {
   // Keep fixed snapshot rates to avoid exposing live multi-currency behavior.
@@ -26,7 +27,8 @@ export const getUsdRates = async (_forceRefresh = false): Promise<{ rates: Recor
       ETH: 0,
       USDT: 1,
       USDC: 1,
-      SOL: 0
+      SOL: 0,
+      LTC: 0
     },
     fetchedAt: now
   };

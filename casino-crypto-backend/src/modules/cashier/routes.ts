@@ -16,7 +16,7 @@ import {
   validatePayoutWebhookOrThrow
 } from "./service";
 
-const NETWORKS = ["bitcoin", "erc20", "solana"] as const;
+const NETWORKS = ["bitcoin", "erc20", "trc20", "solana", "litecoin"] as const;
 const payoutAssetSchema = z.enum(CASHIER_ASSETS);
 
 const requestWithdrawSchema = z.object({

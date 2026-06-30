@@ -26,7 +26,8 @@ const ASSET_DECIMALS: Record<CashierAsset, number> = {
   ETH: 18,
   USDT: 6,
   USDC: 6,
-  SOL: 9
+  SOL: 9,
+  LTC: 8
 };
 
 export type UserCashierAddress = {
@@ -194,13 +195,14 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       if (method.asset === "USDT" && method.network === "erc20") return 0;
       if (method.asset === "BTC" && method.network === "bitcoin") return 1;
       if (method.asset === "ETH" && method.network === "erc20") return 2;
-      if (method.asset === "USDC" && method.network === "erc20") return 3;
-      if (method.asset === "SOL" && method.network === "solana") return 4;
-      return 5;
+      if (method.asset === "SOL" && method.network === "solana") return 3;
+      if (method.asset === "USDC" && method.network === "erc20") return 4;
+      if (method.asset === "USDT" && method.network === "trc20") return 5;
+      if (method.asset === "LTC" && method.network === "litecoin") return 6;
+      return 7;
     };
     return score(a) - score(b);
   });
-  let newUserAttempts = 0;
   for (const method of methods) {
     const pair = `${method.asset}:${method.network}`;
     if (byPair.has(pair)) {
@@ -227,10 +229,6 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       });
       byPair.set(pair, true);
       createdAnyAddress = true;
-      // For brand-new users, one successful address is enough for the deposit page.
-      if (!hadAnyAddresses) {
-        break;
-      }
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         byPair.set(pair, true);
@@ -247,13 +245,6 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       });
       if (error instanceof Error && (error.message.includes("429") || error.message.toLowerCase().includes("rate limit"))) {
         break;
-      }
-      if (!hadAnyAddresses) {
-        // Try at most two methods for brand-new users to avoid provider flooding.
-        newUserAttempts += 1;
-        if (newUserAttempts >= 2) {
-          break;
-        }
       }
       // Allow partial availability if one provider/network fails.
       continue;
