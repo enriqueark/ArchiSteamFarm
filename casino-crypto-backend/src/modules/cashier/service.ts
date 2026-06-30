@@ -186,6 +186,7 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
   const byPair = new Map(existing.map((entry) => [`${entry.asset}:${entry.network}`, true]));
   const hadAnyAddresses = existing.length > 0;
   let createdAnyAddress = false;
+  let firstFailureMessage: string | null = null;
 
   const callbackUrl = `${env.OXAPAY_CALLBACK_BASE_URL!.replace(/\/+$/, "")}/api/v1/cashier/webhooks/oxapay/payment`;
   for (const method of getCashierMethods()) {
@@ -220,6 +221,15 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
         byPair.set(pair, true);
         continue;
       }
+      if (!firstFailureMessage) {
+        firstFailureMessage = error instanceof Error ? error.message : "Unknown provider error";
+      }
+      console.warn("cashier.deposit_address_creation_failed", {
+        userId,
+        asset: method.asset,
+        network: method.network,
+        reason: error instanceof Error ? error.message : "Unknown provider error"
+      });
       // Allow partial availability if one provider/network fails.
       continue;
     }
@@ -241,6 +251,12 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     orderBy: [{ asset: "asc" }, { network: "asc" }]
   });
   if (refreshed.length === 0 && !hadAnyAddresses && !createdAnyAddress) {
+    if (firstFailureMessage) {
+      console.warn("cashier.deposit_address_creation_unavailable", {
+        userId,
+        reason: firstFailureMessage
+      });
+    }
     throw new AppError(
       "Deposit addresses are temporarily unavailable. Please try again in a few minutes.",
       503,

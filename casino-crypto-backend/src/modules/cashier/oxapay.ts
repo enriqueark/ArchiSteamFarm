@@ -42,6 +42,7 @@ type OxaApiResponse<T> = {
     message?: string;
   } | null;
   message?: string;
+  status?: number | string;
 };
 
 type OxaStaticAddressData = {
@@ -104,14 +105,39 @@ const doOxaRequest = async <T>(
     });
 
     const payload = (await response.json().catch(() => ({}))) as OxaApiResponse<T>;
-    if (!response.ok) {
-      const message = payload.error?.message || payload.message || `OxaPay request failed (${response.status})`;
+    const payloadStatus = Number(payload.status);
+    const hasApiError =
+      Boolean(payload.error?.message) ||
+      (Number.isFinite(payloadStatus) && payloadStatus >= 400);
+    if (!response.ok || hasApiError) {
+      const message =
+        payload.error?.message ||
+        payload.message ||
+        `OxaPay request failed (${response.status})`;
       throw new Error(message);
     }
-    return payload.data as T;
+    if (payload.data !== undefined) {
+      return payload.data as T;
+    }
+    // Some public endpoints can reply with the payload as the root object.
+    return payload as unknown as T;
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const withOptionalEmail = (
+  payload: Record<string, unknown>,
+  email: string | undefined
+): Record<string, unknown> => {
+  const trimmed = email?.trim();
+  if (!trimmed) {
+    return payload;
+  }
+  return {
+    ...payload,
+    email: trimmed
+  };
 };
 
 const networkHintsByMethod = (method: CashierMethod): string[] => {
@@ -181,27 +207,59 @@ export const createOxaPayStaticAddress = async (input: {
     currencies = {};
   }
   const network = resolveNetworkName(input.method, currencies);
-  const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", {
-    currency: input.method.asset,
-    network: network.networkValue,
-    callback_url: input.callbackUrl,
-    email: input.email,
-    order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
-    description: `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`
-  });
+  const basePayload = withOptionalEmail(
+    {
+      callback_url: input.callbackUrl,
+      order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
+      description: `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`
+    },
+    input.email
+  );
 
-  const trackId = data.track_id;
-  const address = data.address?.trim();
-  if ((!trackId && trackId !== 0) || !address) {
-    throw new Error("Invalid OxaPay static address response");
+  const networkFallbacks =
+    input.method.network === "bitcoin"
+      ? ["BTC", "bitcoin"]
+      : input.method.network === "solana"
+        ? ["SOL", "solana"]
+        : ["ERC20", "erc20", "ETH", "ethereum"];
+  const networkCandidates = Array.from(
+    new Set([network.networkValue, input.method.network, ...networkFallbacks])
+  )
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  const payloads: Record<string, unknown>[] = [];
+  for (const networkValue of networkCandidates) {
+    payloads.push({ ...basePayload, network: networkValue, to_currency: input.method.asset });
+    payloads.push({ ...basePayload, network: networkValue, currency: input.method.asset });
+    payloads.push({ ...basePayload, network: networkValue });
+  }
+  payloads.push({ ...basePayload, currency: input.method.asset });
+
+  let lastError: unknown = null;
+  for (const payload of payloads) {
+    try {
+      const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", payload);
+      const trackId = data.track_id;
+      const address = data.address?.trim();
+      if ((!trackId && trackId !== 0) || !address) {
+        throw new Error("Invalid OxaPay static address response");
+      }
+      return {
+        trackId: String(trackId),
+        address,
+        networkLabel: data.network || network.networkLabel,
+        qrCodeUrl: data.qr_code?.trim() || null
+      };
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return {
-    trackId: String(trackId),
-    address,
-    networkLabel: data.network || network.networkLabel,
-    qrCodeUrl: data.qr_code?.trim() || null
-  };
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error("Unable to create OxaPay static address");
 };
 
 export const createOxaPayPayout = async (input: {
