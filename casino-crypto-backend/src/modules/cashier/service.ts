@@ -163,7 +163,7 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true }
+    select: { id: true }
   });
   if (!user) {
     throw new AppError("User not found", 404, "USER_NOT_FOUND");
@@ -192,13 +192,15 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
   const methods = [...getCashierMethods()].sort((a, b) => {
     const score = (method: CashierMethod): number => {
       if (method.asset === "USDT" && method.network === "erc20") return 0;
-      if (method.asset === "USDC" && method.network === "erc20") return 1;
-      if (method.asset === "BTC" && method.network === "bitcoin") return 2;
-      if (method.asset === "SOL" && method.network === "solana") return 3;
-      return 4;
+      if (method.asset === "BTC" && method.network === "bitcoin") return 1;
+      if (method.asset === "ETH" && method.network === "erc20") return 2;
+      if (method.asset === "USDC" && method.network === "erc20") return 3;
+      if (method.asset === "SOL" && method.network === "solana") return 4;
+      return 5;
     };
     return score(a) - score(b);
   });
+  let newUserAttempts = 0;
   for (const method of methods) {
     const pair = `${method.asset}:${method.network}`;
     if (byPair.has(pair)) {
@@ -207,7 +209,6 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     try {
       const remote = await createOxaPayStaticAddress({
         userId,
-        email: user.email,
         method,
         callbackUrl
       });
@@ -244,12 +245,15 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
         network: method.network,
         reason: error instanceof Error ? error.message : "Unknown provider error"
       });
-      if (!hadAnyAddresses) {
-        // Avoid hammering provider for brand-new users.
-        break;
-      }
       if (error instanceof Error && (error.message.includes("429") || error.message.toLowerCase().includes("rate limit"))) {
         break;
+      }
+      if (!hadAnyAddresses) {
+        // Try at most two methods for brand-new users to avoid provider flooding.
+        newUserAttempts += 1;
+        if (newUserAttempts >= 2) {
+          break;
+        }
       }
       // Allow partial availability if one provider/network fails.
       continue;

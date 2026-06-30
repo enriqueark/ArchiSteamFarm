@@ -263,20 +263,6 @@ const findLegacyStaticAddressByOrderId = async (input: {
   return null;
 };
 
-const withOptionalEmail = (
-  payload: Record<string, unknown>,
-  email: string | undefined
-): Record<string, unknown> => {
-  const trimmed = email?.trim();
-  if (!trimmed) {
-    return payload;
-  }
-  return {
-    ...payload,
-    email: trimmed
-  };
-};
-
 const networkHintsByMethod = (method: CashierMethod): string[] => {
   if (method.network === "bitcoin") {
     return ["bitcoin", "bitcoin network", "btc"];
@@ -291,7 +277,11 @@ const resolveNetworkName = (
   method: CashierMethod,
   currencies: Record<string, OxaCurrencyInfo>
 ): { networkValue: string; networkLabel: string } => {
-  const currency = currencies[method.asset];
+  const currency =
+    currencies[method.asset] ??
+    currencies[method.asset.toLowerCase()] ??
+    currencies[method.asset.toUpperCase()] ??
+    Object.values(currencies).find((entry) => entry.symbol?.toUpperCase() === method.asset);
   const networks = currency?.networks ?? {};
   const values = Object.values(networks);
   const hints = networkHintsByMethod(method);
@@ -332,7 +322,6 @@ export const getOxaPaySupportedCurrencies = async (): Promise<Record<string, Oxa
 
 export const createOxaPayStaticAddress = async (input: {
   userId: string;
-  email?: string;
   method: CashierMethod;
   callbackUrl: string;
 }): Promise<{ trackId: string; address: string; networkLabel: string; qrCodeUrl: string | null }> => {
@@ -346,7 +335,6 @@ export const createOxaPayStaticAddress = async (input: {
   const network = resolveNetworkName(input.method, currencies);
   const callbackUrl = input.callbackUrl.trim();
   const orderId = `user:${input.userId}:${input.method.asset}:${input.method.network}`;
-  const description = `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`;
 
   const existingLegacy = await findLegacyStaticAddressByOrderId({
     orderId,
@@ -360,34 +348,26 @@ export const createOxaPayStaticAddress = async (input: {
       qrCodeUrl: existingLegacy.qrCodeUrl
     };
   }
-  const basePayloadWithCallback = {
-    callback_url: callbackUrl,
-    order_id: orderId,
-    description
-  };
-  const basePayloadWithoutCallback = {
-    order_id: orderId,
-    description
-  };
-  const basePayloadCandidates = [
-    withOptionalEmail(basePayloadWithCallback, input.email),
-    basePayloadWithCallback,
-    withOptionalEmail(basePayloadWithoutCallback, input.email),
-    basePayloadWithoutCallback
-  ];
-
   const canonicalNetwork =
     input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
-  const networkCandidates = Array.from(new Set([canonicalNetwork, network.networkValue]))
+  const networkCandidates = Array.from(
+    new Set([network.networkValue, canonicalNetwork, input.method.network])
+  )
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+  const shortlistedNetworkCandidates = networkCandidates.slice(0, 2);
 
   const payloads: Record<string, unknown>[] = [];
-  for (const networkValue of networkCandidates.slice(0, 1)) {
-    const payloadBase = basePayloadCandidates[0] ?? basePayloadWithCallback;
-    payloads.push({ ...payloadBase, network: networkValue, to_currency: input.method.asset });
-    payloads.push({ ...basePayloadWithCallback, network: networkValue, to_currency: input.method.asset });
-    payloads.push({ ...basePayloadWithoutCallback, network: networkValue, to_currency: input.method.asset });
+  for (const networkValue of shortlistedNetworkCandidates) {
+    payloads.push({
+      network: networkValue,
+      to_currency: input.method.asset
+    });
+    payloads.push({
+      network: networkValue,
+      to_currency: input.method.asset,
+      callback_url: callbackUrl
+    });
   }
 
   let lastError: unknown = null;
@@ -415,19 +395,16 @@ export const createOxaPayStaticAddress = async (input: {
   }
 
   const legacyPayloads: Record<string, unknown>[] = [];
-  const legacyEmail = input.email?.trim() || undefined;
-  for (const networkValue of networkCandidates.slice(0, 1)) {
-    const baseLegacy = {
+  for (const networkValue of shortlistedNetworkCandidates) {
+    legacyPayloads.push({
+      network: networkValue,
+      currency: input.method.asset
+    });
+    legacyPayloads.push({
       network: networkValue,
       currency: input.method.asset,
-      orderId,
-      description
-    };
-    if (legacyEmail) {
-      legacyPayloads.push({ ...baseLegacy, callbackUrl, email: legacyEmail });
-    }
-    legacyPayloads.push({ ...baseLegacy, callbackUrl });
-    legacyPayloads.push(baseLegacy);
+      callbackUrl
+    });
   }
 
   for (const payload of legacyPayloads) {
