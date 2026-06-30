@@ -207,14 +207,15 @@ export const createOxaPayStaticAddress = async (input: {
     currencies = {};
   }
   const network = resolveNetworkName(input.method, currencies);
-  const basePayload = withOptionalEmail(
-    {
-      callback_url: input.callbackUrl,
-      order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
-      description: `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`
-    },
-    input.email
-  );
+  const basePayload = {
+    callback_url: input.callbackUrl,
+    order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
+    description: `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`
+  };
+  const basePayloadCandidates = [
+    withOptionalEmail(basePayload, input.email),
+    basePayload
+  ];
 
   const networkFallbacks =
     input.method.network === "bitcoin"
@@ -229,12 +230,14 @@ export const createOxaPayStaticAddress = async (input: {
     .filter((value) => value.length > 0);
 
   const payloads: Record<string, unknown>[] = [];
-  for (const networkValue of networkCandidates) {
-    payloads.push({ ...basePayload, network: networkValue, to_currency: input.method.asset });
-    payloads.push({ ...basePayload, network: networkValue, currency: input.method.asset });
-    payloads.push({ ...basePayload, network: networkValue });
+  for (const payloadBase of basePayloadCandidates) {
+    for (const networkValue of networkCandidates) {
+      payloads.push({ ...payloadBase, network: networkValue, to_currency: input.method.asset });
+      payloads.push({ ...payloadBase, network: networkValue, currency: input.method.asset });
+      payloads.push({ ...payloadBase, network: networkValue });
+    }
+    payloads.push({ ...payloadBase, currency: input.method.asset });
   }
-  payloads.push({ ...basePayload, currency: input.method.asset });
 
   let lastError: unknown = null;
   for (const payload of payloads) {
