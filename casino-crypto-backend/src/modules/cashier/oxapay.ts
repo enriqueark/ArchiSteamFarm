@@ -47,14 +47,21 @@ type OxaApiResponse<T> = {
 
 type OxaStaticAddressData = {
   track_id?: string | number;
+  trackId?: string | number;
   address?: string;
   network?: string;
   qr_code?: string;
+  qrCode?: string;
 };
 
 type OxaPayoutData = {
   track_id?: string | number;
   status?: string;
+};
+
+type OxaLegacyResponse<T extends Record<string, unknown>> = T & {
+  result?: number | string;
+  message?: string;
 };
 
 let cachedCurrencies:
@@ -124,6 +131,64 @@ const doOxaRequest = async <T>(
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const getOxaApiRootBaseUrl = (): string => env.OXAPAY_API_BASE_URL.replace(/\/v1\/?$/i, "");
+
+const doOxaLegacyMerchantRequest = async <T extends Record<string, unknown>>(
+  path: string,
+  body: Record<string, unknown>
+): Promise<T> => {
+  assertOxaConfigured("merchant");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.OXAPAY_HTTP_TIMEOUT_MS);
+  try {
+    const payloadBody = {
+      merchant: env.OXAPAY_MERCHANT_API_KEY as string,
+      ...body
+    };
+    const response = await fetch(`${getOxaApiRootBaseUrl()}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payloadBody),
+      signal: controller.signal
+    });
+    const payload = (await response.json().catch(() => ({}))) as OxaLegacyResponse<T>;
+    if (!response.ok) {
+      throw new Error(payload.message || `OxaPay legacy request failed (${response.status})`);
+    }
+    const resultCode = Number(payload.result);
+    if (Number.isFinite(resultCode) && resultCode !== 100) {
+      throw new Error(payload.message || `OxaPay legacy request failed (result=${resultCode})`);
+    }
+    return payload as T;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const normalizeStaticAddressData = (
+  raw: OxaStaticAddressData | Record<string, unknown>
+): { trackId: string; address: string; networkLabel?: string; qrCodeUrl: string | null } | null => {
+  const payload = raw as Record<string, unknown>;
+  const nestedData =
+    payload.data && typeof payload.data === "object" ? (payload.data as Record<string, unknown>) : null;
+  const trackIdRaw = payload.track_id ?? payload.trackId ?? nestedData?.track_id ?? nestedData?.trackId;
+  const addressRaw = payload.address ?? nestedData?.address;
+  const networkRaw = payload.network ?? nestedData?.network;
+  const qrCodeRaw = payload.qr_code ?? payload.qrCode ?? nestedData?.qr_code ?? nestedData?.qrCode;
+  const address = typeof addressRaw === "string" ? addressRaw.trim() : "";
+  if ((trackIdRaw === undefined || trackIdRaw === null || trackIdRaw === "") || !address) {
+    return null;
+  }
+  return {
+    trackId: String(trackIdRaw),
+    address,
+    networkLabel: typeof networkRaw === "string" ? networkRaw : undefined,
+    qrCodeUrl: typeof qrCodeRaw === "string" && qrCodeRaw.trim() ? qrCodeRaw.trim() : null
+  };
 };
 
 const withOptionalEmail = (
@@ -207,14 +272,23 @@ export const createOxaPayStaticAddress = async (input: {
     currencies = {};
   }
   const network = resolveNetworkName(input.method, currencies);
-  const basePayload = {
-    callback_url: input.callbackUrl,
-    order_id: `user:${input.userId}:${input.method.asset}:${input.method.network}`,
-    description: `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`
+  const callbackUrl = input.callbackUrl.trim();
+  const orderId = `user:${input.userId}:${input.method.asset}:${input.method.network}`;
+  const description = `cashier-static-address:${input.userId}:${input.method.asset}:${input.method.network}`;
+  const basePayloadWithCallback = {
+    callback_url: callbackUrl,
+    order_id: orderId,
+    description
+  };
+  const basePayloadWithoutCallback = {
+    order_id: orderId,
+    description
   };
   const basePayloadCandidates = [
-    withOptionalEmail(basePayload, input.email),
-    basePayload
+    withOptionalEmail(basePayloadWithCallback, input.email),
+    basePayloadWithCallback,
+    withOptionalEmail(basePayloadWithoutCallback, input.email),
+    basePayloadWithoutCallback
   ];
 
   const networkFallbacks =
@@ -243,16 +317,59 @@ export const createOxaPayStaticAddress = async (input: {
   for (const payload of payloads) {
     try {
       const data = await doOxaRequest<OxaStaticAddressData>("/payment/static-address", "merchant", payload);
-      const trackId = data.track_id;
-      const address = data.address?.trim();
-      if ((!trackId && trackId !== 0) || !address) {
+      const normalized = normalizeStaticAddressData(data);
+      if (!normalized) {
         throw new Error("Invalid OxaPay static address response");
       }
       return {
-        trackId: String(trackId),
-        address,
-        networkLabel: data.network || network.networkLabel,
-        qrCodeUrl: data.qr_code?.trim() || null
+        trackId: normalized.trackId,
+        address: normalized.address,
+        networkLabel: normalized.networkLabel || network.networkLabel,
+        qrCodeUrl: normalized.qrCodeUrl
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const legacyPayloads: Record<string, unknown>[] = [];
+  const legacyEmail = input.email?.trim();
+  for (const networkValue of networkCandidates) {
+    const baseLegacy = {
+      network: networkValue,
+      currency: input.method.asset,
+      orderId,
+      description
+    };
+    legacyPayloads.push({
+      ...baseLegacy,
+      callbackUrl
+    });
+    if (legacyEmail) {
+      legacyPayloads.push({
+        ...baseLegacy,
+        callbackUrl,
+        email: legacyEmail
+      });
+    }
+    legacyPayloads.push(baseLegacy);
+  }
+
+  for (const payload of legacyPayloads) {
+    try {
+      const data = await doOxaLegacyMerchantRequest<Record<string, unknown>>(
+        "/merchants/request/staticaddress",
+        payload
+      );
+      const normalized = normalizeStaticAddressData(data);
+      if (!normalized) {
+        throw new Error("Invalid OxaPay legacy static address response");
+      }
+      return {
+        trackId: normalized.trackId,
+        address: normalized.address,
+        networkLabel: normalized.networkLabel || network.networkLabel,
+        qrCodeUrl: normalized.qrCodeUrl
       };
     } catch (error) {
       lastError = error;
