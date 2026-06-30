@@ -189,7 +189,17 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
   let firstFailureMessage: string | null = null;
 
   const callbackUrl = `${env.OXAPAY_CALLBACK_BASE_URL!.replace(/\/+$/, "")}/api/v1/cashier/webhooks/oxapay/payment`;
-  for (const method of getCashierMethods()) {
+  const methods = [...getCashierMethods()].sort((a, b) => {
+    const score = (method: CashierMethod): number => {
+      if (method.asset === "USDT" && method.network === "erc20") return 0;
+      if (method.asset === "USDC" && method.network === "erc20") return 1;
+      if (method.asset === "BTC" && method.network === "bitcoin") return 2;
+      if (method.asset === "SOL" && method.network === "solana") return 3;
+      return 4;
+    };
+    return score(a) - score(b);
+  });
+  for (const method of methods) {
     const pair = `${method.asset}:${method.network}`;
     if (byPair.has(pair)) {
       continue;
@@ -216,6 +226,10 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       });
       byPair.set(pair, true);
       createdAnyAddress = true;
+      // For brand-new users, one successful address is enough for the deposit page.
+      if (!hadAnyAddresses) {
+        break;
+      }
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         byPair.set(pair, true);
@@ -230,6 +244,9 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
         network: method.network,
         reason: error instanceof Error ? error.message : "Unknown provider error"
       });
+      if (error instanceof Error && (error.message.includes("429") || error.message.toLowerCase().includes("rate limit"))) {
+        break;
+      }
       // Allow partial availability if one provider/network fails.
       continue;
     }

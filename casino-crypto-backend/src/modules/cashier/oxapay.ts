@@ -64,6 +64,16 @@ type OxaLegacyResponse<T extends Record<string, unknown>> = T & {
   message?: string;
 };
 
+class OxaRequestError extends Error {
+  statusCode?: number;
+
+  constructor(message: string, statusCode?: number) {
+    super(message);
+    this.name = "OxaRequestError";
+    this.statusCode = statusCode;
+  }
+}
+
 let cachedCurrencies:
   | {
       at: number;
@@ -117,11 +127,13 @@ const doOxaRequest = async <T>(
       Boolean(payload.error?.message) ||
       (Number.isFinite(payloadStatus) && payloadStatus >= 400);
     if (!response.ok || hasApiError) {
+      const resolvedStatus =
+        Number.isFinite(payloadStatus) && payloadStatus > 0 ? payloadStatus : response.status;
       const message =
         payload.error?.message ||
         payload.message ||
         `OxaPay request failed (${response.status})`;
-      throw new Error(message);
+      throw new OxaRequestError(message, resolvedStatus);
     }
     if (payload.data !== undefined) {
       return payload.data as T;
@@ -157,16 +169,33 @@ const doOxaLegacyMerchantRequest = async <T extends Record<string, unknown>>(
     });
     const payload = (await response.json().catch(() => ({}))) as OxaLegacyResponse<T>;
     if (!response.ok) {
-      throw new Error(payload.message || `OxaPay legacy request failed (${response.status})`);
+      throw new OxaRequestError(
+        payload.message || `OxaPay legacy request failed (${response.status})`,
+        response.status
+      );
     }
     const resultCode = Number(payload.result);
     if (Number.isFinite(resultCode) && resultCode !== 100) {
-      throw new Error(payload.message || `OxaPay legacy request failed (result=${resultCode})`);
+      throw new OxaRequestError(
+        payload.message || `OxaPay legacy request failed (result=${resultCode})`,
+        resultCode
+      );
     }
     return payload as T;
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const isRateLimitedError = (error: unknown): boolean => {
+  if (error instanceof OxaRequestError && error.statusCode === 429) {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return message.includes("429") || message.includes("rate limit");
 };
 
 const normalizeStaticAddressData = (
@@ -291,15 +320,9 @@ export const createOxaPayStaticAddress = async (input: {
     basePayloadWithoutCallback
   ];
 
-  const networkFallbacks =
-    input.method.network === "bitcoin"
-      ? ["BTC", "bitcoin"]
-      : input.method.network === "solana"
-        ? ["SOL", "solana"]
-        : ["ERC20", "erc20", "ETH", "ethereum"];
-  const networkCandidates = Array.from(
-    new Set([network.networkValue, input.method.network, ...networkFallbacks])
-  )
+  const canonicalNetwork =
+    input.method.network === "bitcoin" ? "BTC" : input.method.network === "solana" ? "SOL" : "ERC20";
+  const networkCandidates = Array.from(new Set([network.networkValue, canonicalNetwork]))
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 
@@ -307,10 +330,7 @@ export const createOxaPayStaticAddress = async (input: {
   for (const payloadBase of basePayloadCandidates) {
     for (const networkValue of networkCandidates) {
       payloads.push({ ...payloadBase, network: networkValue, to_currency: input.method.asset });
-      payloads.push({ ...payloadBase, network: networkValue, currency: input.method.asset });
-      payloads.push({ ...payloadBase, network: networkValue });
     }
-    payloads.push({ ...payloadBase, currency: input.method.asset });
   }
 
   let lastError: unknown = null;
@@ -329,11 +349,14 @@ export const createOxaPayStaticAddress = async (input: {
       };
     } catch (error) {
       lastError = error;
+      if (isRateLimitedError(error)) {
+        throw error;
+      }
     }
   }
 
   const legacyPayloads: Record<string, unknown>[] = [];
-  const legacyEmail = input.email?.trim();
+  const legacyEmail = input.email?.trim() || undefined;
   for (const networkValue of networkCandidates) {
     const baseLegacy = {
       network: networkValue,
@@ -341,17 +364,10 @@ export const createOxaPayStaticAddress = async (input: {
       orderId,
       description
     };
-    legacyPayloads.push({
-      ...baseLegacy,
-      callbackUrl
-    });
     if (legacyEmail) {
-      legacyPayloads.push({
-        ...baseLegacy,
-        callbackUrl,
-        email: legacyEmail
-      });
+      legacyPayloads.push({ ...baseLegacy, callbackUrl, email: legacyEmail });
     }
+    legacyPayloads.push({ ...baseLegacy, callbackUrl });
     legacyPayloads.push(baseLegacy);
   }
 
@@ -373,6 +389,9 @@ export const createOxaPayStaticAddress = async (input: {
       };
     } catch (error) {
       lastError = error;
+      if (isRateLimitedError(error)) {
+        throw error;
+      }
     }
   }
 
