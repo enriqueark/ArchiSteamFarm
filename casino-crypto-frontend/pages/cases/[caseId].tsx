@@ -68,6 +68,7 @@ const REEL_STRIDE = REEL_ITEM_WIDTH + REEL_ITEM_GAP;
 const REEL_TRACK_LENGTH = 180;
 const REEL_START_INDEX = 8;
 const INITIAL_REEL_PHASE = 0;
+const BALANCE_PAYOUT_REVEAL_DELAY_MS = 350;
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 const getSpinEase = (progress: number): number => 1 - Math.pow(1 - clamp(progress, 0, 1), 4.25);
@@ -84,6 +85,11 @@ const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number
 };
 
 const getPhaseForIndex = (index: number, pointerPx: number): number => index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
+
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
 function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClose: () => void }) {
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
@@ -387,6 +393,8 @@ export default function CaseDetailPage() {
       balanceSyncStarted = true;
       const result = await openCase(caseDetails.id);
       await runOpeningAnimation(result.item);
+      // Keep payout sync after winner is visibly revealed.
+      await wait(BALANCE_PAYOUT_REVEAL_DELAY_MS);
       syncCaseOpenBalance({ type: "end", payoutAtomic: result.payoutAtomic });
       balanceSyncCompleted = true;
       setLastOpening(result);
