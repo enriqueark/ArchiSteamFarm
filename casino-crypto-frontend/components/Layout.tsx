@@ -448,10 +448,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       animRef.current = requestAnimationFrame(animate);
 
       prevBalanceRef.current = currentBal;
+      return;
     }
     prevBalanceRef.current = currentBal;
-    setDisplayBalance(currentBal);
-  }, [primaryWallet, triggerBalanceFlash]);
+    if (displayBalance === null) {
+      setDisplayBalance(currentBal);
+    }
+  }, [displayBalance, primaryWallet, triggerBalanceFlash]);
   useEffect(() => {
     return () => {
       clearBalanceFlash();
