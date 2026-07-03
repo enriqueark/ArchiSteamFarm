@@ -24,6 +24,7 @@ const sideLinks = [
 
 const COIN_ICON_SRC = "/assets/69a77514d4212f89fc13bd58f30d7dcf.png";
 type BalanceTrend = "up" | "down" | null;
+const BALANCE_TREND_RESET_MS = 1200;
 
 function formatAtomic(val: string, decimals = 8): string {
   const n = Number(val) / Math.pow(10, decimals);
@@ -134,21 +135,34 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     setTargetBalance(nextBalance);
     const previous = previousBalanceRef.current;
     if (previous !== null) {
-      const delta = nextBalance - previous;
-      if (Math.abs(delta) > 0.0000001) {
-        setBalanceTrend(delta > 0 ? "up" : "down");
+      // Trigger trend pulse only when the visible 2-decimal value changes.
+      // This avoids tiny provider-side precision jitter keeping the green state alive.
+      const deltaCents = Math.round(nextBalance * 100) - Math.round(previous * 100);
+      if (deltaCents !== 0) {
+        setBalanceTrend(deltaCents > 0 ? "up" : "down");
         setTrendPulse((prev) => prev + 1);
-        if (trendResetTimerRef.current !== null) {
-          clearTimeout(trendResetTimerRef.current);
-        }
-        trendResetTimerRef.current = setTimeout(() => {
-          setBalanceTrend(null);
-          trendResetTimerRef.current = null;
-        }, 1100);
       }
     }
     previousBalanceRef.current = nextBalance;
   }, [primaryWallet?.balanceAtomic, primaryWallet?.balanceCoins]);
+  useEffect(() => {
+    if (!balanceTrend) {
+      return;
+    }
+    if (trendResetTimerRef.current !== null) {
+      clearTimeout(trendResetTimerRef.current);
+    }
+    trendResetTimerRef.current = setTimeout(() => {
+      setBalanceTrend(null);
+      trendResetTimerRef.current = null;
+    }, BALANCE_TREND_RESET_MS);
+    return () => {
+      if (trendResetTimerRef.current !== null) {
+        clearTimeout(trendResetTimerRef.current);
+        trendResetTimerRef.current = null;
+      }
+    };
+  }, [balanceTrend, trendPulse]);
   useEffect(() => {
     if (balanceAnimationFrameRef.current !== null) {
       cancelAnimationFrame(balanceAnimationFrameRef.current);
