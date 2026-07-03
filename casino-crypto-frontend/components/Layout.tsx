@@ -133,6 +133,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [displayBalance, setDisplayBalance] = useState<string | null>(null);
   const [forcedBalance, setForcedBalance] = useState<string | null>(null);
   const animRef = useRef<number | null>(null);
+  const balanceFlashTimeoutRef = useRef<number | null>(null);
   const walletRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const balanceFreezeRef = useRef(false);
   const queuedWalletsRef = useRef<Wallet[] | null>(null);
@@ -393,9 +394,18 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     if (prev !== null && prev !== currentBal) {
       const prevNum = parseFloat(prev.replace(/,/g, ""));
       const curNum = parseFloat(currentBal.replace(/,/g, ""));
-      if (curNum > prevNum) setBalanceFlash("up");
-      else if (curNum < prevNum) setBalanceFlash("down");
-      const t = setTimeout(() => setBalanceFlash(null), 1500);
+      const deltaCents = Math.round(curNum * 100) - Math.round(prevNum * 100);
+      if (deltaCents > 0) setBalanceFlash("up");
+      else if (deltaCents < 0) setBalanceFlash("down");
+      if (deltaCents !== 0) {
+        if (balanceFlashTimeoutRef.current !== null) {
+          window.clearTimeout(balanceFlashTimeoutRef.current);
+        }
+        balanceFlashTimeoutRef.current = window.setTimeout(() => {
+          setBalanceFlash(null);
+          balanceFlashTimeoutRef.current = null;
+        }, 1500);
+      }
 
       if (animRef.current) cancelAnimationFrame(animRef.current);
       const duration = 1400;
@@ -412,11 +422,22 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       animRef.current = requestAnimationFrame(animate);
 
       prevBalanceRef.current = currentBal;
-      return () => { clearTimeout(t); if (animRef.current) cancelAnimationFrame(animRef.current); };
     }
     prevBalanceRef.current = currentBal;
     setDisplayBalance(currentBal);
   }, [primaryWallet]);
+  useEffect(() => {
+    return () => {
+      if (balanceFlashTimeoutRef.current !== null) {
+        window.clearTimeout(balanceFlashTimeoutRef.current);
+        balanceFlashTimeoutRef.current = null;
+      }
+      if (animRef.current !== null) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+    };
+  }, []);
   const displayUsername = (userEmail?.split("@")[0] || cachedUsername || "").slice(0, 20).trim();
   const avatarInitial = getInitialFromLabel(displayUsername);
   const visibleBalance = forcedBalance ?? displayBalance ?? formatCoins(primaryWallet?.balanceCoins, primaryWallet?.balanceAtomic);
