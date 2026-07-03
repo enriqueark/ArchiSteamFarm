@@ -138,6 +138,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const balanceFreezeRef = useRef(false);
   const queuedWalletsRef = useRef<Wallet[] | null>(null);
   const releaseBalanceTimeoutRef = useRef<number | null>(null);
+  const walletsRef = useRef<Wallet[]>(wallets);
+  const displayBalanceValueRef = useRef<string | null>(displayBalance);
+  const forcedBalanceValueRef = useRef<string | null>(forcedBalance);
   const [cachedUsername, setCachedUsername] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("lastKnownUsername");
@@ -169,6 +172,40 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     return task;
   }, []);
 
+  const clearBalanceFlash = useCallback(() => {
+    if (balanceFlashTimeoutRef.current !== null) {
+      window.clearTimeout(balanceFlashTimeoutRef.current);
+      balanceFlashTimeoutRef.current = null;
+    }
+    setBalanceFlash(null);
+  }, []);
+
+  const triggerBalanceFlash = useCallback(
+    (direction: "up" | "down", durationMs = 1500) => {
+      setBalanceFlash(direction);
+      if (balanceFlashTimeoutRef.current !== null) {
+        window.clearTimeout(balanceFlashTimeoutRef.current);
+      }
+      balanceFlashTimeoutRef.current = window.setTimeout(() => {
+        setBalanceFlash(null);
+        balanceFlashTimeoutRef.current = null;
+      }, durationMs);
+    },
+    []
+  );
+
+  useEffect(() => {
+    walletsRef.current = wallets;
+  }, [wallets]);
+
+  useEffect(() => {
+    displayBalanceValueRef.current = displayBalance;
+  }, [displayBalance]);
+
+  useEffect(() => {
+    forcedBalanceValueRef.current = forcedBalance;
+  }, [forcedBalance]);
+
   useEffect(() => {
     void refreshWallets();
     const interval = window.setInterval(() => {
@@ -198,9 +235,9 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
 
   useEffect(() => {
     const getBaseVisibleBalance = () => {
-      if (forcedBalance) return forcedBalance;
-      if (displayBalance) return displayBalance;
-      const wallet = pickPrimaryWallet(wallets);
+      if (forcedBalanceValueRef.current) return forcedBalanceValueRef.current;
+      if (displayBalanceValueRef.current) return displayBalanceValueRef.current;
+      const wallet = pickPrimaryWallet(walletsRef.current);
       return formatCoins(wallet?.balanceCoins, wallet?.balanceAtomic);
     };
 
@@ -223,11 +260,10 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         const nextFormatted = formatCoinsFixed(next);
         balanceFreezeRef.current = true;
         queuedWalletsRef.current = null;
-        setBalanceFlash("down");
+        triggerBalanceFlash("down", 900);
         setForcedBalance(nextFormatted);
         setDisplayBalance(nextFormatted);
         prevBalanceRef.current = nextFormatted;
-        window.setTimeout(() => setBalanceFlash(null), 900);
         return;
       }
 
@@ -236,7 +272,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
         const base = parseFormattedCoins(getBaseVisibleBalance());
         const next = Math.max(0, base + atomicToCoinsNumber(detail.payoutAtomic));
         const nextFormatted = formatCoinsFixed(next);
-        setBalanceFlash("up");
+        triggerBalanceFlash("up", 1200);
         setForcedBalance(nextFormatted);
         setDisplayBalance(nextFormatted);
         prevBalanceRef.current = nextFormatted;
@@ -250,7 +286,6 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           } else {
             void refreshWallets();
           }
-          setBalanceFlash(null);
           releaseBalanceTimeoutRef.current = null;
         }, 300);
         return;
@@ -260,7 +295,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       balanceFreezeRef.current = false;
       queuedWalletsRef.current = null;
       setForcedBalance(null);
-      setBalanceFlash(null);
+      clearBalanceFlash();
       void refreshWallets();
     };
 
@@ -269,7 +304,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       window.removeEventListener(CASE_OPEN_BALANCE_SYNC_EVENT, handler);
       clearReleaseTimer();
     };
-  }, [displayBalance, forcedBalance, refreshWallets, wallets]);
+  }, [clearBalanceFlash, refreshWallets, triggerBalanceFlash]);
 
   const refreshLiveTicker = useCallback(async () => {
     try {
@@ -395,17 +430,8 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
       const prevNum = parseFloat(prev.replace(/,/g, ""));
       const curNum = parseFloat(currentBal.replace(/,/g, ""));
       const deltaCents = Math.round(curNum * 100) - Math.round(prevNum * 100);
-      if (deltaCents > 0) setBalanceFlash("up");
-      else if (deltaCents < 0) setBalanceFlash("down");
-      if (deltaCents !== 0) {
-        if (balanceFlashTimeoutRef.current !== null) {
-          window.clearTimeout(balanceFlashTimeoutRef.current);
-        }
-        balanceFlashTimeoutRef.current = window.setTimeout(() => {
-          setBalanceFlash(null);
-          balanceFlashTimeoutRef.current = null;
-        }, 1500);
-      }
+      if (deltaCents > 0) triggerBalanceFlash("up", 1500);
+      else if (deltaCents < 0) triggerBalanceFlash("down", 1500);
 
       if (animRef.current) cancelAnimationFrame(animRef.current);
       const duration = 1400;
@@ -425,19 +451,16 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
     }
     prevBalanceRef.current = currentBal;
     setDisplayBalance(currentBal);
-  }, [primaryWallet]);
+  }, [primaryWallet, triggerBalanceFlash]);
   useEffect(() => {
     return () => {
-      if (balanceFlashTimeoutRef.current !== null) {
-        window.clearTimeout(balanceFlashTimeoutRef.current);
-        balanceFlashTimeoutRef.current = null;
-      }
+      clearBalanceFlash();
       if (animRef.current !== null) {
         cancelAnimationFrame(animRef.current);
         animRef.current = null;
       }
     };
-  }, []);
+  }, [clearBalanceFlash]);
   const displayUsername = (userEmail?.split("@")[0] || cachedUsername || "").slice(0, 20).trim();
   const avatarInitial = getInitialFromLabel(displayUsername);
   const visibleBalance = forcedBalance ?? displayBalance ?? formatCoins(primaryWallet?.balanceCoins, primaryWallet?.balanceAtomic);
