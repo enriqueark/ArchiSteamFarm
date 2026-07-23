@@ -125,14 +125,22 @@ const deriveCaseTags = (title: string, description?: string | null): CaseCategor
 };
 
 export const computeVolatilityFromItems = (
-  items: Array<{ valueAtomic: string; dropRate: string }>
+  items: Array<{ valueAtomic: string; dropRate: string; isActive?: boolean }>
 ): { volatilityIndex: number; volatilityTier: "L" | "M" | "H" | "I" } => {
   const valid = items
     .map((item) => ({
       value: Number(item.valueAtomic),
-      rate: Number(item.dropRate)
+      rate: Number(item.dropRate),
+      isActive: item.isActive !== false
     }))
-    .filter((item) => Number.isFinite(item.value) && item.value > 0 && Number.isFinite(item.rate) && item.rate > 0);
+    .filter(
+      (item) =>
+        item.isActive &&
+        Number.isFinite(item.value) &&
+        item.value > 0 &&
+        Number.isFinite(item.rate) &&
+        item.rate > 0
+    );
 
   if (!valid.length) {
     return { volatilityIndex: 0, volatilityTier: "L" };
@@ -144,10 +152,22 @@ export const computeVolatilityFromItems = (
   const variance = normalized.reduce((acc, item) => acc + item.p * Math.pow(item.value - mean, 2), 0);
   const std = Math.sqrt(variance);
   const coefficient = mean <= 0 ? 0 : std / mean;
-  const volatilityIndex = Math.max(0, Math.min(99, Math.round(coefficient * 100)));
+
+  const maxValue = normalized.reduce((max, item) => Math.max(max, item.value), 0);
+  const maxValueProbability = normalized
+    .filter((item) => item.value === maxValue)
+    .reduce((acc, item) => acc + item.p, 0);
+  const jackpotRatio = mean <= 0 ? 1 : maxValue / mean;
+  const rarityFactor = 1 - Math.max(0, Math.min(1, maxValueProbability));
+
+  const volatilityScore =
+    coefficient * 70 +
+    Math.max(0, jackpotRatio - 1) * 8 +
+    rarityFactor * 22;
+  const volatilityIndex = Math.max(0, Math.min(99, Math.round(volatilityScore)));
 
   const volatilityTier: "L" | "M" | "H" | "I" =
-    volatilityIndex < 20 ? "L" : volatilityIndex < 40 ? "M" : volatilityIndex < 65 ? "H" : "I";
+    volatilityIndex < 25 ? "L" : volatilityIndex < 50 ? "M" : volatilityIndex < 75 ? "H" : "I";
 
   return { volatilityIndex, volatilityTier };
 };

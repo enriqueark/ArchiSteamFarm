@@ -60,7 +60,7 @@ const isInPriceRange = (atomic: string, rangeKey: string): boolean => {
 function VolatilityBar({ tier }: { tier: "L" | "M" | "H" | "I" }) {
   return (
     <div className="mt-2">
-      <div className="mb-1 grid grid-cols-4 text-center text-[10px] font-semibold text-[#9cb0c7]">
+      <div className="mb-1 grid grid-cols-4 text-center text-[10px] font-semibold text-[#a7a7a7]">
         {tierOrder.map((label) => (
           <span key={label}>{label}</span>
         ))}
@@ -141,20 +141,20 @@ export default function CasesPage() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9db3cc]">Search</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a7a7a7]">Search</p>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Enter keyword"
-            className="h-[42px] w-full rounded-[10px] border border-[#1f3450] bg-[#07131f] px-4 text-sm text-white outline-none transition-colors focus:border-[#325a84]"
+            className="h-[42px] w-full rounded-[10px] border border-[#2b2b2b] bg-[#111111] px-4 text-sm text-white outline-none transition-colors focus:border-[#555555]"
           />
         </div>
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9db3cc]">Price Range</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a7a7a7]">Price Range</p>
           <select
             value={priceRange}
             onChange={(event) => setPriceRange(event.target.value as (typeof PRICE_RANGE_OPTIONS)[number]["key"])}
-            className="h-[42px] w-full rounded-[10px] border border-[#1f3450] bg-[#07131f] px-3 text-sm font-semibold text-white outline-none"
+            className="h-[42px] w-full rounded-[10px] border border-[#2b2b2b] bg-[#111111] px-3 text-sm font-semibold text-white outline-none"
           >
             {PRICE_RANGE_OPTIONS.map((option) => (
               <option key={option.key} value={option.key}>
@@ -164,11 +164,11 @@ export default function CasesPage() {
           </select>
         </div>
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9db3cc]">Sort By</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a7a7a7]">Sort By</p>
           <select
             value={sortBy}
             onChange={(event) => setSortBy(event.target.value as (typeof SORT_OPTIONS)[number]["key"])}
-            className="h-[42px] w-full rounded-[10px] border border-[#1f3450] bg-[#07131f] px-3 text-sm font-semibold text-white outline-none"
+            className="h-[42px] w-full rounded-[10px] border border-[#2b2b2b] bg-[#111111] px-3 text-sm font-semibold text-white outline-none"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.key} value={option.key}>
@@ -190,7 +190,7 @@ export default function CasesPage() {
               className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.04em] transition-colors ${
                 active
                   ? "border-[#f5c14f] bg-[#f5c14f]/10 text-[#ffd56f]"
-                  : "border-[#1f3450] bg-[#07131f] text-[#a4b7ce] hover:border-[#2e4f73]"
+                  : "border-[#2b2b2b] bg-[#121212] text-[#b0b0b0] hover:border-[#4a4a4a]"
               }`}
             >
               {tag}
@@ -200,21 +200,21 @@ export default function CasesPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-[12px] border border-[#1f3450] bg-[#07131f] p-5 text-sm text-[#9db3cc]">Loading cases...</div>
+        <div className="rounded-[12px] border border-[#2b2b2b] bg-[#121212] p-5 text-sm text-[#a7a7a7]">Loading cases...</div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {visibleCases.map((c) => (
             <Link
               key={c.id}
               href={`/cases/${encodeURIComponent(c.id)}`}
-              className="group overflow-hidden rounded-[12px] border border-[#1c324b] bg-[#0a1726] text-left transition-all hover:border-[#2e4f73]"
+              className="group overflow-hidden rounded-[12px] border border-[#2b2b2b] bg-[#141414] text-left transition-all hover:border-[#4a4a4a]"
             >
-              <div className="relative flex h-[116px] items-center justify-center bg-gradient-to-b from-[#0f2740] to-[#0a1726]">
+              <div className="relative flex h-[116px] items-center justify-center bg-gradient-to-b from-[#1d1d1d] to-[#141414]">
                 {c.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.logoUrl} alt={c.title} className="h-[96px] w-[96px] object-contain" />
                 ) : (
-                  <span className="text-xs text-[#5f7997]">No image</span>
+                  <span className="text-xs text-[#777]">No image</span>
                 )}
               </div>
               <div className="px-3 pb-3 pt-2">
@@ -231,7 +231,7 @@ export default function CasesPage() {
       )}
 
       {!loading && visibleCases.length === 0 ? (
-        <div className="rounded-[12px] border border-[#1f3450] bg-[#07131f] p-4 text-sm text-[#9db3cc]">
+        <div className="rounded-[12px] border border-[#2b2b2b] bg-[#121212] p-4 text-sm text-[#a7a7a7]">
           No cases match the selected filters.
         </div>
       ) : null}

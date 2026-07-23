@@ -153,7 +153,8 @@ export default function AdminCasesPage() {
       computeVolatilityFromItems(
         form.items.map((item) => ({
           valueAtomic: toAtomic(item.valueCoins),
-          dropRate: item.dropRate
+          dropRate: item.dropRate,
+          isActive: item.isActive
         }))
       ),
     [form.items]
