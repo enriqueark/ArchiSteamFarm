@@ -263,6 +263,15 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             <label>Price (coins)</label><input id="casePriceCoins" type="number" step="0.01" min="0.01" style="width:120px" />
             <label>Logo URL</label><input id="caseLogoUrl" style="min-width:220px" />
           </div>
+          <div class="row" style="margin-bottom:6px; align-items:center; flex-wrap:wrap;">
+            <input id="caseLogoUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" style="display:none;" />
+            <button id="caseLogoUploadBtn" type="button">Upload PNG/JPG</button>
+            <button id="caseLogoClearBtn" type="button" class="danger">Remove image</button>
+            <span class="mono muted">Max 2MB. Stored directly in case logo field.</span>
+          </div>
+          <div style="margin-bottom:6px;">
+            <img id="caseLogoPreview" alt="Case logo preview" style="display:none; width:92px; height:92px; object-fit:contain; border:1px solid #2a2f3a; border-radius:8px; background:#0f131a; padding:6px;" />
+          </div>
           <div class="row" style="margin-bottom:6px;">
             <label style="display:flex;align-items:center;gap:6px;"><input id="caseIsActive" type="checkbox" checked />Active</label>
             <button id="caseNewBtn">New</button>
@@ -443,6 +452,10 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const caseTitle = document.getElementById("caseTitle");
       const casePriceCoins = document.getElementById("casePriceCoins");
       const caseLogoUrl = document.getElementById("caseLogoUrl");
+      const caseLogoUpload = document.getElementById("caseLogoUpload");
+      const caseLogoUploadBtn = document.getElementById("caseLogoUploadBtn");
+      const caseLogoClearBtn = document.getElementById("caseLogoClearBtn");
+      const caseLogoPreview = document.getElementById("caseLogoPreview");
       const caseDescription = document.getElementById("caseDescription");
       const caseIsActive = document.getElementById("caseIsActive");
       const caseVolatility = document.getElementById("caseVolatility");
@@ -460,6 +473,8 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const caseRtpHint = document.getElementById("caseRtpHint");
       const IMPORT_TIMEOUT_MS = 120000;
       const TARGET_CASE_RTP = 0.97;
+      const CASE_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+      const CASE_LOGO_ALLOWED_TYPES = new Set(["image/png", "image/jpeg"]);
 
       const coinsToAtomicString = (coinsValue) => {
         const value = Number(coinsValue);
@@ -471,6 +486,17 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
       const setEditorModeLabel = (text) => {
         caseMode.textContent = text;
+      };
+
+      const updateCaseLogoPreview = (url) => {
+        const value = String(url || "").trim();
+        if (!value) {
+          caseLogoPreview.style.display = "none";
+          caseLogoPreview.removeAttribute("src");
+          return;
+        }
+        caseLogoPreview.src = value;
+        caseLogoPreview.style.display = "block";
       };
 
       const deriveVolatilityFromDraft = () => {
@@ -600,6 +626,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         caseTitle.value = casesState.draft.title;
         casePriceCoins.value = casesState.draft.priceCoins;
         caseLogoUrl.value = casesState.draft.logoUrl;
+        updateCaseLogoPreview(casesState.draft.logoUrl);
         caseDescription.value = casesState.draft.description;
         caseIsActive.checked = casesState.draft.isActive;
       };
@@ -609,6 +636,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         casesState.draft.title = caseTitle.value.trim();
         casesState.draft.priceCoins = casePriceCoins.value.trim();
         casesState.draft.logoUrl = caseLogoUrl.value.trim();
+        updateCaseLogoPreview(casesState.draft.logoUrl);
         casesState.draft.description = caseDescription.value.trim();
         casesState.draft.isActive = !!caseIsActive.checked;
       };
@@ -740,6 +768,52 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           "Suggested price applied for 97% RTP: " +
           suggested.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
           " COINS.";
+      });
+      caseLogoUploadBtn.addEventListener("click", () => {
+        caseLogoUpload.click();
+      });
+      caseLogoClearBtn.addEventListener("click", () => {
+        caseLogoUrl.value = "";
+        casesState.draft.logoUrl = "";
+        updateCaseLogoPreview("");
+      });
+      caseLogoUrl.addEventListener("input", () => {
+        casesState.draft.logoUrl = caseLogoUrl.value.trim();
+        updateCaseLogoPreview(casesState.draft.logoUrl);
+      });
+      caseLogoUpload.addEventListener("change", () => {
+        const file = caseLogoUpload.files && caseLogoUpload.files[0] ? caseLogoUpload.files[0] : null;
+        caseLogoUpload.value = "";
+        if (!file) return;
+        if (!CASE_LOGO_ALLOWED_TYPES.has(file.type)) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Only PNG or JPG images are allowed.";
+          return;
+        }
+        if (file.size > CASE_LOGO_MAX_BYTES) {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Image too large. Max size is 2MB.";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === "string" ? reader.result : "";
+          if (!result) {
+            casesStatus.className = "mono err";
+            casesStatus.textContent = "Unable to read image file.";
+            return;
+          }
+          caseLogoUrl.value = result;
+          casesState.draft.logoUrl = result;
+          updateCaseLogoPreview(result);
+          casesStatus.className = "mono ok";
+          casesStatus.textContent = "Image uploaded. Save case to persist.";
+        };
+        reader.onerror = () => {
+          casesStatus.className = "mono err";
+          casesStatus.textContent = "Unable to read image file.";
+        };
+        reader.readAsDataURL(file);
       });
       casesSearchSkinsBtn.addEventListener("click", async () => {
         try {
