@@ -267,7 +267,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             <input id="caseLogoUpload" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" style="display:none;" />
             <button id="caseLogoUploadBtn" type="button">Upload PNG/JPG</button>
             <button id="caseLogoClearBtn" type="button" class="danger">Remove image</button>
-            <span class="mono muted">Max 2MB. Stored directly in case logo field.</span>
+            <span class="mono muted">Max 4MB source. Auto-compressed and stored in logo field.</span>
           </div>
           <div style="margin-bottom:6px;">
             <img id="caseLogoPreview" alt="Case logo preview" style="display:none; width:92px; height:92px; object-fit:contain; border:1px solid #2a2f3a; border-radius:8px; background:#0f131a; padding:6px;" />
@@ -473,8 +473,10 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const caseRtpHint = document.getElementById("caseRtpHint");
       const IMPORT_TIMEOUT_MS = 120000;
       const TARGET_CASE_RTP = 0.97;
-      const CASE_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+      const CASE_LOGO_MAX_BYTES = 4 * 1024 * 1024;
       const CASE_LOGO_ALLOWED_TYPES = new Set(["image/png", "image/jpeg"]);
+      const CASE_LOGO_MAX_DIMENSION = 420;
+      const CASE_LOGO_MAX_DATA_URL_LENGTH = 380000;
 
       const coinsToAtomicString = (coinsValue) => {
         const value = Number(coinsValue);
@@ -497,6 +499,64 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
         caseLogoPreview.src = value;
         caseLogoPreview.style.display = "block";
+      };
+
+      const readFileAsDataUrl = (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result);
+              return;
+            }
+            reject(new Error("Unable to read image file."));
+          };
+          reader.onerror = () => reject(new Error("Unable to read image file."));
+          reader.readAsDataURL(file);
+        });
+
+      const loadImageFromDataUrl = (src) =>
+        new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("Unable to process image."));
+          image.src = src;
+        });
+
+      const normalizeCaseLogoDataUrl = async (file) => {
+        const originalDataUrl = await readFileAsDataUrl(file);
+        const image = await loadImageFromDataUrl(originalDataUrl);
+        const sourceWidth = Number(image.naturalWidth || image.width || 0);
+        const sourceHeight = Number(image.naturalHeight || image.height || 0);
+        if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
+          throw new Error("Invalid image dimensions.");
+        }
+        const scale = Math.min(1, CASE_LOGO_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Unable to process image.");
+        }
+        ctx.drawImage(image, 0, 0, width, height);
+
+        let result = canvas.toDataURL("image/png");
+        if (result.length > CASE_LOGO_MAX_DATA_URL_LENGTH) {
+          let quality = 0.92;
+          result = canvas.toDataURL("image/jpeg", quality);
+          while (result.length > CASE_LOGO_MAX_DATA_URL_LENGTH && quality > 0.45) {
+            quality -= 0.07;
+            result = canvas.toDataURL("image/jpeg", quality);
+          }
+        }
+        if (result.length > CASE_LOGO_MAX_DATA_URL_LENGTH) {
+          throw new Error("Image is still too large after compression. Use a smaller image.");
+        }
+        return result;
       };
 
       const deriveVolatilityFromDraft = () => {
@@ -792,28 +852,22 @@ const ADMIN_PANEL_HTML = `<!doctype html>
         }
         if (file.size > CASE_LOGO_MAX_BYTES) {
           casesStatus.className = "mono err";
-          casesStatus.textContent = "Image too large. Max size is 2MB.";
+          casesStatus.textContent = "Image too large. Max source file size is 4MB.";
           return;
         }
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = typeof reader.result === "string" ? reader.result : "";
-          if (!result) {
+        (async () => {
+          try {
+            const result = await normalizeCaseLogoDataUrl(file);
+            caseLogoUrl.value = result;
+            casesState.draft.logoUrl = result;
+            updateCaseLogoPreview(result);
+            casesStatus.className = "mono ok";
+            casesStatus.textContent = "Image uploaded and optimized. Save case to persist.";
+          } catch (error) {
             casesStatus.className = "mono err";
-            casesStatus.textContent = "Unable to read image file.";
-            return;
+            casesStatus.textContent = error && error.message ? error.message : "Unable to process image file.";
           }
-          caseLogoUrl.value = result;
-          casesState.draft.logoUrl = result;
-          updateCaseLogoPreview(result);
-          casesStatus.className = "mono ok";
-          casesStatus.textContent = "Image uploaded. Save case to persist.";
-        };
-        reader.onerror = () => {
-          casesStatus.className = "mono err";
-          casesStatus.textContent = "Unable to read image file.";
-        };
-        reader.readAsDataURL(file);
+        })();
       });
       casesSearchSkinsBtn.addEventListener("click", async () => {
         try {
