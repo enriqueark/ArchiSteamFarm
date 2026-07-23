@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { getCaseDetails, getCases, getMe } from "@/lib/api";
 import {
@@ -81,8 +81,27 @@ const volColorByTier: Record<"L" | "M" | "H" | "I", string> = {
   I: "#ef4444"
 };
 
+const CASE_LOGO_ALLOWED_TYPES = new Set(["image/png", "image/jpeg"]);
+const CASE_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        resolve(result);
+        return;
+      }
+      reject(new Error("Unable to read file."));
+    };
+    reader.onerror = () => reject(new Error("Unable to read file."));
+    reader.readAsDataURL(file);
+  });
+
 export default function AdminCasesPage() {
   const toast = useToast();
+  const logoUploadInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -202,6 +221,29 @@ export default function AdminCasesPage() {
     setForm(blankForm());
   };
 
+  const handleUploadLogoFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!CASE_LOGO_ALLOWED_TYPES.has(file.type)) {
+      toast.showError("Only PNG or JPG images are allowed.");
+      return;
+    }
+    if (file.size > CASE_LOGO_MAX_BYTES) {
+      toast.showError("Image is too large. Max size is 2MB.");
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setForm((prev) => ({ ...prev, logoUrl: dataUrl }));
+      toast.showSuccess("Case image uploaded successfully.");
+    } catch (error) {
+      toast.showError(error instanceof Error ? error.message : "Failed to upload image.");
+    }
+  };
+
   if (loading) {
     return <div className="rounded-[12px] border border-[#1f3450] bg-[#07131f] p-4 text-sm text-[#9db3cc]">Loading admin panel...</div>;
   }
@@ -269,9 +311,44 @@ export default function AdminCasesPage() {
             <input
               value={form.logoUrl}
               onChange={(event) => setForm((prev) => ({ ...prev, logoUrl: event.target.value }))}
-              placeholder="Image URL"
+              placeholder="Image URL (or upload PNG/JPG below)"
               className="h-[40px] w-full rounded-[8px] border border-[#24405e] bg-[#081321] px-3 text-sm text-white outline-none"
             />
+            <input
+              ref={logoUploadInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+              className="hidden"
+              onChange={(event) => {
+                void handleUploadLogoFile(event);
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => logoUploadInputRef.current?.click()}
+                className="rounded-[8px] border border-[#35506f] bg-[#102034] px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                Upload PNG/JPG
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, logoUrl: "" }))}
+                className="rounded-[8px] border border-[#5c2b35] bg-[#2a1118] px-3 py-1.5 text-xs font-semibold text-[#ff9da8]"
+              >
+                Remove image
+              </button>
+            </div>
+            {form.logoUrl ? (
+              <div className="rounded-[8px] border border-[#24405e] bg-[#081321] p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.logoUrl}
+                  alt="Case logo preview"
+                  className="h-[90px] w-[90px] rounded-[8px] object-contain"
+                />
+              </div>
+            ) : null}
             <input
               value={form.priceCoins}
               onChange={(event) => setForm((prev) => ({ ...prev, priceCoins: event.target.value }))}
