@@ -209,6 +209,8 @@ export default function CaseDetailPage() {
   const [laneWidth, setLaneWidth] = useState(860);
   const [spinPhase, setSpinPhase] = useState(INITIAL_REEL_PHASE);
   const [reelTrackSlots, setReelTrackSlots] = useState<Array<{ repeatedIndex: number; item: CaseItem }>>([]);
+  const [lockedPointerPx, setLockedPointerPx] = useState<number | null>(null);
+  const [lockedStopIndex, setLockedStopIndex] = useState<number | null>(null);
   const [winnerReveal, setWinnerReveal] = useState<{ index: number; item: CaseItem } | null>(null);
   const [caseDetails, setCaseDetails] = useState<CaseMarketplaceDetails | null>(null);
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
@@ -302,39 +304,6 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
-  const resolveRenderedIndexAtPointer = useCallback((): number | null => {
-    const lane = laneRef.current;
-    if (!lane) return null;
-    const laneRect = lane.getBoundingClientRect();
-    if (!Number.isFinite(laneRect.left) || laneRect.width <= 0) return null;
-    const pointerX = laneRect.left + laneRect.width * 0.5;
-    const rendered = lane.querySelectorAll<HTMLElement>("[data-strip-index]");
-    if (!rendered.length) return null;
-
-    let nearestIndex: number | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    for (const node of Array.from(rendered)) {
-      const parsedIndex = Number(node.dataset.stripIndex ?? "");
-      if (!Number.isFinite(parsedIndex)) continue;
-      const rect = node.getBoundingClientRect();
-      if (pointerX >= rect.left && pointerX <= rect.right) {
-        return parsedIndex;
-      }
-      const center = rect.left + rect.width / 2;
-      const distance = Math.abs(pointerX - center);
-      if (
-        distance < nearestDistance - 0.001 ||
-        (Math.abs(distance - nearestDistance) <= 0.001 && (nearestIndex === null || parsedIndex > nearestIndex))
-      ) {
-        nearestIndex = parsedIndex;
-        nearestDistance = distance;
-      }
-    }
-
-    return nearestIndex;
-  }, []);
-
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -343,27 +312,29 @@ export default function CaseDetailPage() {
     const initial = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     spinPhaseRef.current = initial;
     setSpinPhase(initial);
+    setLockedPointerPx(null);
+    setLockedStopIndex(null);
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = ((laneRef.current?.clientWidth && laneRef.current.clientWidth > 0
-    ? laneRef.current.clientWidth
-    : laneWidthRef.current) || laneWidth) * 0.5;
+  const pointerPx = laneWidth * 0.5;
+  const effectivePointerPx = lockedPointerPx ?? pointerPx;
   const activeStripIndex = useMemo(() => {
-    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
-  }, [pointerPx, reelTrackSlots.length, spinPhase]);
+    return getIndexAtPointer(spinPhase, effectivePointerPx, reelTrackSlots.length);
+  }, [effectivePointerPx, reelTrackSlots.length, spinPhase]);
 
   useEffect(() => {
     finalHighlightedIndexRef.current = activeStripIndex;
   }, [activeStripIndex]);
 
-  const highlightedStripIndex = !isReelSpinning && winnerReveal ? winnerReveal.index : activeStripIndex;
+  const highlightedStripIndex = !isReelSpinning ? (lockedStopIndex ?? winnerReveal?.index ?? activeStripIndex) : activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
       if (orderedItems.length === 0) return;
       clearRaf();
       setIsReelSpinning(true);
+      setLockedStopIndex(null);
       setWinnerReveal(null);
 
       let winnerLayout = orderedItems.findIndex((item) => item.id === winningItem.id);
@@ -381,6 +352,7 @@ export default function CaseDetailPage() {
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointer = getPointerPxNow();
+      setLockedPointerPx(pointer);
       const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
       const startPhase = getPhaseForIndex(startIndex, pointer);
       const endPhase = getPhaseForIndex(targetIndex, pointer);
@@ -433,12 +405,12 @@ export default function CaseDetailPage() {
       clearRaf();
       const frozenFinalPhase = spinPhaseRef.current;
       const resolvedFinalIndex =
-        resolveRenderedIndexAtPointer() ??
         finalHighlightedIndexRef.current ??
         getIndexAtPointer(frozenFinalPhase, pointer, track.length) ??
         targetIndex;
       const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
       finalHighlightedIndexRef.current = lockedFinalIndex;
+      setLockedStopIndex(lockedFinalIndex);
 
       if (track[lockedFinalIndex]?.id !== winnerItem.id) {
         track[lockedFinalIndex] = winnerItem;
@@ -447,7 +419,7 @@ export default function CaseDetailPage() {
       setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
+    [clearRaf, getPointerPxNow, orderedItems]
   );
 
   const openCaseNow = async () => {
