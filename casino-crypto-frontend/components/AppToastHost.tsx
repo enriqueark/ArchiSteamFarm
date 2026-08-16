@@ -131,6 +131,13 @@ const getMetrics = (variant: AppToastDetail["variant"]): ToastVariantMetrics =>
   variant === "error" ? ERROR_METRICS : SUCCESS_METRICS;
 
 const buildToastId = (): string => `toast-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const NOISY_RUNTIME_ERROR_PATTERNS = [/reading ['"]M_ID['"]/i];
+
+const isIgnoredRuntimeError = (message: string): boolean => {
+  const trimmed = message.trim();
+  if (!trimmed) return true;
+  return NOISY_RUNTIME_ERROR_PATTERNS.some((pattern) => pattern.test(trimmed));
+};
 
 export default function AppToastHost() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -286,12 +293,12 @@ export default function AppToastHost() {
           : typeof reason === "string"
             ? reason
             : "Unexpected error";
-      if (!message) return;
+      if (!message || isIgnoredRuntimeError(message)) return;
       showToast({ variant: "error", description: message });
     };
     const onWindowError = (event: ErrorEvent) => {
       const message = event.message?.trim();
-      if (!message || message === "Script error.") return;
+      if (!message || message === "Script error." || isIgnoredRuntimeError(message)) return;
       showToast({ variant: "error", description: message });
     };
     window.addEventListener("unhandledrejection", onUnhandledRejection);

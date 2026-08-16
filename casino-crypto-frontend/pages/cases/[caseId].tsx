@@ -399,12 +399,15 @@ export default function CaseDetailPage() {
 
       const resolvedFinalIndex =
         finalHighlightedIndexRef.current ?? getIndexAtPointer(spinPhaseRef.current, pointer, track.length) ?? targetIndex;
-      if (resolvedFinalIndex !== targetIndex && resolvedFinalIndex >= 0 && resolvedFinalIndex < track.length) {
-        track[resolvedFinalIndex] = winnerItem;
-        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-      }
+      const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
+      const lockedFinalPhase = getPhaseForIndex(lockedFinalIndex, pointer);
+      spinPhaseRef.current = lockedFinalPhase;
+      setSpinPhase(lockedFinalPhase);
+      finalHighlightedIndexRef.current = lockedFinalIndex;
 
-      setWinnerReveal({ index: resolvedFinalIndex, item: winnerItem });
+      track[lockedFinalIndex] = winnerItem;
+      setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
