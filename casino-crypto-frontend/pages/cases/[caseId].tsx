@@ -302,6 +302,39 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
+  const resolveRenderedIndexAtPointer = useCallback((): number | null => {
+    const lane = laneRef.current;
+    if (!lane) return null;
+    const laneRect = lane.getBoundingClientRect();
+    if (!Number.isFinite(laneRect.left) || laneRect.width <= 0) return null;
+    const pointerX = laneRect.left + laneRect.width * 0.5;
+    const rendered = lane.querySelectorAll<HTMLElement>("[data-strip-index]");
+    if (!rendered.length) return null;
+
+    let nearestIndex: number | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const node of Array.from(rendered)) {
+      const parsedIndex = Number(node.dataset.stripIndex ?? "");
+      if (!Number.isFinite(parsedIndex)) continue;
+      const rect = node.getBoundingClientRect();
+      if (pointerX >= rect.left && pointerX <= rect.right) {
+        return parsedIndex;
+      }
+      const center = rect.left + rect.width / 2;
+      const distance = Math.abs(pointerX - center);
+      if (
+        distance < nearestDistance - 0.001 ||
+        (Math.abs(distance - nearestDistance) <= 0.001 && (nearestIndex === null || parsedIndex > nearestIndex))
+      ) {
+        nearestIndex = parsedIndex;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearestIndex;
+  }, []);
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -392,12 +425,18 @@ export default function CaseDetailPage() {
 
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
 
       // Hard-freeze exactly on the final rendered frame, without post-stop phase correction.
       clearRaf();
       const frozenFinalPhase = spinPhaseRef.current;
       const resolvedFinalIndex =
-        finalHighlightedIndexRef.current ?? getIndexAtPointer(frozenFinalPhase, pointer, track.length) ?? targetIndex;
+        resolveRenderedIndexAtPointer() ??
+        finalHighlightedIndexRef.current ??
+        getIndexAtPointer(frozenFinalPhase, pointer, track.length) ??
+        targetIndex;
       const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
       finalHighlightedIndexRef.current = lockedFinalIndex;
 
@@ -408,7 +447,7 @@ export default function CaseDetailPage() {
       setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerPxNow, orderedItems, resolveRenderedIndexAtPointer]
   );
 
   const openCaseNow = async () => {
@@ -561,7 +600,7 @@ export default function CaseDetailPage() {
 
         <div className="rounded-[12px] border border-[#2d3139] bg-[#12161d] p-3">
           <div ref={laneRef} className="relative overflow-hidden rounded-[10px] border border-[#27303c] bg-gradient-to-b from-[#10161e] via-[#0f141b] to-[#0a0f15]">
-            <div className="pointer-events-none absolute inset-y-3 left-1/2 z-30 w-[2px] -translate-x-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[188px] w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-[0_0_16px_rgba(255,255,255,0.4)]" />
             <div className="relative h-[320px]">
               <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
@@ -571,6 +610,7 @@ export default function CaseDetailPage() {
                   return (
                     <div
                       key={`${repeatedIndex}-${item.id}`}
+                      data-strip-index={repeatedIndex}
                       className={`absolute top-1/2 z-10 box-border flex -translate-y-1/2 flex-col items-center justify-center ${
                         active || isWinnerSlot
                           ? "z-20 scale-[1.08] opacity-100 drop-shadow-[0_0_16px_rgba(245,193,79,0.55)]"
