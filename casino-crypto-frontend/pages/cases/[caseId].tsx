@@ -397,16 +397,17 @@ export default function CaseDetailPage() {
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
 
-      const resolvedFinalIndex =
-        finalHighlightedIndexRef.current ?? getIndexAtPointer(spinPhaseRef.current, pointer, track.length) ?? targetIndex;
+      // Hard-freeze exactly on the final rendered frame, without post-stop phase correction.
+      clearRaf();
+      const frozenFinalPhase = spinPhaseRef.current;
+      const resolvedFinalIndex = getIndexAtPointer(frozenFinalPhase, pointer, track.length) ?? targetIndex;
       const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
-      const lockedFinalPhase = getPhaseForIndex(lockedFinalIndex, pointer);
-      spinPhaseRef.current = lockedFinalPhase;
-      setSpinPhase(lockedFinalPhase);
       finalHighlightedIndexRef.current = lockedFinalIndex;
 
-      track[lockedFinalIndex] = winnerItem;
-      setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      if (track[lockedFinalIndex]?.id !== winnerItem.id) {
+        track[lockedFinalIndex] = winnerItem;
+        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
       setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
