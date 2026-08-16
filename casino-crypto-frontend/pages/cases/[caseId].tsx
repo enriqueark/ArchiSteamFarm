@@ -364,7 +364,6 @@ export default function CaseDetailPage() {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
           spinPhaseRef.current = to;
           setSpinPhase(to);
-          finalHighlightedIndexRef.current = getIndexAtPointer(to, pointer, track.length);
           return;
         }
         await new Promise<void>((resolve) => {
@@ -375,14 +374,12 @@ export default function CaseDetailPage() {
             const next = from + (to - from) * mix;
             spinPhaseRef.current = next;
             setSpinPhase(next);
-            finalHighlightedIndexRef.current = getIndexAtPointer(next, pointer, track.length);
             if (progress < 1) {
               rafRef.current = requestAnimationFrame(tick);
               return;
             }
             spinPhaseRef.current = to;
             setSpinPhase(to);
-            finalHighlightedIndexRef.current = getIndexAtPointer(to, pointer, track.length);
             rafRef.current = null;
             resolve();
           };
@@ -392,7 +389,6 @@ export default function CaseDetailPage() {
 
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
-      finalHighlightedIndexRef.current = getIndexAtPointer(startPhase, pointer, track.length);
 
       await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
       await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
@@ -400,7 +396,8 @@ export default function CaseDetailPage() {
       // Hard-freeze exactly on the final rendered frame, without post-stop phase correction.
       clearRaf();
       const frozenFinalPhase = spinPhaseRef.current;
-      const resolvedFinalIndex = getIndexAtPointer(frozenFinalPhase, pointer, track.length) ?? targetIndex;
+      const resolvedFinalIndex =
+        finalHighlightedIndexRef.current ?? getIndexAtPointer(frozenFinalPhase, pointer, track.length) ?? targetIndex;
       const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
       finalHighlightedIndexRef.current = lockedFinalIndex;
 
