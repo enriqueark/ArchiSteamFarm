@@ -80,7 +80,36 @@ const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
 
 const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number): number | null => {
   if (trackLength <= 0) return null;
-  const raw = (phase + pointerPx - REEL_ITEM_WIDTH / 2) / REEL_STRIDE;
+  const pointerTrackX = phase + pointerPx;
+  const approx = Math.floor(pointerTrackX / REEL_STRIDE);
+  const from = clamp(approx - 2, 0, trackLength - 1);
+  const to = clamp(approx + 2, 0, trackLength - 1);
+
+  let nearestIndex: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = from; index <= to; index += 1) {
+    const start = index * REEL_STRIDE;
+    const end = start + REEL_ITEM_WIDTH;
+    if (pointerTrackX >= start && pointerTrackX <= end) {
+      return index;
+    }
+    const center = start + REEL_ITEM_WIDTH / 2;
+    const distance = Math.abs(pointerTrackX - center);
+    if (
+      distance < nearestDistance - 0.001 ||
+      (Math.abs(distance - nearestDistance) <= 0.001 && (nearestIndex === null || index > nearestIndex))
+    ) {
+      nearestIndex = index;
+      nearestDistance = distance;
+    }
+  }
+
+  if (nearestIndex !== null) {
+    return nearestIndex;
+  }
+
+  const raw = (pointerTrackX - REEL_ITEM_WIDTH / 2) / REEL_STRIDE;
   return clamp(Math.round(raw), 0, trackLength - 1);
 };
 
@@ -284,7 +313,9 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = laneWidth * 0.5;
+  const pointerPx = ((laneRef.current?.clientWidth && laneRef.current.clientWidth > 0
+    ? laneRef.current.clientWidth
+    : laneWidthRef.current) || laneWidth) * 0.5;
   const activeStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
