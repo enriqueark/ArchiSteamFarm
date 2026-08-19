@@ -7,7 +7,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
-import { findClosestCatalogSkinByValueAtomic } from "../cases/service";
+import { findClosestCatalogSkinByValueAtomic, resolveCaseItemImageUrl } from "../cases/service";
 import { getLevelFromXp } from "../progression/service";
 import { getProfileSummary, setProfileVisibility } from "../affiliates/service";
 import { verifyTwoFactorCode } from "../security-2fa/service";
@@ -418,7 +418,7 @@ const getWinsTickerFeed = async (limit: number): Promise<WinsTickerItem[]> => {
       },
       skin: {
         name: row.caseItem.name,
-        imageUrl: row.caseItem.imageUrl,
+        imageUrl: resolveCaseItemImageUrl(row.caseItem.imageUrl, row.caseItem.name),
         valueAtomic: row.caseItem.valueAtomic.toString(),
         valueCoins: toCoinsString(row.caseItem.valueAtomic)
       },
@@ -443,7 +443,7 @@ const getWinsTickerFeed = async (limit: number): Promise<WinsTickerItem[]> => {
         },
         skin: {
           name: row.caseItem.name,
-          imageUrl: row.caseItem.imageUrl,
+          imageUrl: resolveCaseItemImageUrl(row.caseItem.imageUrl, row.caseItem.name),
           valueAtomic: row.valueAtomic.toString(),
           valueCoins: toCoinsString(row.valueAtomic)
         },

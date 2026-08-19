@@ -183,13 +183,156 @@ const normalizeSkinLabel = (weapon: string, skin: string): string => {
 const normalizeSourceSkinKey = (sourceCaseSlug: string, name: string): string =>
   `${sourceCaseSlug}:${name.toLowerCase().replace(/\s+/g, " ").trim()}`;
 
+const FALLBACK_SKIN_CATALOG_URL =
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json";
+const BLOCKED_SKIN_IMAGE_HOSTS = new Set([
+  "cdn.rain.gg",
+  "cfdn.wiki.skin.club",
+  "cfdn.skin.club",
+  "cdn.csgoskins.gg"
+]);
+const SKIN_WEAR_SUFFIX_REGEX = /\s*\((factory new|minimal wear|field-tested|well-worn|battle-scarred)\)\s*$/i;
+
+let fallbackImageByNameMap: Map<string, string> | null = null;
+let fallbackImageByNameMapPromise: Promise<Map<string, string> | null> | null = null;
+
+const normalizeSkinNameForLookup = (value: string): string =>
+  value
+    .replace(/^★\s*/u, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const buildSkinLookupCandidates = (name: string): string[] => {
+  const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
+  const candidates = new Set<string>();
+  const push = (value: string) => {
+    const normalized = normalizeSkinNameForLookup(value);
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  };
+
+  push(base);
+  push(base.replace(/^stattrak™\s*/iu, "").trim());
+  push(base.replace(/^souvenir\s*/iu, "").trim());
+
+  const pipeIdx = base.indexOf("|");
+  if (pipeIdx > 0) {
+    const weapon = base.slice(0, pipeIdx).trim();
+    const skin = base.slice(pipeIdx + 1).trim();
+    const stattrakPrefix = skin.match(/^stattrak™\s*/iu)?.[0] ?? "";
+    const souvenirPrefix = skin.match(/^souvenir\s*/iu)?.[0] ?? "";
+    if (stattrakPrefix) {
+      push(`${stattrakPrefix}${weapon} | ${skin.slice(stattrakPrefix.length).trim()}`);
+    }
+    if (souvenirPrefix) {
+      push(`${souvenirPrefix}${weapon} | ${skin.slice(souvenirPrefix.length).trim()}`);
+    }
+    push(`${weapon} | ${skin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
+  }
+
+  return Array.from(candidates);
+};
+
+const parseCandidateImageUrl = (value: string | null | undefined): string | null => {
+  const raw = value?.trim();
+  if (!raw) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (BLOCKED_SKIN_IMAGE_HOSTS.has(host)) {
+    return null;
+  }
+  return parsed.toString();
+};
+
+const ensureFallbackImageMapLoaded = async (): Promise<Map<string, string> | null> => {
+  if (fallbackImageByNameMap) {
+    return fallbackImageByNameMap;
+  }
+  if (fallbackImageByNameMapPromise) {
+    return fallbackImageByNameMapPromise;
+  }
+
+  fallbackImageByNameMapPromise = (async () => {
+    try {
+      const response = await fetch(FALLBACK_SKIN_CATALOG_URL, {
+        method: "GET",
+        headers: {
+          "user-agent": "casino-crypto-backend/1.0"
+        }
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const data = (await response.json()) as Array<{ name?: unknown; image?: unknown }>;
+      const next = new Map<string, string>();
+      for (const row of data) {
+        const name = typeof row?.name === "string" ? row.name : "";
+        const image = parseCandidateImageUrl(typeof row?.image === "string" ? row.image : "");
+        if (!name || !image) continue;
+        const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
+        for (const candidate of buildSkinLookupCandidates(base)) {
+          if (!next.has(candidate)) {
+            next.set(candidate, image);
+          }
+        }
+      }
+      fallbackImageByNameMap = next;
+      return next;
+    } catch {
+      return null;
+    } finally {
+      fallbackImageByNameMapPromise = null;
+    }
+  })();
+
+  return fallbackImageByNameMapPromise;
+};
+
+const lookupFallbackImageUrlFromName = (name: string): string | null => {
+  if (!fallbackImageByNameMap) {
+    return null;
+  }
+  for (const candidate of buildSkinLookupCandidates(name)) {
+    const match = fallbackImageByNameMap.get(candidate);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+};
+
 const buildFallbackImageUrlFromName = (name: string): string => {
+  if (!fallbackImageByNameMap && !fallbackImageByNameMapPromise) {
+    void ensureFallbackImageMapLoaded();
+  }
+  const mapped = lookupFallbackImageUrlFromName(name);
+  if (mapped) {
+    return mapped;
+  }
   const slug = name
     .toLowerCase()
     .replace(/\|/g, " ")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `https://cdn.csgoskins.gg/public/icons/${slug}.png`;
+};
+
+export const resolveCaseItemImageUrl = (imageUrl: string | null | undefined, name: string): string => {
+  return parseCandidateImageUrl(imageUrl) ?? buildFallbackImageUrlFromName(name);
+};
+
+export const warmCaseImageFallbackCatalog = async (): Promise<void> => {
+  await ensureFallbackImageMapLoaded();
 };
 
 const buildJinaMirrorUrl = (url: string): string => `https://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;
@@ -326,7 +469,7 @@ const backfillMissingCatalogImageUrlsFromWiki = async (limit = CATALOG_IMAGE_BAC
   let updated = 0;
   for (const row of rows) {
     const wikiImageUrl = await fetchSkinWikiImageUrlByName(row.name);
-    const nextImageUrl = wikiImageUrl ?? buildFallbackImageUrlFromName(row.name);
+    const nextImageUrl = resolveCaseItemImageUrl(wikiImageUrl, row.name);
     if (!nextImageUrl) {
       continue;
     }
@@ -431,7 +574,7 @@ const parseRainCaseItemsFromMarkdown = (caseSlug: string, markdown: string): Rai
     const imageUrlMatch = imageLine.match(/\((https?:\/\/[^)]+)\)/i);
     const name = normalizeSkinLabel(weaponLine, skinLine);
     const sourceSkinKey = normalizeSourceSkinKey(caseSlug, name);
-    const imageUrl = imageUrlMatch ? imageUrlMatch[1] : buildFallbackImageUrlFromName(name);
+    const imageUrl = resolveCaseItemImageUrl(imageUrlMatch ? imageUrlMatch[1] : null, name);
     parsed.push({
       sourceCaseSlug: caseSlug,
       sourceSkinKey,
@@ -846,7 +989,7 @@ export const findClosestCatalogSkinByValueAtomic = async (input: {
     id: pick.id,
     name: pick.name,
     valueAtomic: pick.valueAtomic,
-    imageUrl: pick.imageUrl || buildFallbackImageUrlFromName(pick.name)
+    imageUrl: resolveCaseItemImageUrl(pick.imageUrl, pick.name)
   };
 };
 
@@ -1039,7 +1182,7 @@ const asItemState = (item: {
   name: item.name,
   valueAtomic: item.valueAtomic,
   dropRate: item.dropRate.toFixed(8),
-  imageUrl: item.imageUrl ?? buildFallbackImageUrlFromName(item.name),
+  imageUrl: resolveCaseItemImageUrl(item.imageUrl, item.name),
   cs2SkinId: item.cs2SkinId ?? null,
   sortOrder: item.sortOrder,
   isActive: item.isActive
@@ -1770,15 +1913,15 @@ export const upsertCaseByAdmin = async (input: UpsertCaseInput): Promise<CaseDet
     }
     const parsedDrop = new Prisma.Decimal(item.dropRate);
     const linkedSkin = item.cs2SkinId ? catalogSkinById.get(item.cs2SkinId) : undefined;
-    const resolvedImageUrl =
-      item.imageUrl?.trim() ||
-      linkedSkin?.imageUrl ||
-      (linkedSkin?.name ? buildFallbackImageUrlFromName(linkedSkin.name) : null);
+    const resolvedImageUrl = resolveCaseItemImageUrl(
+      item.imageUrl?.trim() || linkedSkin?.imageUrl || null,
+      item.name.trim() || linkedSkin?.name || "cs2 skin"
+    );
     return {
       name: item.name.trim(),
       valueAtomic: item.valueAtomic,
       dropRate: parsedDrop,
-      imageUrl: resolvedImageUrl ?? null,
+      imageUrl: resolvedImageUrl,
       sortOrder: item.sortOrder ?? idx,
       isActive: item.isActive ?? true,
       cs2SkinId: item.cs2SkinId ?? null
