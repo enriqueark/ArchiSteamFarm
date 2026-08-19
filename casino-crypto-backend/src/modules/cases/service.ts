@@ -203,6 +203,13 @@ const normalizeSkinNameForLookup = (value: string): string =>
     .trim()
     .toLowerCase();
 
+const stripDopplerVariantSuffix = (skinName: string): string =>
+  skinName
+    .replace(/\bgamma doppler\s+(phase\s*[1-4]|emerald)\b/iu, "Gamma Doppler")
+    .replace(/\bdoppler\s+(phase\s*[1-4]|ruby|sapphire|black pearl)\b/iu, "Doppler")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const buildSkinLookupCandidates = (name: string): string[] => {
   const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
   const candidates = new Set<string>();
@@ -221,8 +228,11 @@ const buildSkinLookupCandidates = (name: string): string[] => {
   if (pipeIdx > 0) {
     const weapon = base.slice(0, pipeIdx).trim();
     const skin = base.slice(pipeIdx + 1).trim();
+    const simplifiedSkin = stripDopplerVariantSuffix(skin);
     const stattrakPrefix = skin.match(/^stattrak™\s*/iu)?.[0] ?? "";
     const souvenirPrefix = skin.match(/^souvenir\s*/iu)?.[0] ?? "";
+    const simplifiedStattrakPrefix = simplifiedSkin.match(/^stattrak™\s*/iu)?.[0] ?? "";
+    const simplifiedSouvenirPrefix = simplifiedSkin.match(/^souvenir\s*/iu)?.[0] ?? "";
     if (stattrakPrefix) {
       push(`${stattrakPrefix}${weapon} | ${skin.slice(stattrakPrefix.length).trim()}`);
     }
@@ -230,6 +240,13 @@ const buildSkinLookupCandidates = (name: string): string[] => {
       push(`${souvenirPrefix}${weapon} | ${skin.slice(souvenirPrefix.length).trim()}`);
     }
     push(`${weapon} | ${skin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
+    push(`${weapon} | ${simplifiedSkin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
+    if (simplifiedStattrakPrefix) {
+      push(`${simplifiedStattrakPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedStattrakPrefix.length).trim()}`);
+    }
+    if (simplifiedSouvenirPrefix) {
+      push(`${simplifiedSouvenirPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedSouvenirPrefix.length).trim()}`);
+    }
   }
 
   return Array.from(candidates);
@@ -328,6 +345,10 @@ const buildFallbackImageUrlFromName = (name: string): string => {
 };
 
 export const resolveCaseItemImageUrl = (imageUrl: string | null | undefined, name: string): string => {
+  const mapped = lookupFallbackImageUrlFromName(name);
+  if (mapped) {
+    return mapped;
+  }
   return parseCandidateImageUrl(imageUrl) ?? buildFallbackImageUrlFromName(name);
 };
 
