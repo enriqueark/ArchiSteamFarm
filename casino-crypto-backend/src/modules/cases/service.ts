@@ -194,6 +194,7 @@ const BLOCKED_SKIN_IMAGE_HOSTS = new Set([
 const SKIN_WEAR_SUFFIX_REGEX = /\s*\((factory new|minimal wear|field-tested|well-worn|battle-scarred)\)\s*$/i;
 
 let fallbackImageByNameMap: Map<string, string> | null = null;
+let fallbackImageByWeaponMap: Map<string, string> | null = null;
 let fallbackImageByNameMapPromise: Promise<Map<string, string> | null> | null = null;
 
 const normalizeSkinNameForLookup = (value: string): string =>
@@ -210,7 +211,21 @@ const stripDopplerVariantSuffix = (skinName: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-const buildSkinLookupCandidates = (name: string): string[] => {
+const extractWeaponFromSkinName = (name: string): string | null => {
+  const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
+  const pipeIdx = base.indexOf("|");
+  if (pipeIdx <= 0) return null;
+  const weapon = normalizeSkinNameForLookup(base.slice(0, pipeIdx));
+  return weapon || null;
+};
+
+const buildSkinLookupCandidates = (
+  name: string,
+  options?: {
+    collapseVariants?: boolean;
+  }
+): string[] => {
+  const collapseVariants = options?.collapseVariants !== false;
   const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
   const candidates = new Set<string>();
   const push = (value: string) => {
@@ -228,11 +243,8 @@ const buildSkinLookupCandidates = (name: string): string[] => {
   if (pipeIdx > 0) {
     const weapon = base.slice(0, pipeIdx).trim();
     const skin = base.slice(pipeIdx + 1).trim();
-    const simplifiedSkin = stripDopplerVariantSuffix(skin);
     const stattrakPrefix = skin.match(/^stattrak™\s*/iu)?.[0] ?? "";
     const souvenirPrefix = skin.match(/^souvenir\s*/iu)?.[0] ?? "";
-    const simplifiedStattrakPrefix = simplifiedSkin.match(/^stattrak™\s*/iu)?.[0] ?? "";
-    const simplifiedSouvenirPrefix = simplifiedSkin.match(/^souvenir\s*/iu)?.[0] ?? "";
     if (stattrakPrefix) {
       push(`${stattrakPrefix}${weapon} | ${skin.slice(stattrakPrefix.length).trim()}`);
     }
@@ -240,16 +252,61 @@ const buildSkinLookupCandidates = (name: string): string[] => {
       push(`${souvenirPrefix}${weapon} | ${skin.slice(souvenirPrefix.length).trim()}`);
     }
     push(`${weapon} | ${skin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
-    push(`${weapon} | ${simplifiedSkin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
-    if (simplifiedStattrakPrefix) {
-      push(`${simplifiedStattrakPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedStattrakPrefix.length).trim()}`);
-    }
-    if (simplifiedSouvenirPrefix) {
-      push(`${simplifiedSouvenirPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedSouvenirPrefix.length).trim()}`);
+    if (collapseVariants) {
+      const simplifiedSkin = stripDopplerVariantSuffix(skin);
+      const simplifiedStattrakPrefix = simplifiedSkin.match(/^stattrak™\s*/iu)?.[0] ?? "";
+      const simplifiedSouvenirPrefix = simplifiedSkin.match(/^souvenir\s*/iu)?.[0] ?? "";
+      push(`${weapon} | ${simplifiedSkin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim()}`);
+      if (simplifiedStattrakPrefix) {
+        push(`${simplifiedStattrakPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedStattrakPrefix.length).trim()}`);
+      }
+      if (simplifiedSouvenirPrefix) {
+        push(`${simplifiedSouvenirPrefix}${weapon} | ${simplifiedSkin.slice(simplifiedSouvenirPrefix.length).trim()}`);
+      }
     }
   }
 
   return Array.from(candidates);
+};
+
+const buildVariantAliasFromPattern = (baseName: string, patternIdRaw: string): string | null => {
+  const patternId = patternIdRaw.toLowerCase();
+  if (!patternId) return null;
+  const pipeIdx = baseName.indexOf("|");
+  if (pipeIdx <= 0) return null;
+
+  const weapon = baseName.slice(0, pipeIdx).trim();
+  const skin = baseName.slice(pipeIdx + 1).trim();
+  if (!weapon || !skin) return null;
+
+  const stattrakPrefix = skin.match(/^stattrak™\s*/iu)?.[0] ?? "";
+  const souvenirPrefix = skin.match(/^souvenir\s*/iu)?.[0] ?? "";
+  const coreSkin = skin.replace(/^stattrak™\s*/iu, "").replace(/^souvenir\s*/iu, "").trim();
+  const withPrefix = (nextCoreSkin: string): string => `${weapon} | ${stattrakPrefix}${souvenirPrefix}${nextCoreSkin}`.trim();
+
+  if (patternId.includes("sapphire")) {
+    return withPrefix(coreSkin.includes("Gamma Doppler") ? "Gamma Doppler Sapphire" : "Doppler Sapphire");
+  }
+  if (patternId.includes("ruby")) {
+    return withPrefix(coreSkin.includes("Gamma Doppler") ? "Gamma Doppler Ruby" : "Doppler Ruby");
+  }
+  if (patternId.includes("blackpearl")) {
+    return withPrefix(coreSkin.includes("Gamma Doppler") ? "Gamma Doppler Black Pearl" : "Doppler Black Pearl");
+  }
+  if (patternId.includes("emerald")) {
+    return withPrefix(coreSkin.includes("Gamma Doppler") ? "Gamma Doppler Emerald" : "Doppler Emerald");
+  }
+
+  const gammaPhaseMatch = patternId.match(/gamma_doppler_phase([1-4])/);
+  if (gammaPhaseMatch) {
+    return withPrefix(`Gamma Doppler Phase ${gammaPhaseMatch[1]}`);
+  }
+  const phaseMatch = patternId.match(/doppler_phase([1-4])/);
+  if (phaseMatch) {
+    return withPrefix(`Doppler Phase ${phaseMatch[1]}`);
+  }
+
+  return null;
 };
 
 const parseCandidateImageUrl = (value: string | null | undefined): string | null => {
@@ -290,20 +347,33 @@ const ensureFallbackImageMapLoaded = async (): Promise<Map<string, string> | nul
       if (!response.ok) {
         return null;
       }
-      const data = (await response.json()) as Array<{ name?: unknown; image?: unknown }>;
+      const data = (await response.json()) as Array<{ name?: unknown; image?: unknown; pattern?: { id?: unknown } | null }>;
       const next = new Map<string, string>();
+      const byWeapon = new Map<string, string>();
       for (const row of data) {
         const name = typeof row?.name === "string" ? row.name : "";
         const image = parseCandidateImageUrl(typeof row?.image === "string" ? row.image : "");
         if (!name || !image) continue;
         const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
+        const weapon = extractWeaponFromSkinName(base);
+        if (weapon && !byWeapon.has(weapon)) {
+          byWeapon.set(weapon, image);
+        }
         for (const candidate of buildSkinLookupCandidates(base)) {
           if (!next.has(candidate)) {
             next.set(candidate, image);
           }
         }
+        const patternId = typeof row?.pattern?.id === "string" ? row.pattern.id : "";
+        const alias = buildVariantAliasFromPattern(base, patternId);
+        if (alias) {
+        for (const candidate of buildSkinLookupCandidates(alias, { collapseVariants: false })) {
+            next.set(candidate, image);
+          }
+        }
       }
       fallbackImageByNameMap = next;
+      fallbackImageByWeaponMap = byWeapon;
       return next;
     } catch {
       return null;
@@ -318,6 +388,12 @@ const ensureFallbackImageMapLoaded = async (): Promise<Map<string, string> | nul
 const lookupFallbackImageUrlFromName = (name: string): string | null => {
   if (!fallbackImageByNameMap) {
     return null;
+  }
+  for (const candidate of buildSkinLookupCandidates(name, { collapseVariants: false })) {
+    const match = fallbackImageByNameMap.get(candidate);
+    if (match) {
+      return match;
+    }
   }
   for (const candidate of buildSkinLookupCandidates(name)) {
     const match = fallbackImageByNameMap.get(candidate);
@@ -335,6 +411,10 @@ const buildFallbackImageUrlFromName = (name: string): string => {
   const mapped = lookupFallbackImageUrlFromName(name);
   if (mapped) {
     return mapped;
+  }
+  const weapon = extractWeaponFromSkinName(name);
+  if (weapon && fallbackImageByWeaponMap?.has(weapon)) {
+    return fallbackImageByWeaponMap.get(weapon) as string;
   }
   const slug = name
     .toLowerCase()

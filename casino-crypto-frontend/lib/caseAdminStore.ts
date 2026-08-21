@@ -79,6 +79,13 @@ type AdminCasesStore = {
   managedCases: StoredAdminCase[];
 };
 
+const BLOCKED_CASE_IMAGE_HOSTS = new Set([
+  "cdn.rain.gg",
+  "cfdn.wiki.skin.club",
+  "cfdn.skin.club",
+  "cdn.csgoskins.gg"
+]);
+
 const emptyStore = (): AdminCasesStore => ({
   version: 1,
   managedCases: []
@@ -208,12 +215,30 @@ const toStoredItems = (items: AdminCaseFormItem[]): StoredCaseItem[] =>
     }))
     .filter((item) => item.name);
 
+const sanitizeCaseImageUrl = (value: string | null | undefined): string | null => {
+  const raw = value?.trim();
+  if (!raw) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+  if (BLOCKED_CASE_IMAGE_HOSTS.has(parsed.hostname.toLowerCase())) {
+    return null;
+  }
+  return parsed.toString();
+};
+
 const toCaseItem = (item: StoredCaseItem): CaseItem => ({
   id: item.id,
   name: item.name,
   valueAtomic: item.valueAtomic,
   dropRate: item.dropRate,
-  imageUrl: item.imageUrl,
+  imageUrl: sanitizeCaseImageUrl(item.imageUrl),
   cs2SkinId: item.cs2SkinId,
   sortOrder: item.sortOrder,
   isActive: item.isActive
@@ -380,6 +405,20 @@ export const applyManagedDataToDetails = (remoteDetails: CaseDetails): CaseMarke
       source: "backend"
     };
   }
+  const remoteItemsByName = new Map(
+    remoteDetails.items.map((item) => [item.name.trim().toLowerCase(), item])
+  );
+  const mergedOverrideItems = override.items.map((item) => {
+    const safe = sanitizeCaseImageUrl(item.imageUrl);
+    if (safe) {
+      return item;
+    }
+    const remoteMatch = remoteItemsByName.get(item.name.trim().toLowerCase());
+    return {
+      ...item,
+      imageUrl: remoteMatch?.imageUrl ?? item.imageUrl
+    };
+  });
   return {
     ...remoteDetails,
     slug: override.slug,
@@ -390,7 +429,7 @@ export const applyManagedDataToDetails = (remoteDetails: CaseDetails): CaseMarke
     isActive: override.isActive,
     volatilityIndex: override.volatilityIndex,
     volatilityTier: override.volatilityTier,
-    items: override.items.length ? override.items : remoteDetails.items,
+    items: mergedOverrideItems.length ? mergedOverrideItems : remoteDetails.items,
     updatedAt: override.updatedAt,
     tags: override.tags,
     source: "admin-override"
