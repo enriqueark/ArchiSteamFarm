@@ -146,20 +146,35 @@ export default function CashierWalletModal({ open, onClose, onBalanceRefresh }: 
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [onClose, open]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[160]">
+    <div
+      className="fixed inset-0 z-[160] flex items-center justify-center bg-[rgba(26,26,26,0.62)] p-3 backdrop-blur-[1px]"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <iframe
         ref={frameRef}
         src="/dinoskins-wallet-v14-banner-no-gap.html?embedded=1"
         title="Dinoskins Wallet"
-        className="h-full w-full border-0"
+        className="h-[min(900px,96vh)] w-[min(1400px,97vw)] rounded-[20px] border-0 shadow-[0_35px_100px_rgba(0,0,0,0.62)]"
+        style={{ background: "transparent" }}
       />
     </div>
   );

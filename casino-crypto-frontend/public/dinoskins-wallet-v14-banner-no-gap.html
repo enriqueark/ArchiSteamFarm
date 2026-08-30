@@ -1226,7 +1226,13 @@ const getAddressEntry = (methodName) => liveAddressByMethod[methodName] || null;
 
 const getAddressString = (methodName) => {
   const entry = getAddressEntry(methodName);
-  return entry?.address || ADDRESSES[methodName] || "OxaPay address pending";
+  if (entry?.address) {
+    return entry.address;
+  }
+  if (!EMBED_MODE) {
+    return ADDRESSES[methodName] || "OxaPay address pending";
+  }
+  return "OxaPay address pending";
 };
 
 const getQrString = (methodName) => {
@@ -1238,7 +1244,10 @@ const getQrString = (methodName) => {
   if (address) {
     return `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(address)}`;
   }
-  return QR_CODES[methodName] || "";
+  if (!EMBED_MODE) {
+    return QR_CODES[methodName] || "";
+  }
+  return "";
 };
 
 const updateMethodAvailability = () => {
@@ -1247,16 +1256,16 @@ const updateMethodAvailability = () => {
     if (!methodName) return;
     const available = Boolean(getAddressEntry(methodName));
     method.dataset.available = available ? "1" : "0";
-    method.style.opacity = available ? "1" : "0.55";
+    method.style.opacity = "1";
   });
 
   withdrawMethods.forEach((method) => {
     const methodName = method.dataset.withdrawMethod;
     if (!methodName) return;
     const config = METHOD_CONFIG[methodName];
-    const available = Boolean(getAddressEntry(methodName)) && Boolean(config && config.withdrawRate > 0);
+    const available = Boolean(config && config.withdrawRate > 0);
     method.dataset.available = available ? "1" : "0";
-    method.style.opacity = available ? "1" : "0.55";
+    method.style.opacity = "1";
   });
 };
 
@@ -1317,10 +1326,6 @@ function showWithdrawDetails(name){
   const config = METHOD_CONFIG[name];
   if (!config || config.withdrawRate <= 0) {
     notifyError("This withdrawal method is currently unavailable.");
-    return;
-  }
-  if (!getAddressEntry(name) && EMBED_MODE) {
-    notifyError("Address is not available yet for this network.");
     return;
   }
   currentWithdrawCrypto = name;
@@ -1523,6 +1528,25 @@ document.getElementById("renew").addEventListener("click", () => {
 });
 
 if (EMBED_MODE) {
+  document.documentElement.style.background = "transparent";
+  document.body.style.background = "transparent";
+  document.body.style.margin = "0";
+  const page = document.querySelector(".page");
+  if (page) {
+    page.style.minHeight = "100%";
+    page.style.padding = "0";
+    page.style.background = "transparent";
+  }
+  overlay.style.position = "static";
+  overlay.style.inset = "auto";
+  overlay.style.padding = "0";
+  overlay.style.background = "transparent";
+  overlay.style.backdropFilter = "none";
+  const wallet = document.querySelector(".wallet");
+  if (wallet) {
+    wallet.style.width = "100%";
+    wallet.style.height = "100%";
+  }
   if (openWallet) {
     openWallet.style.display = "none";
   }
