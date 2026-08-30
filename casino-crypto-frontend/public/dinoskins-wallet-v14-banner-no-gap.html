@@ -1219,6 +1219,22 @@ const detailAddress = document.getElementById("detailAddress");
 const detailQR = document.getElementById("detailQR");
 const detailIcon = document.getElementById("detailIcon");
 const withdrawMethods = [...document.querySelectorAll(".withdraw-method")];
+const UNAVAILABLE_METHODS = new Set(["Litecoin", "Dogecoin"]);
+
+const hideUnavailableMethodOptions = () => {
+  methods.forEach((method) => {
+    const methodName = method.dataset.method;
+    if (!methodName || !UNAVAILABLE_METHODS.has(methodName)) return;
+    method.remove();
+  });
+  withdrawMethods.forEach((method) => {
+    const methodName = method.dataset.withdrawMethod;
+    if (!methodName || !UNAVAILABLE_METHODS.has(methodName)) return;
+    method.remove();
+  });
+};
+
+hideUnavailableMethodOptions();
 
 const normalizePair = (asset, network) => `${String(asset || "").trim().toUpperCase()}:${String(network || "").trim().toLowerCase()}`;
 
@@ -1533,20 +1549,10 @@ if (EMBED_MODE) {
   document.body.style.margin = "0";
   const page = document.querySelector(".page");
   if (page) {
-    page.style.minHeight = "100%";
-    page.style.padding = "0";
     page.style.background = "transparent";
   }
-  overlay.style.position = "static";
-  overlay.style.inset = "auto";
-  overlay.style.padding = "0";
   overlay.style.background = "transparent";
   overlay.style.backdropFilter = "none";
-  const wallet = document.querySelector(".wallet");
-  if (wallet) {
-    wallet.style.width = "100%";
-    wallet.style.height = "100%";
-  }
   if (openWallet) {
     openWallet.style.display = "none";
   }

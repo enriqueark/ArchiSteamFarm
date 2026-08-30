@@ -173,7 +173,7 @@ export default function CashierWalletModal({ open, onClose, onBalanceRefresh }: 
         ref={frameRef}
         src="/dinoskins-wallet-v14-banner-no-gap.html?embedded=1"
         title="Dinoskins Wallet"
-        className="h-[min(900px,96vh)] w-[min(1400px,97vw)] rounded-[20px] border-0 shadow-[0_35px_100px_rgba(0,0,0,0.62)]"
+        className="h-full w-full border-0"
         style={{ background: "transparent" }}
       />
     </div>
