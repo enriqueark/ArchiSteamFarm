@@ -8,6 +8,7 @@ import {
   type CaseCategoryTag,
   type CaseMarketplaceItem
 } from "@/lib/caseAdminStore";
+import { handleSkinImageError, resolveRenderableSkinImageUrl } from "@/lib/skinImageFallback";
 import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
@@ -212,7 +213,12 @@ export default function CasesPage() {
               <div className="relative flex h-[116px] items-center justify-center bg-gradient-to-b from-[#1d1d1d] to-[#141414]">
                 {c.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.logoUrl} alt={c.title} className="h-[96px] w-[96px] object-contain" />
+                  <img
+                    src={resolveRenderableSkinImageUrl(c.logoUrl)}
+                    alt={c.title}
+                    onError={handleSkinImageError}
+                    className="h-[96px] w-[96px] object-contain"
+                  />
                 ) : (
                   <span className="text-xs text-[#777]">No image</span>
                 )}

@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { LIVE_WINS_REFRESH_EVENT } from "@/lib/liveWinsTicker";
 import { CASE_OPEN_BALANCE_SYNC_EVENT, type CaseOpenBalanceSyncDetail } from "@/lib/refreshBalance";
+import { handleSkinImageError, resolveRenderableSkinImageUrl } from "@/lib/skinImageFallback";
 import { CasinoSocket, type SocketEvent } from "@/lib/socket";
 import { useToast } from "@/lib/toast";
 
@@ -995,7 +996,12 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                     >
                       <div className="relative w-[50px] h-[50px] shrink-0 rounded-[8px] overflow-hidden bg-[#111] border border-[#232323] flex items-center justify-center">
                         {win?.skin?.imageUrl ? (
-                          <img src={win.skin.imageUrl} alt={win.skin.name} className="w-full h-full object-contain" />
+                          <img
+                            src={resolveRenderableSkinImageUrl(win.skin.imageUrl)}
+                            alt={win.skin.name}
+                            onError={handleSkinImageError}
+                            className="w-full h-full object-contain"
+                          />
                         ) : (
                           <span className="w-8 h-8 rounded bg-[#1a1a1a]" />
                         )}

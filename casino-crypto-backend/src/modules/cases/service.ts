@@ -185,6 +185,8 @@ const normalizeSourceSkinKey = (sourceCaseSlug: string, name: string): string =>
 
 const FALLBACK_SKIN_CATALOG_URL =
   "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json";
+const GUARANTEED_FALLBACK_SKIN_IMAGE_URL =
+  "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_CNk7uW-V6JsJPWsAm6Xyfo45-c5GXDnwB534DuEwtuoIHOfaAYiAsYjF-QItUaxmoC0MO_h5ALcjJUFk3sEzfdk4w";
 const BLOCKED_SKIN_IMAGE_HOSTS = new Set([
   "cdn.rain.gg",
   "cfdn.wiki.skin.club",
@@ -416,12 +418,13 @@ const buildFallbackImageUrlFromName = (name: string): string => {
   if (weapon && fallbackImageByWeaponMap?.has(weapon)) {
     return fallbackImageByWeaponMap.get(weapon) as string;
   }
-  const slug = name
-    .toLowerCase()
-    .replace(/\|/g, " ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `https://cdn.csgoskins.gg/public/icons/${slug}.png`;
+  if (fallbackImageByNameMap && fallbackImageByNameMap.size > 0) {
+    const anyKnown = fallbackImageByNameMap.values().next().value;
+    if (typeof anyKnown === "string" && anyKnown.trim().length > 0) {
+      return anyKnown;
+    }
+  }
+  return GUARANTEED_FALLBACK_SKIN_IMAGE_URL;
 };
 
 export const resolveCaseItemImageUrl = (imageUrl: string | null | undefined, name: string): string => {
@@ -434,6 +437,78 @@ export const resolveCaseItemImageUrl = (imageUrl: string | null | undefined, nam
 
 export const warmCaseImageFallbackCatalog = async (): Promise<void> => {
   await ensureFallbackImageMapLoaded();
+};
+
+export const repairBrokenCaseImageUrlsBestEffort = async (): Promise<void> => {
+  try {
+    await ensureFallbackImageMapLoaded();
+
+    const [catalogRows, caseItemRows] = await Promise.all([
+      prisma.cs2SkinCatalog.findMany({
+        where: {
+          OR: [
+            { imageUrl: null },
+            { imageUrl: "" },
+            { imageUrl: { contains: "cdn.rain.gg" } },
+            { imageUrl: { contains: "cfdn.wiki.skin.club" } },
+            { imageUrl: { contains: "cfdn.skin.club" } },
+            { imageUrl: { contains: "cdn.csgoskins.gg" } }
+          ]
+        },
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true
+        },
+        take: 6_000
+      }),
+      prisma.caseItem.findMany({
+        where: {
+          OR: [
+            { imageUrl: null },
+            { imageUrl: "" },
+            { imageUrl: { contains: "cdn.rain.gg" } },
+            { imageUrl: { contains: "cfdn.wiki.skin.club" } },
+            { imageUrl: { contains: "cfdn.skin.club" } },
+            { imageUrl: { contains: "cdn.csgoskins.gg" } }
+          ]
+        },
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true
+        },
+        take: 6_000
+      })
+    ]);
+
+    for (const row of catalogRows) {
+      const next = resolveCaseItemImageUrl(row.imageUrl, row.name);
+      if (next !== row.imageUrl) {
+        await prisma.cs2SkinCatalog.update({
+          where: { id: row.id },
+          data: { imageUrl: next }
+        });
+      }
+    }
+
+    for (const row of caseItemRows) {
+      const next = resolveCaseItemImageUrl(row.imageUrl, row.name);
+      if (next !== row.imageUrl) {
+        await prisma.caseItem.update({
+          where: { id: row.id },
+          data: { imageUrl: next }
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn(
+      {
+        err: error instanceof Error ? error.message : String(error)
+      },
+      "case.images.repair_best_effort_failed"
+    );
+  }
 };
 
 const buildJinaMirrorUrl = (url: string): string => `https://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;

@@ -13,6 +13,7 @@ import {
 import { refreshBalance } from "@/lib/refreshBalance";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { getGameVolume } from "@/lib/gameAudio";
+import { handleSkinImageError, resolveRenderableSkinImageUrl } from "@/lib/skinImageFallback";
 import CoinAmount from "@/components/CoinAmount";
 import CoinIcon from "@/components/CoinIcon";
 
@@ -294,7 +295,7 @@ export default function MinesPage() {
     if (!amountAtomic || amountAtomic === "0") { setSkinUrl(null); return; }
     try {
       const res = await getSkinPreviewByAmountAtomic(amountAtomic);
-      setSkinUrl(res.preview?.imageUrl || null);
+      setSkinUrl(res.preview?.imageUrl ? resolveRenderableSkinImageUrl(res.preview.imageUrl) : null);
     } catch { setSkinUrl(null); }
   }, []);
 
@@ -655,6 +656,7 @@ export default function MinesPage() {
                   key={`${skinUrl}-${skinAnimTick}`}
                   src={skinUrl}
                   alt=""
+                  onError={handleSkinImageError}
                   className={`mines-skin-preview ${lost ? "is-lost" : ""} ${cashedOut ? "is-cashed-out" : ""}`}
                   style={{ width: "100%", height: "100%", objectFit: "contain", position: "relative", zIndex: 1 }}
                 />

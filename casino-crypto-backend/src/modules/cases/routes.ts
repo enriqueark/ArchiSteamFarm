@@ -17,6 +17,7 @@ import {
   listCasesByAdmin,
   listMyCaseOpenings,
   openCase,
+  resolveCaseItemImageUrl,
   simulateCasesRtpByAdmin,
   upsertCaseByAdmin,
   setCaseActiveStatusByAdmin,
@@ -166,7 +167,7 @@ const toCaseResponse = (value: CaseDetails) => ({
     valueAtomic: item.valueAtomic.toString(),
     valueCoins: (Number(item.valueAtomic) / 1e8).toFixed(2),
     dropRate: item.dropRate,
-    imageUrl: item.imageUrl,
+    imageUrl: resolveCaseItemImageUrl(item.imageUrl, item.name),
     cs2SkinId: item.cs2SkinId,
     sortOrder: item.sortOrder,
     isActive: item.isActive
@@ -184,7 +185,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     valueAtomic: value.item.valueAtomic.toString(),
     valueCoins: (Number(value.item.valueAtomic) / 1e8).toFixed(2),
     dropRate: value.item.dropRate,
-    imageUrl: value.item.imageUrl,
+    imageUrl: resolveCaseItemImageUrl(value.item.imageUrl, value.item.name),
     cs2SkinId: value.item.cs2SkinId,
     sortOrder: value.item.sortOrder,
     isActive: value.item.isActive
@@ -196,7 +197,7 @@ const toOpeningResponse = (value: CaseOpenResult) => ({
     valueAtomic: item.valueAtomic.toString(),
     valueCoins: (Number(item.valueAtomic) / 1e8).toFixed(2),
     dropRate: item.dropRate,
-    imageUrl: item.imageUrl,
+    imageUrl: resolveCaseItemImageUrl(item.imageUrl, item.name),
     cs2SkinId: item.cs2SkinId,
     sortOrder: item.sortOrder,
     isActive: item.isActive
@@ -256,7 +257,7 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         sourceSkinKey: row.sourceSkinKey,
         name: row.name,
         valueAtomic: row.valueAtomic.toString(),
-        imageUrl: row.imageUrl,
+        imageUrl: resolveCaseItemImageUrl(row.imageUrl, row.name),
         isActive: row.isActive,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt
@@ -330,7 +331,7 @@ export const casesRoutes: FastifyPluginAsync = async (fastify) => {
         id: preview.id,
         name: preview.name,
         valueAtomic: preview.valueAtomic.toString(),
-        imageUrl: preview.imageUrl
+        imageUrl: resolveCaseItemImageUrl(preview.imageUrl, preview.name)
       }
     });
   });

@@ -20,7 +20,7 @@ import { betsRoutes } from "./modules/bets/routes";
 import { blackjackRoutes } from "./modules/blackjack/routes";
 import { battlesRoutes } from "./modules/battles/routes";
 import { casesRoutes } from "./modules/cases/routes";
-import { warmCaseImageFallbackCatalog } from "./modules/cases/service";
+import { repairBrokenCaseImageUrlsBestEffort, warmCaseImageFallbackCatalog } from "./modules/cases/service";
 import { chatRoutes } from "./modules/chat/routes";
 import { chatTipsRainRoutes } from "./modules/chat-tips-rain/routes";
 import { healthRoutes } from "./modules/health/routes";
@@ -193,6 +193,7 @@ export const buildApp = (): FastifyInstance => {
       await redis.connect();
     }
     await warmCaseImageFallbackCatalog();
+    void repairBrokenCaseImageUrlsBestEffort();
   });
 
   return app;

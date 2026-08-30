@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "../../core/auth";
 import { AppError } from "../../core/errors";
 import { requireIdempotencyKey } from "../../core/idempotency";
+import { resolveCaseItemImageUrl } from "../cases/service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 import {
   callBotForSeat,
@@ -123,7 +124,7 @@ const toBattleResponse = (battle: BattleDetails) => ({
     battleSlotId: drop.battleSlotId,
     caseItemId: drop.caseItem.id,
     caseItemName: drop.caseItem.name,
-    caseItemImageUrl: drop.caseItem.imageUrl,
+    caseItemImageUrl: resolveCaseItemImageUrl(drop.caseItem.imageUrl, drop.caseItem.name),
     valueAtomic: drop.valueAtomic.toString()
   }))
 });

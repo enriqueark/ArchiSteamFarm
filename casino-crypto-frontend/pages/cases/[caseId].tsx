@@ -11,6 +11,7 @@ import {
 } from "@/lib/caseAdminStore";
 import { requestLiveWinsRefresh } from "@/lib/liveWinsTicker";
 import { syncCaseOpenBalance } from "@/lib/refreshBalance";
+import { handleSkinImageError, resolveRenderableSkinImageUrl } from "@/lib/skinImageFallback";
 import { useToast } from "@/lib/toast";
 
 const toCoins = (atomic: string): number => {
@@ -160,7 +161,12 @@ function TopTierReveal({ opening, onClose }: { opening: CaseOpeningResult; onClo
               >
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imageUrl} alt={item.name} className="mb-2 h-14 w-full object-contain" />
+                  <img
+                    src={resolveRenderableSkinImageUrl(item.imageUrl)}
+                    alt={item.name}
+                    onError={handleSkinImageError}
+                    className="mb-2 h-14 w-full object-contain"
+                  />
                 ) : null}
                 <p className="truncate font-semibold">{item.name}</p>
                 <p>{fmtCoins(item.valueAtomic)} COINS</p>
@@ -478,7 +484,12 @@ export default function CaseDetailPage() {
                 />
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imageUrl} alt={item.name} className="relative z-[1] h-[102px] w-[102px] object-contain" />
+                  <img
+                    src={resolveRenderableSkinImageUrl(item.imageUrl)}
+                    alt={item.name}
+                    onError={handleSkinImageError}
+                    className="relative z-[1] h-[102px] w-[102px] object-contain"
+                  />
                 ) : (
                   <span className="text-xs text-[#617a96]">No image</span>
                 )}
@@ -515,7 +526,12 @@ export default function CaseDetailPage() {
           <div className="flex h-[112px] items-center justify-center rounded-[10px] bg-[#1b1f27]">
             {caseDetails.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={caseDetails.logoUrl} alt={caseDetails.title} className="h-[86px] w-[86px] object-contain" />
+              <img
+                src={resolveRenderableSkinImageUrl(caseDetails.logoUrl)}
+                alt={caseDetails.title}
+                onError={handleSkinImageError}
+                className="h-[86px] w-[86px] object-contain"
+              />
             ) : (
               <span className="text-sm text-[#5f7894]">No image</span>
             )}
@@ -593,8 +609,9 @@ export default function CaseDetailPage() {
                       {item.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={item.imageUrl}
+                          src={resolveRenderableSkinImageUrl(item.imageUrl)}
                           alt={item.name}
+                          onError={handleSkinImageError}
                           className={`h-[148px] w-[148px] object-contain ${isWinnerSlot ? "winner-float" : ""}`}
                         />
                       ) : (
