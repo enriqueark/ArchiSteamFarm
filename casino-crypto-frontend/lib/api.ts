@@ -766,9 +766,12 @@ export async function getDepositAddresses(): Promise<{ addresses: CashierAddress
   return request<{ addresses: CashierAddress[] }>("/cashier/deposit-addresses");
 }
 
+export type CashierWithdrawalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL" | "LTC";
+export type CashierWithdrawalNetwork = "bitcoin" | "erc20" | "trc20" | "solana" | "litecoin";
+
 export async function createWithdrawal(input: {
-  asset: "USDT";
-  network: "erc20";
+  asset: CashierWithdrawalAsset;
+  network: CashierWithdrawalNetwork;
   amountCoins: string;
   destinationAddress: string;
 }): Promise<CashierWithdrawalResponse> {

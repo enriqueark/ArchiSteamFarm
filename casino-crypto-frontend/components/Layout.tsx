@@ -4,6 +4,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import CoinAmount from "./CoinAmount";
 import CoinIcon from "./CoinIcon";
+import CashierWalletModal from "./CashierWalletModal";
 import Footer from "./Footer";
 import LevelBadge from "./LevelBadge";
 import NotificationsPanel, { type Notification as HeaderNotification } from "./NotificationsPanel";
@@ -114,6 +115,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   const [hoveredSideHref, setHoveredSideHref] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const [vaultLoading, setVaultLoading] = useState(false);
   const [vaultActionLoading, setVaultActionLoading] = useState(false);
@@ -410,6 +412,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
   useEffect(() => {
     setProfileMenuOpen(false);
     setNotifOpen(false);
+    setWalletModalOpen(false);
   }, [router.pathname]);
 
   useEffect(() => {
@@ -681,8 +684,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                     {visibleBalance}
                   </span>
                 </div>
-                <Link
-                  href="/deposit"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    setNotifOpen(false);
+                    setWalletModalOpen(true);
+                  }}
                   className="inline-flex items-center justify-center text-white transition-all hover:brightness-110"
                   style={{
                     height: 32,
@@ -697,7 +705,7 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
                   }}
                 >
                   Deposit
-                </Link>
+                </button>
                 <div className="mx-3 h-[30px] w-px bg-[#2a2a2a]" />
               </>
             )}
@@ -1237,6 +1245,13 @@ export default function Layout({ children, onLogout, userEmail, userLevel, userA
           </div>
         </div>
       )}
+      <CashierWalletModal
+        open={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+        onBalanceRefresh={() => {
+          void refreshWallets();
+        }}
+      />
       <style jsx global>{`
         @keyframes vaultUnlockRedPulse {
           0% {
