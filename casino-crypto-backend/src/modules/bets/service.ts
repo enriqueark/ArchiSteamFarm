@@ -14,6 +14,7 @@ import { AppError } from "../../core/errors";
 import { GAME_ENGINE_SERVICE_ROLE } from "../../core/service-auth";
 import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
+import { consumeWithdrawWagerRequirementInTx } from "../promotions/service";
 import { ensureUserAllowedFor } from "../users/access-guard";
 
 type PlaceBetInput = {
@@ -364,6 +365,7 @@ export const placeBet = async (input: PlaceBetInput): Promise<PlaceBetResult> =>
           lockedAtomic: lockedAfter
         }
       });
+      await consumeWithdrawWagerRequirementInTx(tx, input.userId, input.amountAtomic);
 
       const bet = await tx.casinoBet.create({
         data: {

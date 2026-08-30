@@ -1517,8 +1517,9 @@ document.getElementById("withdrawSubmit").addEventListener("click", async () => 
   notify("Withdrawal request ready for " + currentWithdrawCrypto);
 });
 
-document.getElementById("redeem").addEventListener("click", () => {
+document.getElementById("redeem").addEventListener("click", async () => {
   const code = promoInput.value.trim();
+  const redeemButton = document.getElementById("redeem");
 
   if(!code){
     promoInput.focus();
@@ -1527,17 +1528,75 @@ document.getElementById("redeem").addEventListener("click", () => {
     return;
   }
 
+  if (EMBED_MODE) {
+    if (redeemButton) {
+      redeemButton.disabled = true;
+      redeemButton.style.opacity = "0.65";
+      redeemButton.style.pointerEvents = "none";
+    }
+    try {
+      const redeemed = await hostRequest("redeemPromoCode", { code });
+      promoInput.style.borderColor = "#22d37b";
+      promoInput.value = "";
+      const reward = redeemed && redeemed.rewardCoins ? redeemed.rewardCoins : null;
+      const wagerLeft = redeemed && redeemed.withdrawWagerRemainingCoins ? redeemed.withdrawWagerRemainingCoins : null;
+      if (reward) {
+        notifySuccess("Promo redeemed: +" + reward + " COINS.");
+      } else {
+        notifySuccess("Promo code redeemed successfully.");
+      }
+      if (wagerLeft) {
+        notify("Wager remaining before withdraw: " + wagerLeft + " COINS");
+      }
+      hostEvent("refreshBalance");
+      return;
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Promo code redemption failed.");
+      return;
+    } finally {
+      if (redeemButton) {
+        redeemButton.disabled = false;
+        redeemButton.style.opacity = "";
+        redeemButton.style.pointerEvents = "";
+      }
+    }
+  }
+
   promoInput.style.borderColor = "#22d37b";
   notifySuccess("Promo code applied: " + code);
 });
 
-document.getElementById("renew").addEventListener("click", () => {
+document.getElementById("renew").addEventListener("click", async () => {
   const code = bonusCodeInput.value.trim();
+  const applyButton = document.getElementById("renew");
   if(!code){
     bonusCodeInput.focus();
     bonusCodeInput.style.borderColor = "#ff1828";
     notifyError("Please enter a bonus code");
     return;
+  }
+  if (EMBED_MODE) {
+    if (applyButton) {
+      applyButton.disabled = true;
+      applyButton.style.opacity = "0.65";
+      applyButton.style.pointerEvents = "none";
+    }
+    try {
+      const applied = await hostRequest("applyDepositBonusCode", { code });
+      bonusCodeInput.style.borderColor = "#22d37b";
+      const until = applied && applied.expiresAt ? new Date(applied.expiresAt).toISOString() : null;
+      notifySuccess(until ? "5% deposit bonus active until " + until : "5% deposit bonus activated.");
+      return;
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Bonus code activation failed.");
+      return;
+    } finally {
+      if (applyButton) {
+        applyButton.disabled = false;
+        applyButton.style.opacity = "";
+        applyButton.style.pointerEvents = "";
+      }
+    }
   }
   bonusCodeInput.style.borderColor = "#22d37b";
   notifySuccess("5% deposit bonus code applied: " + code);

@@ -12,6 +12,7 @@ import { prisma } from "../../infrastructure/db/prisma";
 import { enqueueAuditEvent } from "../../infrastructure/queue/audit-queue";
 import { ensureUserAllowedFor } from "../users/access-guard";
 import { addAffiliateCommissionBestEffort } from "../affiliates/service";
+import { consumeWithdrawWagerRequirementInTx } from "../promotions/service";
 import { addUserXpBestEffort } from "../progression/service";
 import {
   PLATFORM_INTERNAL_CURRENCY,
@@ -1008,6 +1009,7 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
       if (!walletRows[0]) {
         throw new AppError("Insufficient funds for insurance", 422, "INSUFFICIENT_FUNDS");
       }
+      await consumeWithdrawWagerRequirementInTx(tx, input.userId, insuranceStake);
       await tx.blackjackGame.update({
         where: { id: game.id },
         data: {
@@ -1080,6 +1082,7 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
       if (!walletRows[0]) {
         throw new AppError("Insufficient funds to double", 422, "INSUFFICIENT_FUNDS");
       }
+      await consumeWithdrawWagerRequirementInTx(tx, input.userId, extraStake);
       await tx.blackjackGame.update({
         where: { id: game.id },
         data: {
@@ -1125,6 +1128,7 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
       if (!walletRows[0]) {
         throw new AppError("Insufficient funds to split", 422, "INSUFFICIENT_FUNDS");
       }
+      await consumeWithdrawWagerRequirementInTx(tx, input.userId, extraStake);
       await tx.blackjackGame.update({
         where: { id: game.id },
         data: {
