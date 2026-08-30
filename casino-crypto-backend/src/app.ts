@@ -28,6 +28,8 @@ import { ledgerRoutes } from "./modules/ledger/routes";
 import { leaderboardRoutes } from "./modules/leaderboard/routes";
 import { minesRoutes } from "./modules/mines/routes";
 import { pricingRoutes } from "./modules/pricing/routes";
+import { ensurePromotionsSchemaReadyBestEffort } from "./modules/promotions/service";
+import { promotionsRoutes } from "./modules/promotions/routes";
 import { rouletteRoutes } from "./modules/roulette/routes";
 import { cashierRoutes } from "./modules/cashier/routes";
 import { securityTwoFactorRoutes } from "./modules/security-2fa/routes";
@@ -148,6 +150,7 @@ export const buildApp = (): FastifyInstance => {
   app.register(minesRoutes, { prefix: "/api/v1/mines" });
   app.register(rouletteRoutes, { prefix: "/api/v1/roulette" });
   app.register(cashierRoutes, { prefix: "/api/v1/cashier" });
+  app.register(promotionsRoutes, { prefix: "/api/v1/promotions" });
 
   app.setErrorHandler((error, request, reply) => {
     const jwtErrorCode =
@@ -192,6 +195,7 @@ export const buildApp = (): FastifyInstance => {
     if (redis.status === "wait") {
       await redis.connect();
     }
+    await ensurePromotionsSchemaReadyBestEffort();
     await warmCaseImageFallbackCatalog();
     void repairBrokenCaseImageUrlsBestEffort();
   });

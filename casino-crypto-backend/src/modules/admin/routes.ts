@@ -16,6 +16,7 @@ import { requireIdempotencyKey } from "../../core/idempotency";
 import { prisma } from "../../infrastructure/db/prisma";
 import { getBlackjackPayoutConfig, setBlackjackPayoutConfig } from "../blackjack/config";
 import { adjustWalletBalance } from "../ledger/service";
+import { createPromoCodeByAdmin, listPromoCodesByAdmin, setWithdrawWagerRemainingAtomicByAdmin } from "../promotions/service";
 import { getLevelFromXp } from "../progression/service";
 import { PLATFORM_INTERNAL_CURRENCY, PLATFORM_VIRTUAL_COIN_SYMBOL } from "../wallets/service";
 
@@ -82,12 +83,49 @@ const adjustByAdminSchema = z
     path: ["userId"]
   });
 
+const createPromoCodeSchema = z
+  .object({
+    code: z.string().trim().min(3).max(32),
+    usageLimit: z.coerce.number().int().min(1).max(1_000_000),
+    rewardAtomic: z
+      .string()
+      .trim()
+      .regex(/^\d+$/, "rewardAtomic must be an integer string")
+      .optional(),
+    rewardCoins: z.coerce.number().min(0.00000001).max(1_000_000).optional()
+  })
+  .refine((value) => Boolean(value.rewardAtomic) || typeof value.rewardCoins === "number", {
+    message: "Provide rewardAtomic or rewardCoins",
+    path: ["rewardAtomic"]
+  });
+
+const listPromoCodesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  q: z.string().trim().max(80).optional(),
+  onlyActive: z.coerce.boolean().default(false)
+});
+
+const updateUserWithdrawWagerSchema = z
+  .object({
+    remainingAtomic: z
+      .string()
+      .trim()
+      .regex(/^\d+$/, "remainingAtomic must be an integer string")
+      .optional(),
+    remainingCoins: z.coerce.number().min(0).max(1_000_000_000).optional()
+  })
+  .refine((value) => Boolean(value.remainingAtomic) || typeof value.remainingCoins === "number", {
+    message: "Provide remainingAtomic or remainingCoins",
+    path: ["remainingAtomic"]
+  });
+
 const isMissingLevelXpColumnError = (error: unknown): boolean => {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
     return true;
   }
   if (error instanceof Error) {
-    return error.message.toLowerCase().includes("levelxpatomic");
+    const message = error.message.toLowerCase();
+    return message.includes("levelxpatomic") || message.includes("withdrawwagerremainingatomic");
   }
   return false;
 };
@@ -223,6 +261,27 @@ const ADMIN_PANEL_HTML = `<!doctype html>
     </div>
 
     <div class="card">
+      <h2>Promo Codes</h2>
+      <div class="row">
+        <label>Code</label>
+        <input id="promoCodeWord" placeholder="WELCOME100" style="min-width:160px" />
+        <label>Uses</label>
+        <input id="promoCodeUses" type="number" min="1" value="100" style="width:110px" />
+        <label>Reward (coins)</label>
+        <input id="promoCodeRewardCoins" type="number" min="0.01" step="0.01" value="1.00" style="width:130px" />
+        <button id="promoCodeCreateBtn" class="success">Create promo code</button>
+        <button id="promoCodeRefreshBtn">Refresh list</button>
+      </div>
+      <div id="promoStatus" class="mono" style="margin-top:8px;"></div>
+      <table id="promoCodesTable">
+        <thead>
+          <tr><th>Code</th><th>Reward</th><th>Usage</th><th>Status</th><th>Created</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
       <h2>Cases Manager (CS2)</h2>
       <div class="row">
         <label>Preload snapshot:</label>
@@ -334,6 +393,13 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       const detailPrevBtn = document.getElementById("detailPrevBtn");
       const detailNextBtn = document.getElementById("detailNextBtn");
       const detailPageInfo = document.getElementById("detailPageInfo");
+      const promoCodeWord = document.getElementById("promoCodeWord");
+      const promoCodeUses = document.getElementById("promoCodeUses");
+      const promoCodeRewardCoins = document.getElementById("promoCodeRewardCoins");
+      const promoCodeCreateBtn = document.getElementById("promoCodeCreateBtn");
+      const promoCodeRefreshBtn = document.getElementById("promoCodeRefreshBtn");
+      const promoStatus = document.getElementById("promoStatus");
+      const promoCodesTbody = document.querySelector("#promoCodesTable tbody");
       const COIN_CURRENCY = "${PLATFORM_INTERNAL_CURRENCY}";
       const COIN_SYMBOL = "${PLATFORM_VIRTUAL_COIN_SYMBOL}";
 
@@ -1065,6 +1131,78 @@ const ADMIN_PANEL_HTML = `<!doctype html>
       };
       void bootCasesAdmin();
 
+      const renderPromoCodes = (rows) => {
+        promoCodesTbody.innerHTML = "";
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          const remainingUses = Math.max(0, Number(row.remainingUses || 0));
+          tr.innerHTML =
+            "<td><div><strong>" + row.code + "</strong></div><div class=\\"mono\\">id=" + row.id + "</div></td>" +
+            "<td class=\\"mono\\">" + formatAtomicUsd(row.rewardAtomic) + "</td>" +
+            "<td class=\\"mono\\">" + Number(row.usageCount || 0) + " / " + Number(row.usageLimit || 0) + " (left " + remainingUses + ")</td>" +
+            "<td class=\\"mono\\">" + (row.isActive ? "ACTIVE" : "DISABLED") + "</td>" +
+            "<td class=\\"mono\\">" + (row.createdAt ? new Date(row.createdAt).toISOString() : "-") + "</td>";
+          promoCodesTbody.appendChild(tr);
+        });
+      };
+
+      const loadPromoCodes = async () => {
+        const res = await req("/api/v1/admin/promo-codes?limit=200&onlyActive=false");
+        if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to load promo codes"));
+        const rows = await res.json();
+        renderPromoCodes(Array.isArray(rows) ? rows : []);
+      };
+
+      promoCodeRefreshBtn.addEventListener("click", async () => {
+        try {
+          await loadPromoCodes();
+          promoStatus.className = "mono ok";
+          promoStatus.textContent = "Promo codes refreshed.";
+        } catch (error) {
+          promoStatus.className = "mono err";
+          promoStatus.textContent = error && error.message ? error.message : "Failed to refresh promo codes.";
+        }
+      });
+
+      promoCodeCreateBtn.addEventListener("click", async () => {
+        try {
+          const code = String(promoCodeWord.value || "").trim();
+          const usageLimit = Math.max(1, Math.trunc(Number(promoCodeUses.value || "0")));
+          const rewardCoins = Number(promoCodeRewardCoins.value || "0");
+          if (!code) {
+            throw new Error("Promo code is required.");
+          }
+          if (!Number.isFinite(rewardCoins) || rewardCoins <= 0) {
+            throw new Error("Reward must be greater than 0.");
+          }
+
+          promoCodeCreateBtn.disabled = true;
+          const res = await req("/api/v1/admin/promo-codes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, usageLimit, rewardCoins })
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res, "Failed to create promo code"));
+          const created = await res.json();
+          promoStatus.className = "mono ok";
+          promoStatus.textContent =
+            "Promo code " + created.code + " created. Reward " + formatAtomicUsd(created.rewardAtomic) +
+            ", uses " + created.usageLimit + ".";
+          promoCodeWord.value = "";
+          await loadPromoCodes();
+        } catch (error) {
+          promoStatus.className = "mono err";
+          promoStatus.textContent = error && error.message ? error.message : "Failed to create promo code.";
+        } finally {
+          promoCodeCreateBtn.disabled = false;
+        }
+      });
+
+      void loadPromoCodes().catch((error) => {
+        promoStatus.className = "mono err";
+        promoStatus.textContent = error instanceof Error ? error.message : "Failed to initialize promo codes.";
+      });
+
       const persistToken = () => {
         try { localStorage.setItem("admin_panel_token", tokenInput.value.trim()); } catch (_e) {}
       };
@@ -1158,6 +1296,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 "<div class=\\"mono\\">totalDeposits=" + formatAtomicUsd(summary.totalDepositsAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">totalWithdrawals=" + formatAtomicUsd(summary.totalWithdrawalsAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">totalWithdrawalFees=" + formatAtomicUsd(summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">withdrawWagerRemaining=" + formatAtomicUsd(summary.withdrawWagerRemainingAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">rewardsRedeemed=" + formatAtomicUsd(summary.rewardsRedeemedAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">totalWagered=" + formatAtomicUsd(summary.totalWageredAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">totalPayout=" + formatAtomicUsd(summary.totalPayoutAtomic || "0") + "</div>" +
@@ -1267,6 +1406,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
               <div class="mono">publicId=#\${user.publicId ?? "-"} | id=\${user.id}</div>
               <div class="mono">role=\${user.role} status=\${user.status}</div>
               <div class="mono">canWithdraw=\${user.canWithdraw !== false} canTip=\${user.canTip !== false}</div>
+              <div class="mono">withdrawWagerRemaining=\${user.withdrawWagerRemainingCoins || "0.00"} \${COIN_SYMBOL}</div>
               <div class="mono">selfExcludeUntil=\${user.selfExcludeUntil ? new Date(user.selfExcludeUntil).toISOString() : "-"}</div>
               <div class="mono">\${user.selfExcludeUntil ? "selfExclusionStatus=ACTIVE" : "selfExclusionStatus=INACTIVE"}</div>
               <div class="mono">level=\${user.level} xp=\${user.levelXp || user.levelXpAtomic}</div>
@@ -1281,6 +1421,11 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 <button class="credit">+ Credit</button>
                 <button class="debit">- Debit</button>
               </div>
+              <div class="row" style="margin-top:6px;">
+                <span class="mono">Withdraw wager remaining:</span>
+                <input class="wager-remaining" type="number" min="0" step="0.01" value="\${user.withdrawWagerRemainingCoins || "0.00"}" style="width:130px" />
+                <button class="set-wager">Set</button>
+              </div>
               <div class="actions">
                 <button class="approve success">Approve (PLAYER+ACTIVE)</button>
                 <button class="suspend danger">Suspend</button>
@@ -1294,6 +1439,7 @@ const ADMIN_PANEL_HTML = `<!doctype html>
           \`;
 
           const amountEl = tr.querySelector(".amount");
+          const wagerRemainingEl = tr.querySelector(".wager-remaining");
           const msgEl = tr.querySelector(".msg");
           const doAdjust = async (sign) => {
             try {
@@ -1332,6 +1478,29 @@ const ADMIN_PANEL_HTML = `<!doctype html>
 
           tr.querySelector(".credit").addEventListener("click", () => void doAdjust("+"));
           tr.querySelector(".debit").addEventListener("click", () => void doAdjust("-"));
+          tr.querySelector(".set-wager").addEventListener("click", async () => {
+            try {
+              const remainingCoins = Number(wagerRemainingEl.value || "0");
+              if (!Number.isFinite(remainingCoins) || remainingCoins < 0) {
+                throw new Error("Wager remaining must be >= 0.");
+              }
+              const res = await req("/api/v1/admin/users/" + encodeURIComponent(user.id) + "/withdraw-wager", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ remainingCoins })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                throw new Error((data && data.message) ? data.message : "Failed to update wager requirement.");
+              }
+              msgEl.className = "mono msg ok";
+              msgEl.textContent = "Withdraw wager remaining set to " + data.withdrawWagerRemainingCoins + " " + COIN_SYMBOL + ".";
+              document.getElementById("searchBtn").click();
+            } catch (error) {
+              msgEl.className = "mono msg err";
+              msgEl.textContent = error && error.message ? error.message : "Failed to update wager requirement.";
+            }
+          });
           tr.querySelector(".approve").addEventListener("click", () => void setUserAccess(user.id, "ACTIVE", "PLAYER", msgEl));
           tr.querySelector(".suspend").addEventListener("click", () => void setUserAccess(user.id, "SUSPENDED", user.role, msgEl));
           tr.querySelector(".withdraw-toggle").addEventListener("click", () =>
@@ -1555,6 +1724,61 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get(
+    "/promo-codes",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const query = listPromoCodesQuerySchema.parse(request.query);
+      const rows = await listPromoCodesByAdmin(query);
+      return reply.send(rows);
+    }
+  );
+
+  fastify.post(
+    "/promo-codes",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const body = createPromoCodeSchema.parse(request.body);
+      const rewardAtomic =
+        typeof body.rewardAtomic === "string" && body.rewardAtomic.trim().length > 0
+          ? BigInt(body.rewardAtomic)
+          : BigInt(Math.round((body.rewardCoins ?? 0) * Number(COIN_ATOMIC_FACTOR)));
+      const created = await createPromoCodeByAdmin({
+        actorUserId: request.user.sub,
+        code: body.code,
+        usageLimit: body.usageLimit,
+        rewardAtomic
+      });
+      return reply.code(201).send(created);
+    }
+  );
+
+  fastify.patch(
+    "/users/:userId/withdraw-wager",
+    {
+      preHandler: [requireRoles(["ADMIN"])]
+    },
+    async (request, reply) => {
+      const params = userDetailParamsSchema.parse(request.params);
+      const body = updateUserWithdrawWagerSchema.parse(request.body);
+      const remainingAtomic =
+        typeof body.remainingAtomic === "string" && body.remainingAtomic.trim().length > 0
+          ? BigInt(body.remainingAtomic)
+          : BigInt(Math.round((body.remainingCoins ?? 0) * Number(COIN_ATOMIC_FACTOR)));
+      const updated = await setWithdrawWagerRemainingAtomicByAdmin(params.userId, remainingAtomic);
+      return reply.send({
+        userId: updated.userId,
+        withdrawWagerRemainingAtomic: updated.remainingAtomic.toString(),
+        withdrawWagerRemainingCoins: updated.remainingCoins,
+        currency: PLATFORM_VIRTUAL_COIN_SYMBOL
+      });
+    }
+  );
+
+  fastify.get(
     "/users",
     {
       preHandler: [requireRoles(["ADMIN"])]
@@ -1597,6 +1821,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           createdAt: true,
           updatedAt: true,
           levelXpAtomic: true,
+          withdrawWagerRemainingAtomic: true,
           wallets: {
             where: { currency: PLATFORM_INTERNAL_CURRENCY },
             select: {
@@ -1651,6 +1876,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           ...row,
           publicId: null,
           levelXpAtomic: 0n,
+          withdrawWagerRemainingAtomic: 0n,
           selfExcludeUntil: null
         }));
       });
@@ -1674,6 +1900,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             user.selfExcludedUntil.getTime() > Date.now(),
           level: getLevelFromXp(user.levelXpAtomic),
           levelXpAtomic: user.levelXpAtomic.toString(),
+          withdrawWagerRemainingAtomic:
+            "withdrawWagerRemainingAtomic" in user
+              ? user.withdrawWagerRemainingAtomic.toString()
+              : "0",
+          withdrawWagerRemainingCoins:
+            "withdrawWagerRemainingAtomic" in user
+              ? toCoinsString(user.withdrawWagerRemainingAtomic)
+              : "0.00",
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
           wallets: ("wallets" in user ? user.wallets : []).map((wallet) => ({
@@ -1765,6 +1999,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           createdAt: true,
           updatedAt: true,
           levelXpAtomic: true,
+          withdrawWagerRemainingAtomic: true,
           wallets: {
             where: { currency: PLATFORM_INTERNAL_CURRENCY },
             select: {
@@ -1812,6 +2047,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           ...legacy,
           publicId: null,
           levelXpAtomic: 0n,
+          withdrawWagerRemainingAtomic: 0n,
           selfExcludedUntil: null
         };
       });
@@ -2068,6 +2304,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           totalDepositsAtomic: (depositsAgg._sum.amountAtomic ?? 0n).toString(),
           totalWithdrawalsAtomic: (withdrawalsAgg._sum.amountAtomic ?? 0n).toString(),
           totalWithdrawalFeesAtomic: (withdrawalsAgg._sum.feeAtomic ?? 0n).toString(),
+          withdrawWagerRemainingAtomic:
+            "withdrawWagerRemainingAtomic" in userRow
+              ? userRow.withdrawWagerRemainingAtomic.toString()
+              : "0",
+          withdrawWagerRemainingCoins:
+            "withdrawWagerRemainingAtomic" in userRow
+              ? toCoinsString(userRow.withdrawWagerRemainingAtomic)
+              : "0.00",
           rewardsRedeemedAtomic: "0",
           totalWageredAtomic: totalWageredAtomic.toString(),
           totalPayoutAtomic: totalPayoutAtomic.toString(),

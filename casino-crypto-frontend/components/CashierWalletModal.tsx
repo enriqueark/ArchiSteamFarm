@@ -1,5 +1,12 @@
 import { useEffect, useRef } from "react";
-import { createWithdrawal, getDepositAddresses, type CashierWithdrawalAsset, type CashierWithdrawalNetwork } from "@/lib/api";
+import {
+  applyDepositBonusCode,
+  createWithdrawal,
+  getDepositAddresses,
+  redeemPromoCode,
+  type CashierWithdrawalAsset,
+  type CashierWithdrawalNetwork
+} from "@/lib/api";
 import { useToast } from "@/lib/toast";
 
 type Props = {
@@ -26,6 +33,24 @@ type WalletBridgeRequest =
         network: CashierWithdrawalNetwork;
         amountCoins: string;
         destinationAddress: string;
+      };
+    }
+  | {
+      type: "dinoskins-wallet-bridge";
+      direction: "request";
+      requestId: number;
+      action: "redeemPromoCode";
+      payload: {
+        code: string;
+      };
+    }
+  | {
+      type: "dinoskins-wallet-bridge";
+      direction: "request";
+      requestId: number;
+      action: "applyDepositBonusCode";
+      payload: {
+        code: string;
       };
     };
 
@@ -122,6 +147,26 @@ export default function CashierWalletModal({ open, onClose, onBalanceRefresh }: 
           onBalanceRefresh?.();
           window.dispatchEvent(new Event("refreshBalance"));
           reply(true, created);
+          return;
+        }
+        if (data.action === "redeemPromoCode") {
+          const payload = data.payload as { code?: string } | undefined;
+          if (!payload || typeof payload.code !== "string") {
+            throw new Error("Invalid promo code payload.");
+          }
+          const redeemed = await redeemPromoCode(payload.code);
+          onBalanceRefresh?.();
+          window.dispatchEvent(new Event("refreshBalance"));
+          reply(true, redeemed);
+          return;
+        }
+        if (data.action === "applyDepositBonusCode") {
+          const payload = data.payload as { code?: string } | undefined;
+          if (!payload || typeof payload.code !== "string") {
+            throw new Error("Invalid bonus code payload.");
+          }
+          const applied = await applyDepositBonusCode(payload.code);
+          reply(true, applied);
           return;
         }
         throw new Error("Unsupported wallet bridge action.");

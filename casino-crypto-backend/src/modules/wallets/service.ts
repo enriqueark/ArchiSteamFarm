@@ -2,6 +2,7 @@ import { Currency, Prisma } from "@prisma/client";
 
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
+import { consumeWithdrawWagerRequirementInTx } from "../promotions/service";
 import { ensureUserAllowedFor } from "../users/access-guard";
 
 export const PLATFORM_INTERNAL_CURRENCY: Currency = Currency.USDT;
@@ -96,6 +97,7 @@ const debitBalanceWithRowLock = async (
       lockedAtomic: nextLocked
     }
   });
+  await consumeWithdrawWagerRequirementInTx(tx, input.userId, input.amountAtomic);
 
   return {
     walletId: wallet.id,

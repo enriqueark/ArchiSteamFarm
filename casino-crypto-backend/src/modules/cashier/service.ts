@@ -6,7 +6,7 @@ import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { adjustWalletBalance } from "../ledger/service";
 import { quoteDepositToCoins, quoteWithdrawFromCoins } from "../pricing/service";
-import { applyReferralDepositBonusBestEffort } from "../affiliates/service";
+import { addWithdrawWagerRequirementBestEffort, applyDepositBonusForDepositBestEffort, getWithdrawWagerRemainingAtomic } from "../promotions/service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 import { ensureUserAllowedFor } from "../users/access-guard";
 import {
@@ -20,6 +20,7 @@ import {
 } from "./oxapay";
 
 const COINS_DECIMALS = 8;
+const COINS_ATOMIC_FACTOR = 10n ** BigInt(COINS_DECIMALS);
 
 const ASSET_DECIMALS: Record<CashierAsset, number> = {
   BTC: 8,
@@ -88,6 +89,15 @@ const toAssetAtomic = (value: number, decimals: number): bigint => {
     return 0n;
   }
   return BigInt(Math.floor(value * 10 ** decimals));
+};
+
+const toCoinsString = (atomic: bigint, decimals = 2): string => {
+  const sign = atomic < 0n ? "-" : "";
+  const abs = atomic < 0n ? -atomic : atomic;
+  const whole = abs / COINS_ATOMIC_FACTOR;
+  const fractionRaw = (abs % COINS_ATOMIC_FACTOR).toString().padStart(8, "0");
+  const fraction = decimals > 0 ? `.${fractionRaw.slice(0, decimals)}` : "";
+  return `${sign}${whole.toString()}${fraction}`;
 };
 
 const stableStringify = (value: unknown): string => {
@@ -311,6 +321,17 @@ export const createCashierWithdrawal = async (input: {
     .catch(() => null);
   if (userFlags && userFlags.canWithdraw === false) {
     throw new AppError("Withdrawals are disabled for this account", 403, "WITHDRAWALS_DISABLED_FOR_USER");
+  }
+  const withdrawWagerRemainingAtomic = await getWithdrawWagerRemainingAtomic(input.userId);
+  if (withdrawWagerRemainingAtomic > 0n) {
+    throw new AppError(
+      `You must wager ${toCoinsString(withdrawWagerRemainingAtomic)} more COINS before withdrawing`,
+      409,
+      "WITHDRAW_WAGER_REQUIREMENT_NOT_MET",
+      {
+        withdrawWagerRemainingAtomic: withdrawWagerRemainingAtomic.toString()
+      }
+    );
   }
 
   const method = getMethodOrThrow(input.asset, input.network);
@@ -608,7 +629,8 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
       creditedTransactionId: credited.entry.id
     }
   });
-  void applyReferralDepositBonusBestEffort(deposit.id, deposit.userId, deposit.amountAtomic);
+  void addWithdrawWagerRequirementBestEffort(deposit.userId, deposit.amountAtomic);
+  void applyDepositBonusForDepositBestEffort(deposit.id, deposit.userId, deposit.amountAtomic);
 };
 
 export const processPayoutWebhook = async (payload: OxaPayPayoutWebhookPayload): Promise<void> => {

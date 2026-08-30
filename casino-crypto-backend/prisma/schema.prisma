@@ -169,6 +169,7 @@ model User {
   twoFactorEnabled Boolean @default(false)
   twoFactorSecret String?
   twoFactorTempSecret String?
+  withdrawWagerRemainingAtomic BigInt @default(0)
   canWithdraw  Boolean    @default(true)
   canTip       Boolean    @default(true)
   selfExcludedUntil DateTime?
@@ -198,6 +199,11 @@ model User {
   affiliateCommissionEventsAsReferrer AffiliateCommissionEvent[] @relation("AffiliateCommissionEventsAsReferrer")
   affiliateCommissionEventsAsReferred AffiliateCommissionEvent[] @relation("AffiliateCommissionEventsAsReferred")
   affiliateDepositBonuses AffiliateDepositBonus[] @relation("AffiliateDepositBonusesAsReferred")
+  depositBonusActivation AffiliateDepositBonusActivation? @relation("DepositBonusActivationUser")
+  depositBonusActivationsAsReferrer AffiliateDepositBonusActivation[] @relation("DepositBonusActivationReferrer")
+  affiliateDepositBonusCredits AffiliateDepositBonusCredit[] @relation("AffiliateDepositBonusCreditsAsReferred")
+  createdPromoCodes PromoCode[] @relation("PromoCodesCreatedByUser")
+  promoCodeRedemptions PromoCodeRedemption[]
   createdCases Case[] @relation("CasesCreatedByUser")
   createdSkinCatalogEntries Cs2SkinCatalog[] @relation("Cs2SkinCatalogCreatedByUser")
   caseOpenings CaseOpening[]
@@ -413,9 +419,42 @@ model AffiliateCode {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   referrals Referral[]
+  depositBonusActivations AffiliateDepositBonusActivation[]
 
   @@index([code])
   @@map("affiliate_codes")
+}
+
+model PromoCode {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  rewardAtomic    BigInt
+  usageLimit      Int
+  usageCount      Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdByUserId String?
+  createdByUser   User?    @relation("PromoCodesCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  redemptions     PromoCodeRedemption[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  userId      String
+  rewardAtomic BigInt
+  createdAt   DateTime @default(now())
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Restrict)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("promo_code_redemptions")
 }
 
 model Referral {
@@ -473,6 +512,41 @@ model AffiliateDepositBonus {
   @@index([referralId, createdAt(sort: Desc)])
   @@index([referredUserId, createdAt(sort: Desc)])
   @@map("affiliate_deposit_bonuses")
+}
+
+model AffiliateDepositBonusActivation {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  affiliateCodeId String
+  referrerUserId String
+  code           String
+  bonusBps       Int      @default(500)
+  activatedAt    DateTime @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation("DepositBonusActivationUser", fields: [userId], references: [id], onDelete: Cascade)
+  referrer       User     @relation("DepositBonusActivationReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  affiliateCode  AffiliateCode @relation(fields: [affiliateCodeId], references: [id], onDelete: Restrict)
+  credits        AffiliateDepositBonusCredit[]
+
+  @@index([expiresAt])
+  @@index([affiliateCodeId, expiresAt])
+  @@map("affiliate_deposit_bonus_activations")
+}
+
+model AffiliateDepositBonusCredit {
+  id             String   @id @default(cuid())
+  depositId      String   @unique
+  activationId   String
+  referredUserId String
+  bonusAtomic    BigInt
+  createdAt      DateTime @default(now())
+  activation     AffiliateDepositBonusActivation @relation(fields: [activationId], references: [id], onDelete: Cascade)
+  referred       User     @relation("AffiliateDepositBonusCreditsAsReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referredUserId, createdAt(sort: Desc)])
+  @@map("affiliate_deposit_bonus_credits")
 }
 
 model Session {
