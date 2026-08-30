@@ -516,12 +516,9 @@ export const repairBrokenCaseImageUrlsBestEffort = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    logger.warn(
-      {
-        err: error instanceof Error ? error.message : String(error)
-      },
-      "case.images.repair_best_effort_failed"
-    );
+    console.warn("case.images.repair_best_effort_failed", {
+      err: error instanceof Error ? error.message : String(error)
+    });
   }
 };
 
