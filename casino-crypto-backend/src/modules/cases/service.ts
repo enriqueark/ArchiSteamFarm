@@ -170,9 +170,17 @@ const getVolatilityTier = (index: number): VolatilityTier => {
 
 const normalizeSkinLabel = (weapon: string, skin: string): string => {
   const left = weapon.trim();
-  const right = skin.trim();
+  let right = skin.trim();
   if (!left) {
     return right;
+  }
+  if (!right) {
+    return left;
+  }
+  const escapedLeft = left.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const duplicatePrefixRegex = new RegExp(`^${escapedLeft}\\s*\\|\\s*`, "iu");
+  while (duplicatePrefixRegex.test(right)) {
+    right = right.replace(duplicatePrefixRegex, "").trim();
   }
   if (!right) {
     return left;
@@ -183,8 +191,14 @@ const normalizeSkinLabel = (weapon: string, skin: string): string => {
 const normalizeSourceSkinKey = (sourceCaseSlug: string, name: string): string =>
   `${sourceCaseSlug}:${name.toLowerCase().replace(/\s+/g, " ").trim()}`;
 
-const FALLBACK_SKIN_CATALOG_URL =
-  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json";
+const FALLBACK_CATALOG_DATASET_URLS = [
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json",
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/stickers.json",
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/graffiti.json",
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/music_kits.json",
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/patches.json",
+  "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/agents.json"
+] as const;
 const GUARANTEED_FALLBACK_SKIN_IMAGE_URL =
   "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_CNk7uW-V6JsJPWsAm6Xyfo45-c5GXDnwB534DuEwtuoIHOfaAYiAsYjF-QItUaxmoC0MO_h5ALcjJUFk3sEzfdk4w";
 const BLOCKED_SKIN_IMAGE_HOSTS = new Set([
@@ -244,7 +258,12 @@ const buildSkinLookupCandidates = (
   const pipeIdx = base.indexOf("|");
   if (pipeIdx > 0) {
     const weapon = base.slice(0, pipeIdx).trim();
-    const skin = base.slice(pipeIdx + 1).trim();
+    let skin = base.slice(pipeIdx + 1).trim();
+    const escapedWeapon = weapon.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const duplicatePrefixRegex = new RegExp(`^${escapedWeapon}\\s*\\|\\s*`, "iu");
+    while (duplicatePrefixRegex.test(skin)) {
+      skin = skin.replace(duplicatePrefixRegex, "").trim();
+    }
     const stattrakPrefix = skin.match(/^stattrak™\s*/iu)?.[0] ?? "";
     const souvenirPrefix = skin.match(/^souvenir\s*/iu)?.[0] ?? "";
     if (stattrakPrefix) {
@@ -330,6 +349,13 @@ const parseCandidateImageUrl = (value: string | null | undefined): string | null
   return parsed.toString();
 };
 
+type FallbackCatalogRow = {
+  name?: unknown;
+  market_hash_name?: unknown;
+  image?: unknown;
+  pattern?: { id?: unknown } | null;
+};
+
 const ensureFallbackImageMapLoaded = async (): Promise<Map<string, string> | null> => {
   if (fallbackImageByNameMap) {
     return fallbackImageByNameMap;
@@ -340,37 +366,45 @@ const ensureFallbackImageMapLoaded = async (): Promise<Map<string, string> | nul
 
   fallbackImageByNameMapPromise = (async () => {
     try {
-      const response = await fetch(FALLBACK_SKIN_CATALOG_URL, {
-        method: "GET",
-        headers: {
-          "user-agent": "casino-crypto-backend/1.0"
-        }
-      });
-      if (!response.ok) {
-        return null;
-      }
-      const data = (await response.json()) as Array<{ name?: unknown; image?: unknown; pattern?: { id?: unknown } | null }>;
       const next = new Map<string, string>();
       const byWeapon = new Map<string, string>();
-      for (const row of data) {
-        const name = typeof row?.name === "string" ? row.name : "";
-        const image = parseCandidateImageUrl(typeof row?.image === "string" ? row.image : "");
-        if (!name || !image) continue;
-        const base = name.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
-        const weapon = extractWeaponFromSkinName(base);
-        if (weapon && !byWeapon.has(weapon)) {
-          byWeapon.set(weapon, image);
-        }
-        for (const candidate of buildSkinLookupCandidates(base)) {
-          if (!next.has(candidate)) {
-            next.set(candidate, image);
+      for (const datasetUrl of FALLBACK_CATALOG_DATASET_URLS) {
+        const response = await fetch(datasetUrl, {
+          method: "GET",
+          headers: {
+            "user-agent": "casino-crypto-backend/1.0"
           }
+        });
+        if (!response.ok) {
+          continue;
         }
-        const patternId = typeof row?.pattern?.id === "string" ? row.pattern.id : "";
-        const alias = buildVariantAliasFromPattern(base, patternId);
-        if (alias) {
-        for (const candidate of buildSkinLookupCandidates(alias, { collapseVariants: false })) {
-            next.set(candidate, image);
+        const data = (await response.json()) as FallbackCatalogRow[];
+        for (const row of data) {
+          const image = parseCandidateImageUrl(typeof row?.image === "string" ? row.image : "");
+          if (!image) continue;
+          const sourceNames = [
+            typeof row?.name === "string" ? row.name : "",
+            typeof row?.market_hash_name === "string" ? row.market_hash_name : ""
+          ].filter((value): value is string => Boolean(value && value.trim().length > 0));
+
+          for (const sourceName of sourceNames) {
+            const base = sourceName.replace(SKIN_WEAR_SUFFIX_REGEX, "").trim();
+            const weapon = extractWeaponFromSkinName(base);
+            if (weapon && !byWeapon.has(weapon)) {
+              byWeapon.set(weapon, image);
+            }
+            for (const candidate of buildSkinLookupCandidates(base)) {
+              if (!next.has(candidate)) {
+                next.set(candidate, image);
+              }
+            }
+            const patternId = typeof row?.pattern?.id === "string" ? row.pattern.id : "";
+            const alias = buildVariantAliasFromPattern(base, patternId);
+            if (alias) {
+              for (const candidate of buildSkinLookupCandidates(alias, { collapseVariants: false })) {
+                next.set(candidate, image);
+              }
+            }
           }
         }
       }
@@ -418,12 +452,6 @@ const buildFallbackImageUrlFromName = (name: string): string => {
   if (weapon && fallbackImageByWeaponMap?.has(weapon)) {
     return fallbackImageByWeaponMap.get(weapon) as string;
   }
-  if (fallbackImageByNameMap && fallbackImageByNameMap.size > 0) {
-    const anyKnown = fallbackImageByNameMap.values().next().value;
-    if (typeof anyKnown === "string" && anyKnown.trim().length > 0) {
-      return anyKnown;
-    }
-  }
   return GUARANTEED_FALLBACK_SKIN_IMAGE_URL;
 };
 
@@ -446,39 +474,25 @@ export const repairBrokenCaseImageUrlsBestEffort = async (): Promise<void> => {
     const [catalogRows, caseItemRows] = await Promise.all([
       prisma.cs2SkinCatalog.findMany({
         where: {
-          OR: [
-            { imageUrl: null },
-            { imageUrl: "" },
-            { imageUrl: { contains: "cdn.rain.gg" } },
-            { imageUrl: { contains: "cfdn.wiki.skin.club" } },
-            { imageUrl: { contains: "cfdn.skin.club" } },
-            { imageUrl: { contains: "cdn.csgoskins.gg" } }
-          ]
+          isActive: true
         },
         select: {
           id: true,
           name: true,
           imageUrl: true
         },
-        take: 6_000
+        take: 12_000
       }),
       prisma.caseItem.findMany({
         where: {
-          OR: [
-            { imageUrl: null },
-            { imageUrl: "" },
-            { imageUrl: { contains: "cdn.rain.gg" } },
-            { imageUrl: { contains: "cfdn.wiki.skin.club" } },
-            { imageUrl: { contains: "cfdn.skin.club" } },
-            { imageUrl: { contains: "cdn.csgoskins.gg" } }
-          ]
+          isActive: true
         },
         select: {
           id: true,
           name: true,
           imageUrl: true
         },
-        take: 6_000
+        take: 12_000
       })
     ]);
 
