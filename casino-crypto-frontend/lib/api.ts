@@ -644,6 +644,67 @@ export async function createWithdrawal(input: {
   );
 }
 
+export interface PromoRedeemResponse {
+  redemptionId: string;
+  promoCode: string;
+  rewardAtomic: string;
+  rewardCoins: string;
+  usageLeft: number;
+  currency: string;
+  withdrawWagerRemainingAtomic: string;
+  withdrawWagerRemainingCoins: string;
+}
+
+export interface DepositBonusApplyResponse {
+  code: string;
+  bonusPercent: number;
+  activatedAt: string;
+  expiresAt: string;
+  referrer: {
+    publicId: number | null;
+    userLabel: string;
+  };
+}
+
+export interface DepositBonusStatusResponse {
+  active: boolean;
+  code?: string;
+  bonusPercent?: number;
+  activatedAt?: string;
+  expiresAt?: string;
+  referrer?: {
+    publicId: number | null;
+    userLabel: string;
+  };
+  withdrawWagerRemainingAtomic: string;
+}
+
+export async function redeemPromoCode(code: string): Promise<PromoRedeemResponse> {
+  return request<PromoRedeemResponse>(
+    "/promotions/promo-codes/redeem",
+    {
+      method: "POST",
+      body: JSON.stringify({ code })
+    },
+    true
+  );
+}
+
+export async function applyDepositBonusCode(code: string): Promise<DepositBonusApplyResponse> {
+  return request<DepositBonusApplyResponse>(
+    "/promotions/deposit-bonus/apply",
+    {
+      method: "POST",
+      body: JSON.stringify({ code })
+    },
+    true
+  );
+}
+
+export async function getDepositBonusStatus(): Promise<DepositBonusStatusResponse> {
+  return request<DepositBonusStatusResponse>("/promotions/deposit-bonus/status", {}, true);
+}
+
 export async function actBlackjack(gameId: string, action: BlackjackAction): Promise<BlackjackGame> {
   return request<BlackjackGame>(
     `/blackjack/games/${gameId}/action`,
