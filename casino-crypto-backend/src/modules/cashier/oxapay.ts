@@ -384,13 +384,20 @@ export const createOxaPayStaticAddress = async (input: {
   )
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-  const shortlistedNetworkCandidates = networkCandidates.slice(0, 1);
 
   const payloads: Record<string, unknown>[] = [];
-  for (const networkValue of shortlistedNetworkCandidates) {
+  for (const networkValue of networkCandidates) {
     payloads.push({
       network: networkValue,
-      to_currency: input.method.asset
+      to_currency: input.method.asset,
+      order_id: orderId,
+      callback_url: input.callbackUrl
+    });
+    payloads.push({
+      network: networkValue,
+      currency: input.method.asset,
+      order_id: orderId,
+      callback_url: input.callbackUrl
     });
   }
 
@@ -419,10 +426,12 @@ export const createOxaPayStaticAddress = async (input: {
   }
 
   const legacyPayloads: Record<string, unknown>[] = [];
-  for (const networkValue of shortlistedNetworkCandidates) {
+  for (const networkValue of networkCandidates) {
     legacyPayloads.push({
       network: networkValue,
-      currency: input.method.asset
+      currency: input.method.asset,
+      orderId,
+      callback_url: input.callbackUrl
     });
   }
 
