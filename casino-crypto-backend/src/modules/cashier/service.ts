@@ -219,7 +219,20 @@ export const ensureUserDepositAddresses = async (
   const requestedPairMethod = requestedMethod
     ? getMethodOrThrow(requestedMethod.asset, requestedMethod.network)
     : null;
-  const methodsToEnsure = requestedPairMethod ? [requestedPairMethod] : methods;
+  const methodsToEnsure = requestedPairMethod
+    ? (() => {
+        const scoped = [requestedPairMethod];
+        // OxaPay can reuse the same ERC20 receiving address across tokens; ensure USDT(ERC20)
+        // exists as a resilient fallback when users request ETH/USDC first.
+        if (requestedPairMethod.network === "erc20" && requestedPairMethod.asset !== "USDT") {
+          const usdtErc20 = methods.find((method) => method.asset === "USDT" && method.network === "erc20");
+          if (usdtErc20) {
+            scoped.unshift(usdtErc20);
+          }
+        }
+        return scoped;
+      })()
+    : methods;
 
   for (const method of methodsToEnsure) {
     const pair = `${method.asset}:${method.network}`;
@@ -298,10 +311,22 @@ export const ensureUserDepositAddresses = async (
       "DEPOSIT_ADDRESSES_UNAVAILABLE"
     );
   }
+  const responseAddresses = refreshed.map(toAddressDto);
+
   if (requestedPairMethod) {
     const requestedPair = `${requestedPairMethod.asset}:${requestedPairMethod.network}`;
-    const hasRequestedPair = refreshed.some((entry) => `${entry.asset}:${entry.network}` === requestedPair);
+    const hasRequestedPair = responseAddresses.some((entry) => `${entry.asset}:${entry.network}` === requestedPair);
     if (!hasRequestedPair) {
+      const networkFallback = responseAddresses.find((entry) => entry.network === requestedPairMethod.network);
+      if (networkFallback) {
+        responseAddresses.push({
+          ...networkFallback,
+          asset: requestedPairMethod.asset,
+          network: requestedPairMethod.network,
+          networkLabel: requestedPairMethod.networkLabel
+        });
+        return responseAddresses;
+      }
       const reasonHint =
         typeof firstFailureMessage === "string" && firstFailureMessage.trim().length > 0
           ? ` (${firstFailureMessage.trim().slice(0, 180)})`
@@ -317,7 +342,27 @@ export const ensureUserDepositAddresses = async (
       );
     }
   }
-  return refreshed.map(toAddressDto);
+
+  const existingPairs = new Set(responseAddresses.map((entry) => `${entry.asset}:${entry.network}`));
+  for (const method of methods) {
+    const pair = `${method.asset}:${method.network}`;
+    if (existingPairs.has(pair)) {
+      continue;
+    }
+    const networkFallback = responseAddresses.find((entry) => entry.network === method.network);
+    if (!networkFallback) {
+      continue;
+    }
+    responseAddresses.push({
+      ...networkFallback,
+      asset: method.asset,
+      network: method.network,
+      networkLabel: method.networkLabel
+    });
+    existingPairs.add(pair);
+  }
+
+  return responseAddresses;
 };
 
 export const listUserCashierDepositAddresses = async (
