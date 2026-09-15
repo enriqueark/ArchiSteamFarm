@@ -32,6 +32,8 @@ const SUIT_LARGE: Record<string, string> = {
 
 function parseCard(c: string) { const s = c.slice(-1); return { rank: c.slice(0, -1).toUpperCase(), suit: s, sym: SUIT_SYM[s] || "", clr: SUIT_CLR[s] || "#1a1919" }; }
 function fmtCoins(v: string | null | undefined) { if (!v) return "0.00"; const n = Number(v) / 1e8; return isNaN(n) ? "0.00" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const normalizeDecimalSeparator = (value: string) => value.replace(/,/g, ".");
+const parseCoinsInput = (value: string): number => Number.parseFloat(normalizeDecimalSeparator(value));
 
 function Card({ code, faceDown, idx, flipping, splitOffset, tiltDeg = 0, dealDelayMs }: { code: string; faceDown?: boolean; idx: number; flipping?: boolean; splitOffset?: number; tiltDeg?: number; dealDelayMs?: number }) {
   const { rank, suit, clr } = parseCard(code);
@@ -183,12 +185,12 @@ export default function BlackjackPage() {
     if (ended) { setGame(null); setShowResult(false); setRevealedDealerCount(0); }
     setErr(null); setLd(true);
     try {
-      const mainBet = Number.parseFloat(bet);
+      const mainBet = parseCoinsInput(bet);
       if (!Number.isFinite(mainBet) || mainBet < BLACKJACK_MIN_BET_COINS) {
         throw new Error(`Minimum blackjack bet is ${BLACKJACK_MIN_BET_COINS.toFixed(2)}`);
       }
       const ba = String(Math.round(mainBet * 1e8));
-      const pv = parseFloat(sidePairs); const tv = parseFloat(side21);
+      const pv = parseCoinsInput(sidePairs); const tv = parseCoinsInput(side21);
       const g = await startBlackjackGame({ currency: "USDT", betAtomic: ba, ...(pv > 0 ? { sideBetPairsAtomic: String(Math.round(pv * 1e8)) } : {}), ...(tv > 0 ? { sideBet21Plus3Atomic: String(Math.round(tv * 1e8)) } : {}) }); refreshBalance();
       setGame(g);
       for (let i = 0; i < 4; i++) setTimeout(playDealSound, i * 300);
@@ -398,7 +400,7 @@ export default function BlackjackPage() {
                 <div key={inp.label} style={{ minWidth: 0, textAlign: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", background: "#090909", borderRadius: 12, border: "1px solid #2a2d32", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.55)", padding: "0 4px 0 0", height: 42 }}>
                     <CoinIcon size={20} style={{ margin: "0 6px", flexShrink: 0 }} />
-                    <input value={inp.val} onChange={(e) => inp.set(e.target.value)}
+                    <input value={inp.val} onChange={(e) => inp.set(normalizeDecimalSeparator(e.target.value))}
                       style={{ flex: 1, height: "100%", border: "none", outline: "none", background: "transparent", color: "#fff", fontSize: 16, fontFamily: G, fontWeight: 500, padding: 0, minWidth: 0 }} />
                   </div>
                   <p style={{ color: "#828282", fontSize: 11, margin: "5px 0 0", fontFamily: G }}>{inp.label}</p>
