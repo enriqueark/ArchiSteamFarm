@@ -1208,6 +1208,16 @@ const METHOD_CONFIG = {
 const METHOD_BY_PAIR = Object.fromEntries(
   Object.entries(METHOD_CONFIG).map(([name, config]) => [`${config.asset}:${config.network}`, name])
 );
+const getMethodRequestPayload = (methodName) => {
+  const config = METHOD_CONFIG[methodName];
+  if (!config || config.withdrawRate <= 0 || config.network === "dogecoin") {
+    return null;
+  }
+  return {
+    asset: config.asset,
+    network: config.network
+  };
+};
 
 const liveAddressByMethod = {};
 
@@ -1285,10 +1295,11 @@ const updateMethodAvailability = () => {
   });
 };
 
-const loadDepositAddressesFromApi = async () => {
+const loadDepositAddressesFromApi = async (methodName) => {
   if (!EMBED_MODE) return;
+  const scopedPayload = methodName ? getMethodRequestPayload(methodName) : null;
   try {
-    const response = await hostRequest("getDepositAddresses", {});
+    const response = await hostRequest("getDepositAddresses", scopedPayload || {});
     const addresses = Array.isArray(response?.addresses) ? response.addresses : [];
     Object.keys(liveAddressByMethod).forEach((key) => {
       delete liveAddressByMethod[key];
@@ -1301,8 +1312,18 @@ const loadDepositAddressesFromApi = async () => {
       liveAddressByMethod[methodName] = entry;
     });
     updateMethodAvailability();
+    if (currentDepositCrypto) {
+      detailAddress.textContent = getAddressString(currentDepositCrypto);
+      detailQR.src = getQrString(currentDepositCrypto);
+    }
+    if (methodName && !getAddressEntry(methodName)) {
+      throw new Error(`Deposit address for ${methodName} is still pending. Please try again.`);
+    }
   } catch (error) {
     updateMethodAvailability();
+    if (methodName) {
+      throw error;
+    }
     notifyError(error instanceof Error ? error.message : "Failed to load deposit addresses");
   }
 };
@@ -1373,13 +1394,23 @@ function showBanner(){
 }
 
 methods.forEach(method => {
-  method.addEventListener("click", () => {
+  method.addEventListener("click", async () => {
     const methodName = method.dataset.method;
     if (!methodName) return;
     const group = method.closest(".methods");
     group.querySelectorAll(".method").forEach(item => item.classList.remove("selected"));
     method.classList.add("selected");
     showDepositDetails(methodName);
+    if (EMBED_MODE && !getAddressEntry(methodName)) {
+      detailAddress.textContent = "Generating OxaPay address...";
+      detailQR.removeAttribute("src");
+      try {
+        await loadDepositAddressesFromApi(methodName);
+      } catch (error) {
+        notifyError(error instanceof Error ? error.message : "Failed to generate deposit address.");
+      }
+      showDepositDetails(methodName);
+    }
     notify(methodName + " selected");
   });
 });

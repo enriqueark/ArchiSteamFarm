@@ -18,6 +18,14 @@ import {
 
 const NETWORKS = ["bitcoin", "erc20", "trc20", "solana", "litecoin"] as const;
 const payoutAssetSchema = z.enum(CASHIER_ASSETS);
+const depositAddressQuerySchema = z
+  .object({
+    asset: payoutAssetSchema.optional(),
+    network: z.enum(NETWORKS).optional()
+  })
+  .refine((value) => Boolean(value.asset) === Boolean(value.network), {
+    message: "asset and network must be provided together"
+  });
 
 const requestWithdrawSchema = z.object({
   asset: payoutAssetSchema,
@@ -87,12 +95,30 @@ const normalizeRawBody = (rawBody: string | undefined, body: unknown): string =>
 
 export const cashierRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/deposit-addresses", { preHandler: requireAuth }, async (request, reply) => {
-    const addresses = await listUserCashierDepositAddresses(request.user.sub);
+    const query = depositAddressQuerySchema.parse(request.query);
+    const addresses = await listUserCashierDepositAddresses(
+      request.user.sub,
+      query.asset && query.network
+        ? {
+            asset: query.asset,
+            network: query.network
+          }
+        : undefined
+    );
     return reply.send({ addresses });
   });
 
   fastify.get("/deposit-addresses/current", { preHandler: requireAuth }, async (request, reply) => {
-    const addresses = await listUserCashierDepositAddresses(request.user.sub);
+    const query = depositAddressQuerySchema.parse(request.query);
+    const addresses = await listUserCashierDepositAddresses(
+      request.user.sub,
+      query.asset && query.network
+        ? {
+            asset: query.asset,
+            network: query.network
+          }
+        : undefined
+    );
     return reply.send({ addresses });
   });
 

@@ -21,7 +21,10 @@ type WalletBridgeRequest =
       direction: "request";
       requestId: number;
       action: "getDepositAddresses";
-      payload?: unknown;
+      payload?: {
+        asset?: CashierWithdrawalAsset;
+        network?: CashierWithdrawalNetwork;
+      };
     }
   | {
       type: "dinoskins-wallet-bridge";
@@ -119,7 +122,21 @@ export default function CashierWalletModal({ open, onClose, onBalanceRefresh }: 
 
       const run = async () => {
         if (data.action === "getDepositAddresses") {
-          const result = await getDepositAddresses();
+          const payload = data.payload as
+            | {
+                asset?: CashierWithdrawalAsset;
+                network?: CashierWithdrawalNetwork;
+              }
+            | undefined;
+          const hasScopedMethod = Boolean(payload?.asset && payload?.network);
+          const result = await getDepositAddresses(
+            hasScopedMethod
+              ? {
+                  asset: payload!.asset!,
+                  network: payload!.network!
+                }
+              : undefined
+          );
           reply(true, result);
           return;
         }

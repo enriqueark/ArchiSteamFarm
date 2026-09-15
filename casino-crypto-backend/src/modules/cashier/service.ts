@@ -167,7 +167,10 @@ const toAddressDto = (entry: {
 export const isCashierEnabled = (): boolean =>
   Boolean(env.OXAPAY_MERCHANT_API_KEY && env.OXAPAY_PAYOUT_API_KEY && env.OXAPAY_CALLBACK_BASE_URL);
 
-export const ensureUserDepositAddresses = async (userId: string): Promise<UserCashierAddress[]> => {
+export const ensureUserDepositAddresses = async (
+  userId: string,
+  requestedMethod?: { asset: string; network: string }
+): Promise<UserCashierAddress[]> => {
   if (!isCashierEnabled()) {
     return [];
   }
@@ -213,7 +216,12 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
     };
     return score(a) - score(b);
   });
-  for (const method of methods) {
+  const requestedPairMethod = requestedMethod
+    ? getMethodOrThrow(requestedMethod.asset, requestedMethod.network)
+    : null;
+  const methodsToEnsure = requestedPairMethod ? [requestedPairMethod] : methods;
+
+  for (const method of methodsToEnsure) {
     const pair = `${method.asset}:${method.network}`;
     if (byPair.has(pair)) {
       continue;
@@ -290,11 +298,28 @@ export const ensureUserDepositAddresses = async (userId: string): Promise<UserCa
       "DEPOSIT_ADDRESSES_UNAVAILABLE"
     );
   }
+  if (requestedPairMethod) {
+    const requestedPair = `${requestedPairMethod.asset}:${requestedPairMethod.network}`;
+    const hasRequestedPair = refreshed.some((entry) => `${entry.asset}:${entry.network}` === requestedPair);
+    if (!hasRequestedPair) {
+      throw new AppError(
+        `Deposit address for ${requestedPairMethod.asset} (${requestedPairMethod.network}) is temporarily unavailable. Please try again in a few minutes.`,
+        503,
+        "DEPOSIT_ADDRESS_UNAVAILABLE_FOR_METHOD",
+        {
+          asset: requestedPairMethod.asset,
+          network: requestedPairMethod.network
+        }
+      );
+    }
+  }
   return refreshed.map(toAddressDto);
 };
 
-export const listUserCashierDepositAddresses = async (userId: string): Promise<UserCashierAddress[]> =>
-  ensureUserDepositAddresses(userId);
+export const listUserCashierDepositAddresses = async (
+  userId: string,
+  requestedMethod?: { asset: string; network: string }
+): Promise<UserCashierAddress[]> => ensureUserDepositAddresses(userId, requestedMethod);
 
 export const createCashierWithdrawal = async (input: {
   userId: string;

@@ -762,12 +762,19 @@ export interface CashierWithdrawalResponse {
   providerTrackId: string | null;
 }
 
-export async function getDepositAddresses(): Promise<{ addresses: CashierAddress[] }> {
-  return request<{ addresses: CashierAddress[] }>("/cashier/deposit-addresses");
-}
-
 export type CashierWithdrawalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL" | "LTC";
 export type CashierWithdrawalNetwork = "bitcoin" | "erc20" | "trc20" | "solana" | "litecoin";
+
+export async function getDepositAddresses(input?: {
+  asset?: CashierWithdrawalAsset;
+  network?: CashierWithdrawalNetwork;
+}): Promise<{ addresses: CashierAddress[] }> {
+  const hasScopedMethod = Boolean(input?.asset && input?.network);
+  const query = hasScopedMethod
+    ? `?asset=${encodeURIComponent(input!.asset!)}&network=${encodeURIComponent(input!.network!)}`
+    : "";
+  return request<{ addresses: CashierAddress[] }>(`/cashier/deposit-addresses${query}`);
+}
 
 export async function createWithdrawal(input: {
   asset: CashierWithdrawalAsset;
