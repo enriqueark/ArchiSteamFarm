@@ -232,8 +232,42 @@ const normalizeStaticAddressData = (
 
 const normalizeLegacyStaticAddressEntry = (
   entry: OxaLegacyStaticAddressEntry | Record<string, unknown>
-): { trackId: string; address: string; networkLabel?: string; qrCodeUrl: string | null } | null =>
-  normalizeStaticAddressData(entry as Record<string, unknown>);
+):
+  | {
+      trackId: string;
+      address: string;
+      networkLabel?: string;
+      qrCodeUrl: string | null;
+      currency?: string;
+    }
+  | null => {
+  const normalized = normalizeStaticAddressData(entry as Record<string, unknown>);
+  if (!normalized) {
+    return null;
+  }
+  const payload = entry as Record<string, unknown>;
+  const rawCurrency = payload.currency ?? payload.to_currency ?? payload.toCurrency ?? payload.symbol;
+  const currency =
+    typeof rawCurrency === "string" && rawCurrency.trim().length > 0 ? rawCurrency.trim().toUpperCase() : undefined;
+  return {
+    ...normalized,
+    currency
+  };
+};
+
+const normalizeNetworkToken = (value: string | undefined): string => {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+  if (!raw) return "";
+  if (raw.includes("trc") || raw.includes("tron") || raw === "trx") return "trc20";
+  if (raw.includes("erc") || raw.includes("eth") || raw.includes("ethereum")) return "erc20";
+  if (raw.includes("sol")) return "solana";
+  if (raw.includes("ltc") || raw.includes("litecoin")) return "litecoin";
+  if (raw.includes("btc") || raw.includes("bitcoin")) return "bitcoin";
+  return raw;
+};
 
 const findLegacyStaticAddressByOrderId = async (input: {
   orderId: string;
@@ -250,9 +284,12 @@ const findLegacyStaticAddressByOrderId = async (input: {
             ? "LTC"
             : "ERC20";
   const filters: Record<string, unknown>[] = [
-    { orderId: input.orderId, network: canonicalNetwork, currency: input.method.asset, size: 5, page: 1 },
-    { orderId: input.orderId, size: 5, page: 1 }
+    { orderId: input.orderId, network: canonicalNetwork, currency: input.method.asset, size: 10, page: 1 },
+    { order_id: input.orderId, network: canonicalNetwork, currency: input.method.asset, size: 10, page: 1 },
+    { orderId: input.orderId, currency: input.method.asset, size: 10, page: 1 },
+    { order_id: input.orderId, currency: input.method.asset, size: 10, page: 1 }
   ];
+  const targetNetwork = normalizeNetworkToken(input.method.network);
   for (const filter of filters) {
     try {
       const payload = await doOxaLegacyMerchantRequest<Record<string, unknown>>(
@@ -260,9 +297,13 @@ const findLegacyStaticAddressByOrderId = async (input: {
         filter
       );
       const data = Array.isArray(payload.data) ? (payload.data as OxaLegacyStaticAddressEntry[]) : [];
-      const found = data
-        .map((entry) => normalizeLegacyStaticAddressEntry(entry))
-        .find((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+      const found = data.map((entry) => normalizeLegacyStaticAddressEntry(entry)).find((entry) => {
+        if (!entry) return false;
+        const entryAsset = entry.currency;
+        if (entryAsset && entryAsset !== input.method.asset) return false;
+        const entryNetwork = normalizeNetworkToken(entry.networkLabel);
+        return !entryNetwork || !targetNetwork || entryNetwork === targetNetwork;
+      });
       if (found) {
         return found;
       }
@@ -357,18 +398,6 @@ export const createOxaPayStaticAddress = async (input: {
   const network = resolveNetworkName(input.method, currencies);
   const orderId = `user:${input.userId}:${input.method.asset}:${input.method.network}`;
 
-  const existingLegacy = await findLegacyStaticAddressByOrderId({
-    orderId,
-    method: input.method
-  });
-  if (existingLegacy) {
-    return {
-      trackId: existingLegacy.trackId,
-      address: existingLegacy.address,
-      networkLabel: existingLegacy.networkLabel || input.method.networkLabel,
-      qrCodeUrl: existingLegacy.qrCodeUrl
-    };
-  }
   const canonicalNetwork =
     input.method.network === "bitcoin"
       ? "BTC"
@@ -458,6 +487,19 @@ export const createOxaPayStaticAddress = async (input: {
         break;
       }
     }
+  }
+
+  const existingLegacy = await findLegacyStaticAddressByOrderId({
+    orderId,
+    method: input.method
+  });
+  if (existingLegacy) {
+    return {
+      trackId: existingLegacy.trackId,
+      address: existingLegacy.address,
+      networkLabel: existingLegacy.networkLabel || network.networkLabel,
+      qrCodeUrl: existingLegacy.qrCodeUrl
+    };
   }
 
   if (sawRateLimit) {

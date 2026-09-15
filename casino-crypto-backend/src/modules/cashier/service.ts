@@ -302,8 +302,12 @@ export const ensureUserDepositAddresses = async (
     const requestedPair = `${requestedPairMethod.asset}:${requestedPairMethod.network}`;
     const hasRequestedPair = refreshed.some((entry) => `${entry.asset}:${entry.network}` === requestedPair);
     if (!hasRequestedPair) {
+      const reasonHint =
+        typeof firstFailureMessage === "string" && firstFailureMessage.trim().length > 0
+          ? ` (${firstFailureMessage.trim().slice(0, 180)})`
+          : "";
       throw new AppError(
-        `Deposit address for ${requestedPairMethod.asset} (${requestedPairMethod.network}) is temporarily unavailable. Please try again in a few minutes.`,
+        `Deposit address for ${requestedPairMethod.asset} (${requestedPairMethod.network}) is temporarily unavailable. Please try again in a few minutes.${reasonHint}`,
         503,
         "DEPOSIT_ADDRESS_UNAVAILABLE_FOR_METHOD",
         {
