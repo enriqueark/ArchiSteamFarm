@@ -5,7 +5,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../core/errors";
 import { prisma } from "../../infrastructure/db/prisma";
 import { adjustWalletBalance } from "../ledger/service";
-import { quoteDepositToCoins, quoteWithdrawFromCoins } from "../pricing/service";
+import { quoteDepositToCoins, quoteWithdrawFromCoins, USD_PER_COIN } from "../pricing/service";
 import { addWithdrawWagerRequirementBestEffort, applyDepositBonusForDepositBestEffort, getWithdrawWagerRemainingAtomic } from "../promotions/service";
 import { PLATFORM_INTERNAL_CURRENCY } from "../wallets/service";
 import { ensureUserAllowedFor } from "../users/access-guard";
@@ -48,17 +48,18 @@ export type OxaPayPaymentWebhookTx = {
   network?: string;
   sender_address?: string;
   address?: string;
-  sent_amount?: number;
-  auto_convert_amount?: number;
-  value?: number;
+  sent_amount?: number | string;
+  auto_convert_amount?: number | string;
+  value?: number | string;
 };
 
 export type OxaPayPaymentWebhookPayload = {
   type?: string;
   status?: string;
   track_id?: string | number;
-  amount?: number;
-  value?: number;
+  amount?: number | string;
+  value?: number | string;
+  auto_convert_amount?: number | string;
   currency?: string;
   network?: string;
   txs?: OxaPayPaymentWebhookTx[];
@@ -84,12 +85,39 @@ const toCoinsAtomicFromDecimal = (value: number): bigint => {
   return BigInt(Math.floor(value * 10 ** COINS_DECIMALS));
 };
 
+const toCoinsAtomicFromUsd = (usdValue: number): bigint => {
+  if (!Number.isFinite(usdValue) || usdValue <= 0) {
+    return 0n;
+  }
+  return toCoinsAtomicFromDecimal(usdValue / USD_PER_COIN);
+};
+
 const toAssetAtomic = (value: number, decimals: number): bigint => {
   if (!Number.isFinite(value) || value <= 0) {
     return 0n;
   }
   return BigInt(Math.floor(value * 10 ** decimals));
 };
+
+const parsePositiveNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+};
+
+const normalizeStatusToken = (value: unknown): string =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const isDepositCreditableStatus = (value: string): boolean =>
+  value === "paid" || value === "confirmed" || value === "completed" || value === "complete";
+
+const isDepositInProgressStatus = (value: string): boolean =>
+  value === "paying" || value === "pending" || value === "processing" || value === "confirming";
 
 const toCoinsString = (atomic: bigint, decimals = 2): string => {
   const sign = atomic < 0n ? "-" : "";
@@ -568,14 +596,22 @@ const computeDepositCreditCoinsAtomic = async (
   tx: OxaPayPaymentWebhookTx | undefined,
   fallbackAsset: CashierAsset
 ): Promise<bigint> => {
-  const autoConverted = Number(tx?.auto_convert_amount ?? 0);
-  if (Number.isFinite(autoConverted) && autoConverted > 0) {
-    return toCoinsAtomicFromDecimal(autoConverted);
+  const autoConverted =
+    parsePositiveNumber(tx?.auto_convert_amount) ??
+    parsePositiveNumber(payload.auto_convert_amount) ??
+    null;
+  if (typeof autoConverted === "number") {
+    return toCoinsAtomicFromUsd(autoConverted);
   }
 
   const rawAsset = String(tx?.currency ?? payload.currency ?? fallbackAsset).toUpperCase() as CashierAsset;
   const asset = (Object.keys(ASSET_DECIMALS) as CashierAsset[]).includes(rawAsset) ? rawAsset : fallbackAsset;
-  const assetAmount = Number(tx?.sent_amount ?? payload.amount ?? tx?.value ?? payload.value ?? 0);
+  const assetAmount =
+    parsePositiveNumber(tx?.sent_amount) ??
+    parsePositiveNumber(payload.amount) ??
+    parsePositiveNumber(tx?.value) ??
+    parsePositiveNumber(payload.value) ??
+    0;
   if (!Number.isFinite(assetAmount) || assetAmount <= 0) {
     return 0n;
   }
@@ -584,8 +620,19 @@ const computeDepositCreditCoinsAtomic = async (
   if (assetAtomic <= 0n) {
     return 0n;
   }
-  const quote = await quoteDepositToCoins(asset, assetAtomic);
-  return quote.coinsAtomic;
+  try {
+    const quote = await quoteDepositToCoins(asset, assetAtomic);
+    return quote.coinsAtomic;
+  } catch {
+    if (asset === "USDT" || asset === "USDC") {
+      return toCoinsAtomicFromUsd(assetAmount);
+    }
+    throw new AppError(
+      `Unable to convert ${asset} deposit amount right now`,
+      503,
+      "DEPOSIT_CONVERSION_UNAVAILABLE"
+    );
+  }
 };
 
 export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload): Promise<void> => {
@@ -614,13 +661,23 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
   const idempotencyKey = txHash
     ? `oxapay:deposit:${trackId}:${txHash}`
     : `oxapay:deposit:${trackId}:${payload.date ?? "0"}:${fingerprint}`;
-  const status = (payload.status ?? "").trim().toLowerCase();
+  const status = normalizeStatusToken(payload.status);
+  const txStatus = normalizeStatusToken(tx?.status);
+  const isCreditable = isDepositCreditableStatus(status) || isDepositCreditableStatus(txStatus);
+  const isInProgress = isDepositInProgressStatus(status) || isDepositInProgressStatus(txStatus);
   const coinsAtomic = await computeDepositCreditCoinsAtomic(
     payload,
     tx,
     paymentAddress.asset as CashierAsset
   );
   if (coinsAtomic <= 0n) {
+    if (isCreditable) {
+      throw new AppError(
+        "Deposit callback marked as paid but amount could not be resolved",
+        503,
+        "DEPOSIT_AMOUNT_UNRESOLVED"
+      );
+    }
     return;
   }
 
@@ -642,7 +699,7 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
         txHash,
         sourceAddress: tx?.sender_address?.trim() || null,
         providerTrackId: trackId,
-        status: status === "paid" ? DepositStatus.CONFIRMING : DepositStatus.PENDING,
+        status: isCreditable || isInProgress ? DepositStatus.CONFIRMING : DepositStatus.PENDING,
         confirmations: tx?.confirmations ?? 0,
         requiredConfirmations: Math.max(1, tx?.confirmations ?? 1),
         idempotencyKey,
@@ -657,7 +714,12 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
     deposit = await prisma.deposit.update({
       where: { id: deposit.id },
       data: {
-        status: status === "paying" ? DepositStatus.CONFIRMING : deposit.status,
+        status:
+          deposit.status === DepositStatus.COMPLETED
+            ? DepositStatus.COMPLETED
+            : isCreditable || isInProgress
+              ? DepositStatus.CONFIRMING
+              : deposit.status,
         confirmations: tx?.confirmations ?? deposit.confirmations,
         txHash: txHash ?? deposit.txHash,
         sourceAddress: tx?.sender_address?.trim() || deposit.sourceAddress,
@@ -670,7 +732,7 @@ export const processPaymentWebhook = async (payload: OxaPayPaymentWebhookPayload
     });
   }
 
-  if (status !== "paid" || deposit.creditedTransactionId) {
+  if (!isCreditable || deposit.creditedTransactionId) {
     return;
   }
 

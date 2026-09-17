@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const assetSchema = z.literal("COINS");
 const COIN_DECIMALS = 8;
-const USD_PER_COIN = 0.7;
+const USD_PER_COIN = 0.6;
 
 const depositQuoteSchema = z.object({
   asset: assetSchema,

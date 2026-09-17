@@ -53,15 +53,17 @@ type OxaPayPaymentWebhookTx = {
   network?: string;
   sender_address?: string;
   address?: string;
-  auto_convert_amount?: number;
-  value?: number;
+  auto_convert_amount?: number | string;
+  value?: number | string;
+  sent_amount?: number | string;
 };
 
 type OxaPayPaymentWebhookPayload = {
   type?: string;
   status?: string;
   track_id?: string | number;
-  amount?: number;
+  amount?: number | string;
+  auto_convert_amount?: number | string;
   currency?: string;
   network?: string;
   txs?: OxaPayPaymentWebhookTx[];

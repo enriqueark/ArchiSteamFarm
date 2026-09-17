@@ -1,7 +1,9 @@
 type ExternalAsset = "BTC" | "ETH" | "USDT" | "USDC" | "SOL" | "LTC";
 
 const COINS_ATOMIC_DECIMALS = 8;
-const USD_PER_COIN = 0.7;
+export const USD_PER_COIN = 0.6;
+const RATES_TTL_MS = 60_000;
+const RATES_TIMEOUT_MS = 8_000;
 
 const ASSET_ATOMIC_DECIMALS: Record<ExternalAsset, number> = {
   BTC: 8,
@@ -17,21 +19,94 @@ const toAtomic = (amount: number, decimals: number): bigint => BigInt(Math.floor
 
 export const getSupportedExternalAssets = (): ExternalAsset[] => ["BTC", "ETH", "USDT", "USDC", "SOL", "LTC"];
 
+let ratesCache:
+  | {
+      rates: Record<ExternalAsset, number>;
+      fetchedAt: number;
+    }
+  | null = null;
+
+const FALLBACK_RATES: Record<ExternalAsset, number> = {
+  BTC: 0,
+  ETH: 0,
+  USDT: 1,
+  USDC: 1,
+  SOL: 0,
+  LTC: 0
+};
+
+const fetchUsdRates = async (): Promise<Record<ExternalAsset, number>> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RATES_TIMEOUT_MS);
+  try {
+    const url =
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,usd-coin,solana,litecoin&vs_currencies=usd";
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch rates (${response.status})`);
+    }
+    const payload = (await response.json()) as Record<string, { usd?: number }>;
+    const parsed: Record<ExternalAsset, number> = {
+      BTC: Number(payload.bitcoin?.usd ?? 0),
+      ETH: Number(payload.ethereum?.usd ?? 0),
+      USDT: Number(payload.tether?.usd ?? 1),
+      USDC: Number(payload["usd-coin"]?.usd ?? 1),
+      SOL: Number(payload.solana?.usd ?? 0),
+      LTC: Number(payload.litecoin?.usd ?? 0)
+    };
+    const hasCoreRates =
+      Number.isFinite(parsed.BTC) &&
+      parsed.BTC > 0 &&
+      Number.isFinite(parsed.ETH) &&
+      parsed.ETH > 0 &&
+      Number.isFinite(parsed.SOL) &&
+      parsed.SOL > 0 &&
+      Number.isFinite(parsed.LTC) &&
+      parsed.LTC > 0;
+    if (!hasCoreRates) {
+      throw new Error("Incomplete price payload");
+    }
+    return parsed;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 export const getUsdRates = async (_forceRefresh = false): Promise<{ rates: Record<ExternalAsset, number>; fetchedAt: number }> => {
-  // Keep fixed snapshot rates to avoid exposing live multi-currency behavior.
-  // Deposits/withdrawals are disabled in product for now and only internal COINS are used.
   const now = Date.now();
-  return {
-    rates: {
-      BTC: 0,
-      ETH: 0,
-      USDT: 1,
-      USDC: 1,
-      SOL: 0,
-      LTC: 0
-    },
-    fetchedAt: now
-  };
+  if (!_forceRefresh && ratesCache && now - ratesCache.fetchedAt < RATES_TTL_MS) {
+    return {
+      rates: ratesCache.rates,
+      fetchedAt: ratesCache.fetchedAt
+    };
+  }
+  try {
+    const rates = await fetchUsdRates();
+    ratesCache = {
+      rates,
+      fetchedAt: now
+    };
+    return {
+      rates,
+      fetchedAt: now
+    };
+  } catch {
+    if (ratesCache) {
+      return {
+        rates: ratesCache.rates,
+        fetchedAt: ratesCache.fetchedAt
+      };
+    }
+    return {
+      rates: FALLBACK_RATES,
+      fetchedAt: now
+    };
+  }
 };
 
 export const quoteDepositToCoins = async (asset: ExternalAsset, amountAtomic: bigint) => {

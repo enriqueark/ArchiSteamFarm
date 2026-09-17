@@ -27,7 +27,7 @@ const userSearchQuerySchema = z.object({
 });
 
 const userDetailParamsSchema = z.object({
-  userId: z.string().cuid()
+  userId: z.string().trim().min(1).max(128)
 });
 
 const userDetailQuerySchema = z.object({
@@ -1263,6 +1263,54 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             " | locked=" + formatAtomicUsd(w.lockedAtomic) +
             " | available=" + formatAtomicUsd(w.availableAtomic) + "</div>"
           ).join("");
+          const depositAddressRows = (data.depositAddresses || []).map((entry) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + (entry.asset || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.networkLabel || entry.network || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.address || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.providerTrackId || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.createdAt || "") + "</td>" +
+            "</tr>"
+          ).join("");
+          const depositRows = (data.deposits || []).map((entry) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + (entry.createdAt || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.status || "") + "</td>" +
+              "<td class=\\"mono\\">" + ((entry.asset || "?") + "/" + (entry.network || "")) + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(entry.amountAtomic || "0") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.sourceAddress || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.txHash || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.providerTrackId || "") + "</td>" +
+            "</tr>"
+          ).join("");
+          const withdrawalRows = (data.withdrawals || []).map((entry) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + (entry.createdAt || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.status || "") + "</td>" +
+              "<td class=\\"mono\\">" + ((entry.asset || "?") + "/" + (entry.network || "")) + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(entry.amountAtomic || "0") + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(entry.feeAtomic || "0") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.destinationAddress || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.txHash || "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.providerTrackId || "") + "</td>" +
+            "</tr>"
+          ).join("");
+          const tipsSentRows = ((data.tips && data.tips.sent) || []).map((entry) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + (entry.createdAt || "") + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(entry.amountAtomic || "0") + "</td>" +
+              "<td class=\\"mono\\">#" + (((entry.counterparty && entry.counterparty.publicId) ?? "-")) + " " + (((entry.counterparty && entry.counterparty.username) || (entry.counterparty && entry.counterparty.email) || "") + "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.message || "") + "</td>" +
+            "</tr>"
+          ).join("");
+          const tipsReceivedRows = ((data.tips && data.tips.received) || []).map((entry) =>
+            "<tr>" +
+              "<td class=\\"mono\\">" + (entry.createdAt || "") + "</td>" +
+              "<td class=\\"mono\\">" + formatAtomicUsd(entry.amountAtomic || "0") + "</td>" +
+              "<td class=\\"mono\\">#" + (((entry.counterparty && entry.counterparty.publicId) ?? "-")) + " " + (((entry.counterparty && entry.counterparty.username) || (entry.counterparty && entry.counterparty.email) || "") + "") + "</td>" +
+              "<td class=\\"mono\\">" + (entry.message || "") + "</td>" +
+            "</tr>"
+          ).join("");
 
           const movementsRows = (data.movements || []).map((m) =>
             "<tr>" +
@@ -1293,9 +1341,12 @@ const ADMIN_PANEL_HTML = `<!doctype html>
             "<div class=\\"grid-2\\" style=\\"margin-top:12px;\\">" +
               "<div>" +
                 "<h3>Financial summary</h3>" +
-                "<div class=\\"mono\\">totalDeposits=" + formatAtomicUsd(summary.totalDepositsAtomic || "0") + "</div>" +
-                "<div class=\\"mono\\">totalWithdrawals=" + formatAtomicUsd(summary.totalWithdrawalsAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">totalDeposits=" + formatAtomicUsd(summary.totalDepositsAtomic || "0") + " (" + (summary.totalDepositsCount || 0) + ")</div>" +
+                "<div class=\\"mono\\">totalWithdrawals=" + formatAtomicUsd(summary.totalWithdrawalsAtomic || "0") + " (" + (summary.totalWithdrawalsCount || 0) + ")</div>" +
                 "<div class=\\"mono\\">totalWithdrawalFees=" + formatAtomicUsd(summary.totalWithdrawalFeesAtomic || "0") + "</div>" +
+                "<div class=\\"mono\\">tipsSent=" + formatAtomicUsd(summary.totalTipsSentAtomic || "0") + " (" + (summary.totalTipsSentCount || 0) + ")</div>" +
+                "<div class=\\"mono\\">tipsReceived=" + formatAtomicUsd(summary.totalTipsReceivedAtomic || "0") + " (" + (summary.totalTipsReceivedCount || 0) + ")</div>" +
+                "<div class=\\"mono\\">rainTips=" + formatAtomicUsd(summary.totalRainTipsAtomic || "0") + " (" + (summary.totalRainTipsCount || 0) + ")</div>" +
                 "<div class=\\"mono\\">withdrawWagerRemaining=" + formatAtomicUsd(summary.withdrawWagerRemainingAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">rewardsRedeemed=" + formatAtomicUsd(summary.rewardsRedeemedAtomic || "0") + "</div>" +
                 "<div class=\\"mono\\">totalWagered=" + formatAtomicUsd(summary.totalWageredAtomic || "0") + "</div>" +
@@ -1308,6 +1359,32 @@ const ADMIN_PANEL_HTML = `<!doctype html>
                 "<div class=\\"mono\\">mines wagered=" + formatAtomicUsd((perGame.mines && perGame.mines.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.mines && perGame.mines.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.mines && perGame.mines.netAtomic) || "0", { signed: true }) + "</div>" +
                 "<div class=\\"mono\\">blackjack wagered=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.blackjack && perGame.blackjack.netAtomic) || "0", { signed: true }) + "</div>" +
                 "<div class=\\"mono\\">roulette wagered=" + formatAtomicUsd((perGame.roulette && perGame.roulette.wageredAtomic) || "0") + " payout=" + formatAtomicUsd((perGame.roulette && perGame.roulette.payoutAtomic) || "0") + " net=" + formatAtomicUsd((perGame.roulette && perGame.roulette.netAtomic) || "0", { signed: true }) + "</div>" +
+              "</div>" +
+            "</div>" +
+            "<h3 style=\\"margin-top:12px;\\">Deposit wallets / addresses</h3>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>Asset</th><th>Network</th><th>Address</th><th>Track ID</th><th>Created</th></tr></thead><tbody>" +
+            (depositAddressRows || "<tr><td colspan=\\"5\\" class=\\"mono\\">No deposit addresses</td></tr>") +
+            "</tbody></table>" +
+            "<h3 style=\\"margin-top:12px;\\">Detected deposits</h3>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Status</th><th>Method</th><th>Amount</th><th>Source address</th><th>TX hash</th><th>Track ID</th></tr></thead><tbody>" +
+            (depositRows || "<tr><td colspan=\\"7\\" class=\\"mono\\">No deposits</td></tr>") +
+            "</tbody></table>" +
+            "<h3 style=\\"margin-top:12px;\\">Withdrawals requested</h3>" +
+            "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Status</th><th>Method</th><th>Amount</th><th>Fee</th><th>Destination address</th><th>TX hash</th><th>Track ID</th></tr></thead><tbody>" +
+            (withdrawalRows || "<tr><td colspan=\\"8\\" class=\\"mono\\">No withdrawals</td></tr>") +
+            "</tbody></table>" +
+            "<div class=\\"grid-2\\" style=\\"margin-top:12px;\\">" +
+              "<div>" +
+                "<h3>Tips sent</h3>" +
+                "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Amount</th><th>To</th><th>Message</th></tr></thead><tbody>" +
+                (tipsSentRows || "<tr><td colspan=\\"4\\" class=\\"mono\\">No tips sent</td></tr>") +
+                "</tbody></table>" +
+              "</div>" +
+              "<div>" +
+                "<h3>Tips received</h3>" +
+                "<table class=\\"detail-table\\"><thead><tr><th>At</th><th>Amount</th><th>From</th><th>Message</th></tr></thead><tbody>" +
+                (tipsReceivedRows || "<tr><td colspan=\\"4\\" class=\\"mono\\">No tips received</td></tr>") +
+                "</tbody></table>" +
               "</div>" +
             "</div>" +
             "<h3 style=\\"margin-top:12px;\\">Movement history</h3>" +
@@ -2155,13 +2232,30 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         ];
       }
 
-      const [depositsAgg, withdrawalsAgg, minesAgg, blackjackAgg, rouletteAgg, movements, totalMovements] = await Promise.all([
+      const [
+        depositsAgg,
+        withdrawalsAgg,
+        minesAgg,
+        blackjackAgg,
+        rouletteAgg,
+        directTipsSentAgg,
+        directTipsReceivedAgg,
+        rainTipsAgg,
+        paymentAddresses,
+        deposits,
+        withdrawals,
+        directTipsSent,
+        directTipsReceived,
+        movements,
+        totalMovements
+      ] = await Promise.all([
         prisma.deposit.aggregate({
           where: {
             userId: params.userId,
             currency: PLATFORM_INTERNAL_CURRENCY,
             status: DepositStatus.COMPLETED
           },
+          _count: true,
           _sum: {
             amountAtomic: true
           }
@@ -2172,6 +2266,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             currency: PLATFORM_INTERNAL_CURRENCY,
             status: WithdrawalStatus.COMPLETED
           },
+          _count: true,
           _sum: {
             amountAtomic: true,
             feeAtomic: true
@@ -2205,6 +2300,157 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           _sum: {
             stakeAtomic: true,
             payoutAtomic: true
+          }
+        }),
+        prisma.userTip.aggregate({
+          where: {
+            fromUserId: params.userId
+          },
+          _sum: {
+            amountAtomic: true
+          },
+          _count: {
+            _all: true
+          }
+        }),
+        prisma.userTip.aggregate({
+          where: {
+            toUserId: params.userId
+          },
+          _sum: {
+            amountAtomic: true
+          },
+          _count: {
+            _all: true
+          }
+        }),
+        prisma.rainTip.aggregate({
+          where: {
+            userId: params.userId
+          },
+          _sum: {
+            amountAtomic: true
+          },
+          _count: {
+            _all: true
+          }
+        }),
+        prisma.paymentAddress.findMany({
+          where: {
+            userId: params.userId
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 200,
+          select: {
+            id: true,
+            provider: true,
+            asset: true,
+            network: true,
+            networkLabel: true,
+            address: true,
+            providerTrackId: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        }),
+        prisma.deposit.findMany({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 200,
+          select: {
+            id: true,
+            status: true,
+            asset: true,
+            network: true,
+            amountAtomic: true,
+            sourceAddress: true,
+            txHash: true,
+            providerTrackId: true,
+            confirmations: true,
+            requiredConfirmations: true,
+            createdAt: true,
+            confirmedAt: true,
+            completedAt: true,
+            failedAt: true
+          }
+        }),
+        prisma.withdrawal.findMany({
+          where: {
+            userId: params.userId,
+            currency: PLATFORM_INTERNAL_CURRENCY
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 200,
+          select: {
+            id: true,
+            status: true,
+            asset: true,
+            network: true,
+            destinationAddress: true,
+            amountAtomic: true,
+            feeAtomic: true,
+            providerTrackId: true,
+            txHash: true,
+            createdAt: true,
+            broadcastedAt: true,
+            completedAt: true,
+            failedAt: true,
+            cancelledAt: true
+          }
+        }),
+        prisma.userTip.findMany({
+          where: {
+            fromUserId: params.userId
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 100,
+          select: {
+            id: true,
+            amountAtomic: true,
+            message: true,
+            createdAt: true,
+            toUserId: true,
+            toUser: {
+              select: {
+                publicId: true,
+                username: true,
+                email: true
+              }
+            }
+          }
+        }),
+        prisma.userTip.findMany({
+          where: {
+            toUserId: params.userId
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 100,
+          select: {
+            id: true,
+            amountAtomic: true,
+            message: true,
+            createdAt: true,
+            fromUserId: true,
+            fromUser: {
+              select: {
+                publicId: true,
+                username: true,
+                email: true
+              }
+            }
           }
         }),
         prisma.ledgerEntry.findMany({
@@ -2244,6 +2490,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const totalPayoutAtomic = minesPayout + blackjackPayout + roulettePayout;
       const houseProfitAtomic = totalWageredAtomic - totalPayoutAtomic;
       const netPlayerGamingAtomic = totalPayoutAtomic - totalWageredAtomic;
+      const directTipsSentAtomic = directTipsSentAgg._sum.amountAtomic ?? 0n;
+      const directTipsReceivedAtomic = directTipsReceivedAgg._sum.amountAtomic ?? 0n;
+      const directTipsSentCount = directTipsSentAgg._count._all ?? 0;
+      const directTipsReceivedCount = directTipsReceivedAgg._count._all ?? 0;
+      const rainTipsAtomic = rainTipsAgg._sum.amountAtomic ?? 0n;
+      const rainTipsCount = rainTipsAgg._count._all ?? 0;
+      const depositsCompletedCount =
+        typeof depositsAgg._count === "number"
+          ? depositsAgg._count
+          : depositsAgg._count && typeof depositsAgg._count === "object" && "_all" in depositsAgg._count
+            ? Number((depositsAgg._count as { _all?: number })._all ?? 0)
+            : 0;
+      const withdrawalsCompletedCount =
+        typeof withdrawalsAgg._count === "number"
+          ? withdrawalsAgg._count
+          : withdrawalsAgg._count && typeof withdrawalsAgg._count === "object" && "_all" in withdrawalsAgg._count
+            ? Number((withdrawalsAgg._count as { _all?: number })._all ?? 0)
+            : 0;
 
       const movementRows = movements.map((row) => {
         const metadata =
@@ -2302,8 +2566,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         })),
         summary: {
           totalDepositsAtomic: (depositsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalDepositsCount: depositsCompletedCount,
           totalWithdrawalsAtomic: (withdrawalsAgg._sum.amountAtomic ?? 0n).toString(),
+          totalWithdrawalsCount: withdrawalsCompletedCount,
           totalWithdrawalFeesAtomic: (withdrawalsAgg._sum.feeAtomic ?? 0n).toString(),
+          totalTipsSentAtomic: directTipsSentAtomic.toString(),
+          totalTipsSentCount: directTipsSentCount,
+          totalTipsReceivedAtomic: directTipsReceivedAtomic.toString(),
+          totalTipsReceivedCount: directTipsReceivedCount,
+          totalRainTipsAtomic: rainTipsAtomic.toString(),
+          totalRainTipsCount: rainTipsCount,
           withdrawWagerRemainingAtomic:
             "withdrawWagerRemainingAtomic" in userRow
               ? userRow.withdrawWagerRemainingAtomic.toString()
@@ -2334,6 +2606,80 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
               netAtomic: (roulettePayout - rouletteWagered).toString()
             }
           }
+        },
+        depositAddresses: paymentAddresses.map((entry) => ({
+          id: entry.id,
+          provider: entry.provider,
+          asset: entry.asset,
+          network: entry.network,
+          networkLabel: entry.networkLabel,
+          address: entry.address,
+          providerTrackId: entry.providerTrackId,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt
+        })),
+        deposits: deposits.map((entry) => ({
+          id: entry.id,
+          status: entry.status,
+          asset: entry.asset ?? null,
+          network: entry.network,
+          amountAtomic: entry.amountAtomic.toString(),
+          amountCoins: toCoinsString(entry.amountAtomic),
+          sourceAddress: entry.sourceAddress ?? null,
+          txHash: entry.txHash ?? null,
+          providerTrackId: entry.providerTrackId ?? null,
+          confirmations: entry.confirmations,
+          requiredConfirmations: entry.requiredConfirmations,
+          createdAt: entry.createdAt,
+          confirmedAt: entry.confirmedAt,
+          completedAt: entry.completedAt,
+          failedAt: entry.failedAt
+        })),
+        withdrawals: withdrawals.map((entry) => ({
+          id: entry.id,
+          status: entry.status,
+          asset: entry.asset ?? null,
+          network: entry.network,
+          destinationAddress: entry.destinationAddress,
+          amountAtomic: entry.amountAtomic.toString(),
+          amountCoins: toCoinsString(entry.amountAtomic),
+          feeAtomic: entry.feeAtomic.toString(),
+          feeCoins: toCoinsString(entry.feeAtomic),
+          providerTrackId: entry.providerTrackId ?? null,
+          txHash: entry.txHash ?? null,
+          createdAt: entry.createdAt,
+          broadcastedAt: entry.broadcastedAt,
+          completedAt: entry.completedAt,
+          failedAt: entry.failedAt,
+          cancelledAt: entry.cancelledAt
+        })),
+        tips: {
+          sent: directTipsSent.map((entry) => ({
+            id: entry.id,
+            amountAtomic: entry.amountAtomic.toString(),
+            amountCoins: toCoinsString(entry.amountAtomic),
+            message: entry.message ?? null,
+            createdAt: entry.createdAt,
+            counterparty: {
+              userId: entry.toUserId,
+              publicId: entry.toUser.publicId ?? null,
+              username: entry.toUser.username ?? null,
+              email: entry.toUser.email
+            }
+          })),
+          received: directTipsReceived.map((entry) => ({
+            id: entry.id,
+            amountAtomic: entry.amountAtomic.toString(),
+            amountCoins: toCoinsString(entry.amountAtomic),
+            message: entry.message ?? null,
+            createdAt: entry.createdAt,
+            counterparty: {
+              userId: entry.fromUserId,
+              publicId: entry.fromUser.publicId ?? null,
+              username: entry.fromUser.username ?? null,
+              email: entry.fromUser.email
+            }
+          }))
         },
         movements: movementRows,
         pagination: {
