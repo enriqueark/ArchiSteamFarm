@@ -677,7 +677,13 @@ export async function fillBattleBots(input: {
 
 // ── Blackjack ─────────────────────────────────────────────────────────────
 
-export type BlackjackAction = "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE";
+export type BlackjackAction =
+  | "HIT"
+  | "STAND"
+  | "DOUBLE"
+  | "SPLIT"
+  | "INSURANCE"
+  | "INSURANCE_DECLINE";
 
 export interface BlackjackHandState {
   cards: string[];

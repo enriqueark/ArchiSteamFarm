@@ -24,7 +24,7 @@ import { getBlackjackPayoutConfig } from "./config";
 const SUITS = ["S", "H", "D", "C"] as const;
 const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
-const INSURANCE_PAYOUT = 2n;
+const INSURANCE_DEALER_BLACKJACK_RETURN_MULTIPLIER = 3n;
 const STANDARD_PAYOUT = 2n;
 const MIN_BLACKJACK_BET_ATOMIC = 20_000_000n; // 0.2 coins (1e8 atomic precision)
 type CardRank = (typeof RANKS)[number];
@@ -113,7 +113,7 @@ type StartBlackjackInput = {
 type PlayerActionInput = {
   userId: string;
   gameId: string;
-  action: "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE";
+  action: "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "INSURANCE" | "INSURANCE_DECLINE";
   idempotencyKey?: string;
 };
 
@@ -175,6 +175,7 @@ const handValue = (cards: CardCode[]): number => {
 };
 
 const isNaturalBlackjack = (cards: CardCode[]): boolean => cards.length === 2 && handValue(cards) === 21;
+const isTenValueRank = (rank: CardRank): boolean => rank === "10" || rank === "J" || rank === "Q" || rank === "K";
 
 const isPair = (cards: CardCode[]): boolean => {
   if (cards.length !== 2) {
@@ -538,7 +539,8 @@ const resolveCurrentGame = (
 
   let insurancePayout = 0n;
   if (insuranceBetAtomic && insuranceBetAtomic > 0n && dealerBlackjack) {
-    insurancePayout = insuranceBetAtomic * INSURANCE_PAYOUT;
+    // Insurance "YES" should return main bet + insurance amount when dealer has blackjack.
+    insurancePayout = insuranceBetAtomic * INSURANCE_DEALER_BLACKJACK_RETURN_MULTIPLIER;
   }
 
   let sidePayout = 0n;
@@ -986,6 +988,18 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
     }
 
     const state = parseStoredState(game.playerHands, game.dealerCards, game.deck);
+    const insuranceDecisionPending = game.canInsurance && !game.insuranceBetAtomic;
+    if (
+      insuranceDecisionPending &&
+      input.action !== "INSURANCE" &&
+      input.action !== "INSURANCE_DECLINE"
+    ) {
+      throw new AppError(
+        "You must choose insurance (YES or NO) before continuing",
+        409,
+        "BLACKJACK_INSURANCE_DECISION_REQUIRED"
+      );
+    }
     const hand = state.playerHands[game.activeHandIndex];
     if (!hand) {
       throw new AppError("No active hand found", 409, "BLACKJACK_ACTIVE_HAND_MISSING");
@@ -1014,6 +1028,7 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
         where: { id: game.id },
         data: {
           insuranceBetAtomic: insuranceStake,
+          canInsurance: false,
           initialBetAtomic: {
             increment: insuranceStake
           }
@@ -1043,8 +1058,55 @@ export const actOnBlackjackGame = async (input: PlayerActionInput): Promise<Blac
           } as Prisma.InputJsonValue
         }
       });
+      const dealerUpCard = state.dealerCards[0];
+      const dealerHoleCard = state.dealerCards[1];
+      const dealerShowsAce = Boolean(dealerUpCard && parseCard(dealerUpCard).rank === "A");
+      const dealerHasBlackjack =
+        dealerShowsAce && Boolean(dealerHoleCard && isTenValueRank(parseCard(dealerHoleCard).rank));
+      if (dealerHasBlackjack) {
+        const gameForCapture = await tx.blackjackGame.findUniqueOrThrow({
+          where: { id: game.id },
+          include: {
+            betReservation: {
+              select: {
+                id: true,
+                walletId: true,
+                status: true,
+                amountAtomic: true
+              }
+            }
+          }
+        });
+        await captureReservationFunds(
+          tx,
+          gameForCapture as Awaited<ReturnType<typeof lockGameForUser>>,
+          `blackjack:${game.id}:capture`,
+          gameForCapture.betReservation.amountAtomic
+        );
+        const finalized = await finalizeGameInTx(
+          tx,
+          gameForCapture as Awaited<ReturnType<typeof lockGameForUser>>,
+          gameForCapture.betReservation.amountAtomic
+        );
+        return finalized.state;
+      }
+
       const refreshed = await tx.blackjackGame.findUniqueOrThrow({
         where: { id: game.id },
+        include: { betReservation: { select: { walletId: true } } }
+      });
+      return toGameState(refreshed);
+    }
+
+    if (input.action === "INSURANCE_DECLINE") {
+      if (!game.canInsurance || game.insuranceBetAtomic) {
+        throw new AppError("Insurance is not available", 409, "BLACKJACK_INSURANCE_NOT_AVAILABLE");
+      }
+      const refreshed = await tx.blackjackGame.update({
+        where: { id: game.id },
+        data: {
+          canInsurance: false
+        },
         include: { betReservation: { select: { walletId: true } } }
       });
       return toGameState(refreshed);

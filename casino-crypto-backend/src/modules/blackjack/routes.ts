@@ -32,7 +32,7 @@ const startGameSchema = z.object({
 });
 
 const actionSchema = z.object({
-  action: z.enum(["HIT", "STAND", "DOUBLE", "SPLIT", "INSURANCE"])
+  action: z.enum(["HIT", "STAND", "DOUBLE", "SPLIT", "INSURANCE", "INSURANCE_DECLINE"])
 });
 
 const gameParamsSchema = z.object({

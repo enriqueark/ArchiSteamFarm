@@ -152,6 +152,7 @@ export default function BlackjackPage() {
   const lost = st === "LOST";
   const push = st === "PUSH";
   const ended = won || lost || push;
+  const insuranceDecisionPending = Boolean(active && game?.canInsurance && !game?.insuranceBetAtomic);
 
   useEffect(() => {
     if (ended && game?.dealerRevealed) {
@@ -413,28 +414,73 @@ export default function BlackjackPage() {
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 8, width: "100%" }}>
-            {([
-              { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "hit" as const },
-              { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "stand" as const },
-              { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, icon: "split" as const },
-              { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, icon: "double" as const },
-            ]).map(({ a, l, dis, icon }) => (
-              <button key={a} onClick={() => !dis && act(a)} disabled={dis}
+          insuranceDecisionPending ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%" }}>
+              <button
+                onClick={() => !ld && act("INSURANCE")}
+                disabled={ld}
                 style={{
-                  flex: 1, minHeight: 50, padding: "14px 16px", borderRadius: 12, border: "none",
-                  cursor: dis ? "default" : "pointer",
+                  minHeight: 50,
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  border: "none",
+                  cursor: ld ? "default" : "pointer",
+                  background: "linear-gradient(180deg,#1f3a20,#2b6f2f)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.35)",
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  fontFamily: G,
+                  opacity: ld ? 0.45 : 1
+                }}
+              >
+                INSURANCE YES
+              </button>
+              <button
+                onClick={() => !ld && act("INSURANCE_DECLINE")}
+                disabled={ld}
+                style={{
+                  minHeight: 50,
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  border: "none",
+                  cursor: ld ? "default" : "pointer",
                   background: "#1a1a1a",
                   boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
-                  opacity: dis ? 0.3 : 1,
-                }}>
-                {renderActionIcon(icon)}
-                {l}
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  fontFamily: G,
+                  opacity: ld ? 0.3 : 1
+                }}
+              >
+                INSURANCE NO
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, width: "100%" }}>
+              {([
+                { a: "HIT" as BlackjackAction, l: "Hit", dis: ld, icon: "hit" as const },
+                { a: "STAND" as BlackjackAction, l: "Stand", dis: ld, icon: "stand" as const },
+                { a: "SPLIT" as BlackjackAction, l: "Split", dis: ld || !game?.canSplit, icon: "split" as const },
+                { a: "DOUBLE" as BlackjackAction, l: "Double", dis: ld || (hand?.cards.length || 0) > 2, icon: "double" as const },
+              ]).map(({ a, l, dis, icon }) => (
+                <button key={a} onClick={() => !dis && act(a)} disabled={dis}
+                  style={{
+                    flex: 1, minHeight: 50, padding: "14px 16px", borderRadius: 12, border: "none",
+                    cursor: dis ? "default" : "pointer",
+                    background: "#1a1a1a",
+                    boxShadow: "inset 0 1px 0 #252525, inset 0 -1px 0 #242424",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    color: "#fff", fontSize: 16, fontWeight: 600, fontFamily: G,
+                    opacity: dis ? 0.3 : 1,
+                  }}>
+                  {renderActionIcon(icon)}
+                  {l}
+                </button>
+              ))}
+            </div>
+          )
         )}
       </div>
 
