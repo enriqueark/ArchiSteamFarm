@@ -1417,6 +1417,18 @@ export interface ProfileSummary {
       payoutAtomic: string;
       payoutCoins: string;
     };
+    cases: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
+    battles: {
+      wageredAtomic: string;
+      wageredCoins: string;
+      payoutAtomic: string;
+      payoutCoins: string;
+    };
   };
 }
 

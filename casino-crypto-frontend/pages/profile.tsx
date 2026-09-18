@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   changeMyPassword,
   clearSession,
-  getChatProfileByPublicIdQuiet,
-  getChatProfileByUserIdQuiet,
   getMyGameHistory,
   getMeQuiet,
   getProfileSummaryQuiet,
@@ -879,33 +877,16 @@ export default function ProfilePage() {
         const me = await fetchMeWithRetry();
         if (cancelled) return;
         // Render immediately from auth payload; enrich stats/settings in the background.
-        setProfile(mapProfileData(me, null));
+        const initial = mapProfileData(me, null);
+        setProfile(initial);
         setProfileResolved(true);
 
-        const summaryPromise = (async () => {
-          try {
-            if (typeof me.publicId === "number" && me.publicId > 0) {
-              return await getChatProfileByPublicIdQuiet(me.publicId);
-            }
-            return await getChatProfileByUserIdQuiet(me.id);
-          } catch {
-            try {
-              return await getChatProfileByUserIdQuiet(me.id);
-            } catch {
-              return null;
-            }
-          }
-        })();
         const profileSummaryPromise = getProfileSummaryQuiet().catch(() => null);
         const securitySettingsPromise = getSecuritySettingsQuiet().catch(() => null);
 
-        const [summary, profileSummary, securitySettings] = await Promise.all([
-          summaryPromise,
-          profileSummaryPromise,
-          securitySettingsPromise
-        ]);
+        const [profileSummary, securitySettings] = await Promise.all([profileSummaryPromise, securitySettingsPromise]);
         if (cancelled) return;
-        const mapped = mapProfileData(me, summary);
+        const mapped = mapProfileData(me, null);
         if (securitySettings) {
           const exclusionUntil = securitySettings.selfExcludeUntil ?? mapped.selfExcludeUntil;
           mapped.steamTradeUrl = securitySettings.tradeUrl ?? mapped.steamTradeUrl;
@@ -920,15 +901,21 @@ export default function ProfilePage() {
           const minesFromSummary = parseCoins(profileSummary.perGame.mines.wageredCoins);
           const blackjackFromSummary = parseCoins(profileSummary.perGame.blackjack.wageredCoins);
           const rouletteFromSummary = parseCoins(profileSummary.perGame.roulette.wageredCoins);
+          const casesFromSummary = parseCoins(profileSummary.perGame.cases.wageredCoins);
+          const battlesFromSummary = parseCoins(profileSummary.perGame.battles.wageredCoins);
+          mapped.profileVisible = profileSummary.user.profileVisible;
+          mapped.level = Math.max(mapped.level, profileSummary.user.level ?? 1);
           mapped.stats.mines = toCoinsFixed(minesFromSummary);
           mapped.stats.blackjack = toCoinsFixed(blackjackFromSummary);
           mapped.stats.roulette = toCoinsFixed(rouletteFromSummary);
+          mapped.stats.cases = toCoinsFixed(casesFromSummary);
+          mapped.stats.battles = toCoinsFixed(battlesFromSummary);
           mapped.stats.totalPlayed = toCoinsFixed(totalPlayedFromSummary);
         }
         setProfile(mapped);
 
         // Heavy paginated history fallback runs in background so first paint is fast.
-        if (!hasHydratedStatsFallbackRef.current) {
+        if (!hasHydratedStatsFallbackRef.current && !profileSummary) {
           hasHydratedStatsFallbackRef.current = true;
           void (async () => {
             let historyTotals:
