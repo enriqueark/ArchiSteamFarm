@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   changeMyPassword,
   clearSession,
-  getChatProfileByPublicId,
-  getChatProfileByUserId,
+  getChatProfileByPublicIdQuiet,
+  getChatProfileByUserIdQuiet,
   getMyGameHistory,
-  getMe,
-  getProfileSummary,
+  getMeQuiet,
+  getProfileSummaryQuiet,
   getSecuritySettings,
+  getSecuritySettingsQuiet,
   getTwoFactorState,
   setSelfExclusion,
   setTradeUrl,
@@ -434,7 +435,7 @@ async function getHistoryWageredByMode() {
   let offset = 0;
   const limit = 100;
   for (let page = 0; page < 20; page += 1) {
-    const response = await getMyGameHistory({ limit, offset, mode: "ALL" });
+    const response = await getMyGameHistory({ limit, offset, mode: "ALL" }, { suppressErrorToast: true });
     const items = response.items ?? [];
     items.forEach((item) => {
       if (item.gameMode in totals) {
@@ -783,7 +784,7 @@ async function fetchMeWithRetry(): Promise<User> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < PROFILE_FETCH_RETRIES; attempt += 1) {
     try {
-      return await getMe();
+      return await getMeQuiet();
     } catch (error) {
       lastError = error;
       if (attempt < PROFILE_FETCH_RETRIES - 1) {
@@ -876,22 +877,27 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       try {
         const me = await fetchMeWithRetry();
+        if (cancelled) return;
+        // Render immediately from auth payload; enrich stats/settings in the background.
+        setProfile(mapProfileData(me, null));
+        setProfileResolved(true);
+
         const summaryPromise = (async () => {
           try {
             if (typeof me.publicId === "number" && me.publicId > 0) {
-              return await getChatProfileByPublicId(me.publicId);
+              return await getChatProfileByPublicIdQuiet(me.publicId);
             }
-            return await getChatProfileByUserId(me.id);
+            return await getChatProfileByUserIdQuiet(me.id);
           } catch {
             try {
-              return await getChatProfileByUserId(me.id);
+              return await getChatProfileByUserIdQuiet(me.id);
             } catch {
               return null;
             }
           }
         })();
-        const profileSummaryPromise = getProfileSummary().catch(() => null);
-        const securitySettingsPromise = getSecuritySettings().catch(() => null);
+        const profileSummaryPromise = getProfileSummaryQuiet().catch(() => null);
+        const securitySettingsPromise = getSecuritySettingsQuiet().catch(() => null);
 
         const [summary, profileSummary, securitySettings] = await Promise.all([
           summaryPromise,
@@ -920,7 +926,6 @@ export default function ProfilePage() {
           mapped.stats.totalPlayed = toCoinsFixed(totalPlayedFromSummary);
         }
         setProfile(mapped);
-        setProfileResolved(true);
 
         // Heavy paginated history fallback runs in background so first paint is fast.
         if (!hasHydratedStatsFallbackRef.current) {

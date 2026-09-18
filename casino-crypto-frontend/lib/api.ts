@@ -116,7 +116,10 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
   needsAuth = true,
-  needsIdempotency = false
+  needsIdempotency = false,
+  behavior: {
+    suppressErrorToast?: boolean;
+  } = {}
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -174,12 +177,12 @@ async function request<T>(
       !lastApiErrorToast ||
       lastApiErrorToast.message !== message ||
       now - lastApiErrorToast.at > dedupeWindowMs;
-    if (shouldEmitToast) {
+    if (shouldEmitToast && !behavior.suppressErrorToast) {
       lastApiErrorToast = { message, at: now };
       emitAppToast({ variant: "error", description: message });
     }
     const error = new Error(message) as Error & { __appToastShown?: boolean; statusCode?: number };
-    error.__appToastShown = shouldEmitToast;
+    error.__appToastShown = shouldEmitToast && !behavior.suppressErrorToast;
     error.statusCode = res.status;
     throw error;
   }
@@ -1066,8 +1069,24 @@ export async function getChatProfileByPublicId(publicId: number): Promise<ChatPu
   return request<ChatPublicProfileSummary>(`/users/profiles/${publicId}/summary`);
 }
 
+export async function getChatProfileByPublicIdQuiet(
+  publicId: number
+): Promise<ChatPublicProfileSummary> {
+  return request<ChatPublicProfileSummary>(`/users/profiles/${publicId}/summary`, {}, true, false, {
+    suppressErrorToast: true
+  });
+}
+
 export async function getChatProfileByUserId(userId: string): Promise<ChatPublicProfileSummary> {
   return request<ChatPublicProfileSummary>(`/users/profiles/by-user/${encodeURIComponent(userId)}/summary`);
+}
+
+export async function getChatProfileByUserIdQuiet(
+  userId: string
+): Promise<ChatPublicProfileSummary> {
+  return request<ChatPublicProfileSummary>(`/users/profiles/by-user/${encodeURIComponent(userId)}/summary`, {}, true, false, {
+    suppressErrorToast: true
+  });
 }
 
 // ── User ────────────────────────────────────────────────────────────────
@@ -1106,6 +1125,12 @@ export interface User {
 
 export async function getMe(): Promise<User> {
   return request<User>("/users/me");
+}
+
+export async function getMeQuiet(): Promise<User> {
+  return request<User>("/users/me", {}, true, false, {
+    suppressErrorToast: true
+  });
 }
 
 export interface ChangeMyPasswordInput {
@@ -1168,6 +1193,43 @@ export async function getSecuritySettings(): Promise<SecuritySettingsResponse> {
       until?: string | null;
     } | null;
   }>("/users/me/security-settings");
+
+  const tradeUrl = raw.tradeUrl ?? raw.steamTradeUrl ?? null;
+  const selfExcludeUntil = raw.selfExcludeUntil ?? raw.selfExclusion?.until ?? null;
+  const now = Date.now();
+  const exclusionUntilMs = selfExcludeUntil ? Date.parse(selfExcludeUntil) : Number.NaN;
+  const selfExclusionActive =
+    typeof raw.selfExclusion?.active === "boolean"
+      ? raw.selfExclusion.active
+      : Number.isFinite(exclusionUntilMs) && exclusionUntilMs > now;
+
+  return {
+    username: raw.username ?? null,
+    tradeUrl,
+    usernameChangedAt: raw.usernameChangedAt ?? null,
+    usernameNextChangeAt: raw.usernameNextChangeAt ?? null,
+    canChangeUsername: typeof raw.canChangeUsername === "boolean" ? raw.canChangeUsername : true,
+    selfExcludeUntil,
+    selfExclusionActive
+  };
+}
+
+export async function getSecuritySettingsQuiet(): Promise<SecuritySettingsResponse> {
+  const raw = await request<{
+    username?: string | null;
+    tradeUrl?: string | null;
+    steamTradeUrl?: string | null;
+    usernameChangedAt?: string | null;
+    usernameNextChangeAt?: string | null;
+    canChangeUsername?: boolean;
+    selfExcludeUntil?: string | null;
+    selfExclusion?: {
+      active?: boolean;
+      until?: string | null;
+    } | null;
+  }>("/users/me/security-settings", {}, true, false, {
+    suppressErrorToast: true
+  });
 
   const tradeUrl = raw.tradeUrl ?? raw.steamTradeUrl ?? null;
   const selfExcludeUntil = raw.selfExcludeUntil ?? raw.selfExclusion?.until ?? null;
@@ -1362,6 +1424,12 @@ export async function getProfileSummary(): Promise<ProfileSummary> {
   return request<ProfileSummary>("/users/profile/summary");
 }
 
+export async function getProfileSummaryQuiet(): Promise<ProfileSummary> {
+  return request<ProfileSummary>("/users/profile/summary", {}, true, false, {
+    suppressErrorToast: true
+  });
+}
+
 export interface LiveWinTickerItem {
   id: string;
   mode: "MINES" | "CASES" | "BATTLES";
@@ -1498,13 +1566,18 @@ export interface UserGameHistoryItem {
 }
 
 export async function getMyGameHistory(
-  params: { limit?: number; offset?: number; mode?: "ALL" | "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES" } = {}
+  params: { limit?: number; offset?: number; mode?: "ALL" | "MINES" | "BLACKJACK" | "ROULETTE" | "CASES" | "BATTLES" } = {},
+  behavior: { suppressErrorToast?: boolean } = {}
 ): Promise<PaginatedResponse<UserGameHistoryItem>> {
   const limit = params.limit ?? 50;
   const offset = params.offset ?? 0;
   const mode = params.mode ?? "ALL";
   return request<PaginatedResponse<UserGameHistoryItem>>(
-    `/users/me/game-history?limit=${limit}&offset=${offset}&mode=${mode}`
+    `/users/me/game-history?limit=${limit}&offset=${offset}&mode=${mode}`,
+    {},
+    true,
+    false,
+    behavior
   );
 }
 

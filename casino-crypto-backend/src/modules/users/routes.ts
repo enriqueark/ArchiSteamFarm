@@ -782,7 +782,7 @@ const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChat
           COALESCE(mg."payoutAtomic", 0)::bigint AS payout_atomic,
           mg."betAtomic"::bigint AS wager_atomic,
           CASE
-            WHEN mg."betAtomic" > 0 THEN (COALESCE(mg."payoutAtomic", 0)::bigint * 100000000n) / mg."betAtomic"
+            WHEN mg."betAtomic" > 0 THEN (COALESCE(mg."payoutAtomic", 0)::bigint * 100000000) / mg."betAtomic"
             ELSE 0::bigint
           END AS multiplier_numerator
         FROM "mines_games" mg
@@ -795,7 +795,7 @@ const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChat
           COALESCE(bj."payoutAtomic", 0)::bigint AS payout_atomic,
           bj."initialBetAtomic"::bigint AS wager_atomic,
           CASE
-            WHEN bj."initialBetAtomic" > 0 THEN (COALESCE(bj."payoutAtomic", 0)::bigint * 100000000n) / bj."initialBetAtomic"
+            WHEN bj."initialBetAtomic" > 0 THEN (COALESCE(bj."payoutAtomic", 0)::bigint * 100000000) / bj."initialBetAtomic"
             ELSE 0::bigint
           END AS multiplier_numerator
         FROM "blackjack_games" bj
@@ -808,7 +808,7 @@ const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChat
           COALESCE(rb."payoutAtomic", 0)::bigint AS payout_atomic,
           rb."stakeAtomic"::bigint AS wager_atomic,
           CASE
-            WHEN rb."stakeAtomic" > 0 THEN (COALESCE(rb."payoutAtomic", 0)::bigint * 100000000n) / rb."stakeAtomic"
+            WHEN rb."stakeAtomic" > 0 THEN (COALESCE(rb."payoutAtomic", 0)::bigint * 100000000) / rb."stakeAtomic"
             ELSE 0::bigint
           END AS multiplier_numerator
         FROM "roulette_bets" rb
@@ -821,7 +821,7 @@ const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChat
           COALESCE(co."payoutAtomic", 0)::bigint AS payout_atomic,
           co."priceAtomic"::bigint AS wager_atomic,
           CASE
-            WHEN co."priceAtomic" > 0 THEN (COALESCE(co."payoutAtomic", 0)::bigint * 100000000n) / co."priceAtomic"
+            WHEN co."priceAtomic" > 0 THEN (COALESCE(co."payoutAtomic", 0)::bigint * 100000000) / co."priceAtomic"
             ELSE 0::bigint
           END AS multiplier_numerator
         FROM "case_openings" co
@@ -834,7 +834,7 @@ const getPublicChatProfileSummary = async (publicId: number): Promise<PublicChat
           COALESCE(bs."payoutAtomic", 0)::bigint AS payout_atomic,
           bs."paidAmountAtomic"::bigint AS wager_atomic,
           CASE
-            WHEN bs."paidAmountAtomic" > 0 THEN (COALESCE(bs."payoutAtomic", 0)::bigint * 100000000n) / bs."paidAmountAtomic"
+            WHEN bs."paidAmountAtomic" > 0 THEN (COALESCE(bs."payoutAtomic", 0)::bigint * 100000000) / bs."paidAmountAtomic"
             ELSE 0::bigint
           END AS multiplier_numerator
         FROM "battle_slots" bs
