@@ -344,18 +344,15 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = laneWidth * 0.5;
-  const activeStripIndex = useMemo(() => {
+  const pointerPx = (laneRef.current?.clientWidth && laneRef.current.clientWidth > 0
+    ? laneRef.current.clientWidth
+    : laneWidth) * 0.5;
+  const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
-
-  const idleStripIndex = useMemo(() => {
-    if (reelTrackSlots.length <= 0) return null;
-    if (typeof activeStripIndex === "number") return activeStripIndex;
-    return clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1);
-  }, [activeStripIndex, reelTrackSlots.length]);
-
-  const highlightedStripIndex = !isReelSpinning ? (lockedStopIndex ?? winnerReveal?.index ?? idleStripIndex) : activeStripIndex;
+  const highlightedStripIndex =
+    centerStripIndex ??
+    (winnerReveal?.index ?? lockedStopIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -631,10 +628,10 @@ export default function CaseDetailPage() {
             <div className="relative h-[320px]">
               <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
+                  const winnerItem = winnerReveal?.item ?? null;
                   const isCenterTrackedSlot = highlightedStripIndex === repeatedIndex;
-                  const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
-                  // Keep highlight in idle/final states, but hide it while spinning to avoid misleading offset visuals.
-                  const active = !isReelSpinning && isCenterTrackedSlot;
+                  const isWinnerSlot = Boolean(winnerItem) && !isReelSpinning && isCenterTrackedSlot;
+                  const active = isCenterTrackedSlot;
                   const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
                     <div
@@ -660,10 +657,10 @@ export default function CaseDetailPage() {
                       )}
                       {isWinnerSlot ? (
                         <>
-                          <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerReveal.item.name}</p>
+                          <p className="mt-1 line-clamp-1 text-center text-[11px] font-bold text-white">{winnerItem?.name ?? item.name}</p>
                           <div className="mt-1 flex w-full items-center justify-center gap-1 text-[#f5c14f] leading-none">
                             <img src="/assets/coin-dino-original.png" alt="" className="h-[30px] w-[30px] shrink-0 object-contain" />
-                            <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerReveal.item.valueAtomic)}</span>
+                            <span className="flex items-center text-[18px] font-extrabold leading-none">{fmtCoins(winnerItem?.valueAtomic ?? item.valueAtomic)}</span>
                           </div>
                         </>
                       ) : null}
