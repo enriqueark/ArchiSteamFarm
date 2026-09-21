@@ -349,7 +349,13 @@ export default function CaseDetailPage() {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
-  const highlightedStripIndex = !isReelSpinning ? (lockedStopIndex ?? winnerReveal?.index ?? activeStripIndex) : activeStripIndex;
+  const idleStripIndex = useMemo(() => {
+    if (reelTrackSlots.length <= 0) return null;
+    if (typeof activeStripIndex === "number") return activeStripIndex;
+    return clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1);
+  }, [activeStripIndex, reelTrackSlots.length]);
+
+  const highlightedStripIndex = !isReelSpinning ? (lockedStopIndex ?? winnerReveal?.index ?? idleStripIndex) : activeStripIndex;
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -627,7 +633,8 @@ export default function CaseDetailPage() {
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
                   const isCenterTrackedSlot = highlightedStripIndex === repeatedIndex;
                   const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
-                  const active = isCenterTrackedSlot && (isReelSpinning || Boolean(winnerReveal));
+                  // Keep highlight in idle/final states, but hide it while spinning to avoid misleading offset visuals.
+                  const active = !isReelSpinning && isCenterTrackedSlot;
                   const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
                     <div
