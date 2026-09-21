@@ -625,8 +625,9 @@ export default function CaseDetailPage() {
             <div className="relative h-[320px]">
               <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
-                  const active = !isReelSpinning && highlightedStripIndex === repeatedIndex;
+                  const isCenterTrackedSlot = highlightedStripIndex === repeatedIndex;
                   const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
+                  const active = isCenterTrackedSlot && (isReelSpinning || Boolean(winnerReveal));
                   const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
                     <div
