@@ -314,6 +314,24 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
+  const getPointerClientXNow = useCallback((): number | null => {
+    const lane = laneRef.current;
+    if (!lane) return null;
+    const rect = lane.getBoundingClientRect();
+    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) return null;
+    return rect.left + rect.width * 0.5;
+  }, []);
+
+  const getSlotCenterClientX = useCallback((slotIndex: number): number | null => {
+    const lane = laneRef.current;
+    if (!lane) return null;
+    const slot = lane.querySelector<HTMLElement>(`[data-strip-index="${slotIndex}"]`);
+    if (!slot) return null;
+    const rect = slot.getBoundingClientRect();
+    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) return null;
+    return rect.left + rect.width * 0.5;
+  }, []);
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -374,7 +392,12 @@ export default function CaseDetailPage() {
       const cruiseDurationMs = 3600 + Math.floor(Math.random() * 900);
       const settleDurationMs = 1300 + Math.floor(Math.random() * 900);
 
-      const animateSegment = async (from: number, to: number, durationMs: number, easing: (progress: number) => number) => {
+      const animateSegment = async (
+        from: number,
+        to: number,
+        durationMs: number,
+        easing: (progress: number) => number
+      ) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
           spinPhaseRef.current = to;
           setSpinPhase(to);
@@ -410,17 +433,32 @@ export default function CaseDetailPage() {
         requestAnimationFrame(() => resolve());
       });
 
-      // Hard-freeze exactly at the winner center relative to the *current* lane width.
+      // Hard-freeze exactly at the winner center relative to the current lane width.
       clearRaf();
       const finalPointer = getPointerPxNow();
       const correctedFinalPhase = getPhaseForIndex(targetIndex, finalPointer);
       spinPhaseRef.current = correctedFinalPhase;
       setSpinPhase(correctedFinalPhase);
+
+      // One more geometry correction pass using live DOM positions to avoid any visual drift.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const pointerClientX = getPointerClientXNow();
+      const slotCenterClientX = getSlotCenterClientX(targetIndex);
+      if (pointerClientX !== null && slotCenterClientX !== null) {
+        const delta = slotCenterClientX - pointerClientX;
+        if (Math.abs(delta) > 0.25) {
+          const correctedWithDom = correctedFinalPhase + delta;
+          spinPhaseRef.current = correctedWithDom;
+          setSpinPhase(correctedWithDom);
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        }
+      }
+
       setLockedStopIndex(targetIndex);
       setWinnerReveal({ index: targetIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerClientXNow, getPointerPxNow, getSlotCenterClientX, orderedItems]
   );
 
   const openCaseNow = async () => {
@@ -587,7 +625,7 @@ export default function CaseDetailPage() {
             <div className="relative h-[320px]">
               <div className="absolute left-0 top-0 h-full w-full will-change-transform">
                 {reelTrackSlots.map(({ repeatedIndex, item }) => {
-                  const active = highlightedStripIndex === repeatedIndex;
+                  const active = !isReelSpinning && highlightedStripIndex === repeatedIndex;
                   const isWinnerSlot = !!winnerReveal && !isReelSpinning && winnerReveal.index === repeatedIndex;
                   const left = repeatedIndex * REEL_STRIDE - spinPhase;
                   return (
