@@ -79,6 +79,12 @@ const buildRandomTrack = (items: CaseItem[], length: number): CaseItem[] => {
   return Array.from({ length }, () => items[Math.floor(Math.random() * items.length)]);
 };
 
+const ensureDifferentNeighbor = (items: CaseItem[], disallowedId: string, fallback: CaseItem): CaseItem => {
+  const pool = items.filter((item) => item.id !== disallowedId);
+  if (pool.length === 0) return fallback;
+  return pool[Math.floor(Math.random() * pool.length)];
+};
+
 const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number): number | null => {
   if (trackLength <= 0) return null;
   const pointerTrackX = phase + pointerPx;
@@ -215,14 +221,12 @@ export default function CaseDetailPage() {
   const [laneWidth, setLaneWidth] = useState(860);
   const [spinPhase, setSpinPhase] = useState(INITIAL_REEL_PHASE);
   const [reelTrackSlots, setReelTrackSlots] = useState<Array<{ repeatedIndex: number; item: CaseItem }>>([]);
-  const [lockedPointerPx, setLockedPointerPx] = useState<number | null>(null);
   const [lockedStopIndex, setLockedStopIndex] = useState<number | null>(null);
   const [winnerReveal, setWinnerReveal] = useState<{ index: number; item: CaseItem } | null>(null);
   const [caseDetails, setCaseDetails] = useState<CaseMarketplaceDetails | null>(null);
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
-  const finalHighlightedIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -318,20 +322,14 @@ export default function CaseDetailPage() {
     const initial = REEL_START_INDEX * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointer;
     spinPhaseRef.current = initial;
     setSpinPhase(initial);
-    setLockedPointerPx(null);
     setLockedStopIndex(null);
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
   const pointerPx = laneWidth * 0.5;
-  const effectivePointerPx = lockedPointerPx ?? pointerPx;
   const activeStripIndex = useMemo(() => {
-    return getIndexAtPointer(spinPhase, effectivePointerPx, reelTrackSlots.length);
-  }, [effectivePointerPx, reelTrackSlots.length, spinPhase]);
-
-  useEffect(() => {
-    finalHighlightedIndexRef.current = activeStripIndex;
-  }, [activeStripIndex]);
+    return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
+  }, [pointerPx, reelTrackSlots.length, spinPhase]);
 
   const highlightedStripIndex = !isReelSpinning ? (lockedStopIndex ?? winnerReveal?.index ?? activeStripIndex) : activeStripIndex;
 
@@ -355,10 +353,15 @@ export default function CaseDetailPage() {
       const targetIndex = Math.floor(REEL_TRACK_LENGTH * 0.82) + Math.floor(Math.random() * 4);
       const winnerItem = orderedItems[winnerLayout] ?? winningItem;
       track[targetIndex] = winnerItem;
+      if (targetIndex - 1 >= 0) {
+        track[targetIndex - 1] = ensureDifferentNeighbor(orderedItems, winnerItem.id, winnerItem);
+      }
+      if (targetIndex + 1 < track.length) {
+        track[targetIndex + 1] = ensureDifferentNeighbor(orderedItems, winnerItem.id, winnerItem);
+      }
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
       const pointer = getPointerPxNow();
-      setLockedPointerPx(pointer);
       const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
       const startPhase = getPhaseForIndex(startIndex, pointer);
       const endPhase = getPhaseForIndex(targetIndex, pointer);
@@ -407,22 +410,14 @@ export default function CaseDetailPage() {
         requestAnimationFrame(() => resolve());
       });
 
-      // Hard-freeze exactly on the final rendered frame, without post-stop phase correction.
+      // Hard-freeze exactly at the winner center relative to the *current* lane width.
       clearRaf();
-      const frozenFinalPhase = spinPhaseRef.current;
-      const resolvedFinalIndex =
-        finalHighlightedIndexRef.current ??
-        getIndexAtPointer(frozenFinalPhase, pointer, track.length) ??
-        targetIndex;
-      const lockedFinalIndex = clamp(resolvedFinalIndex, 0, track.length - 1);
-      finalHighlightedIndexRef.current = lockedFinalIndex;
-      setLockedStopIndex(lockedFinalIndex);
-
-      if (track[lockedFinalIndex]?.id !== winnerItem.id) {
-        track[lockedFinalIndex] = winnerItem;
-        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
-      }
-      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
+      const finalPointer = getPointerPxNow();
+      const correctedFinalPhase = getPhaseForIndex(targetIndex, finalPointer);
+      spinPhaseRef.current = correctedFinalPhase;
+      setSpinPhase(correctedFinalPhase);
+      setLockedStopIndex(targetIndex);
+      setWinnerReveal({ index: targetIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
