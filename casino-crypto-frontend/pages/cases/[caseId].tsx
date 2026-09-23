@@ -316,6 +316,33 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
+  const getVisibleStripIndexAtPointer = useCallback(
+    (trackLength: number): number | null => {
+      const lane = laneRef.current;
+      if (!lane || trackLength <= 0) return null;
+      const rect = lane.getBoundingClientRect();
+      if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) {
+        return null;
+      }
+
+      const centerX = rect.left + rect.width * 0.5;
+      const centerY = rect.top + rect.height * 0.5;
+      const element = document.elementFromPoint(centerX, centerY);
+      const slot = (element as HTMLElement | null)?.closest?.("[data-strip-index]") as HTMLElement | null;
+      const rawIndex = slot?.getAttribute("data-strip-index");
+      if (rawIndex) {
+        const parsed = Number(rawIndex);
+        if (Number.isInteger(parsed)) {
+          return clamp(parsed, 0, trackLength - 1);
+        }
+      }
+
+      const pointerPx = getPointerPxNow();
+      return getIndexAtPointer(spinPhaseRef.current, pointerPx, trackLength);
+    },
+    [getPointerPxNow]
+  );
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -431,8 +458,11 @@ export default function CaseDetailPage() {
       const frozenPhase = spinPhaseRef.current;
       spinPhaseRef.current = frozenPhase;
       setSpinPhase(frozenPhase);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const domVisibleStopIndex = getVisibleStripIndexAtPointer(track.length);
       const finalPointer = getPointerPxNow();
       const resolvedStopIndex =
+        domVisibleStopIndex ??
         centerStripIndexRef.current ??
         getIndexAtPointer(frozenPhase, finalPointer, track.length) ?? targetIndex;
       const lockedFinalIndex = clamp(resolvedStopIndex, 0, track.length - 1);
@@ -446,7 +476,7 @@ export default function CaseDetailPage() {
       setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerPxNow, getVisibleStripIndexAtPointer, orderedItems]
   );
 
   const openCaseNow = async () => {
