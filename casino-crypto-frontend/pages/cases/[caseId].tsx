@@ -105,7 +105,8 @@ const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number
     const distance = Math.abs(pointerTrackX - center);
     if (
       distance < nearestDistance - 0.001 ||
-      (Math.abs(distance - nearestDistance) <= 0.001 && (nearestIndex === null || index > nearestIndex))
+      // Prefer the lower index on ties to avoid right-side snapping at stop.
+      (Math.abs(distance - nearestDistance) <= 0.001 && (nearestIndex === null || index < nearestIndex))
     ) {
       nearestIndex = index;
       nearestDistance = distance;
@@ -117,7 +118,7 @@ const getIndexAtPointer = (phase: number, pointerPx: number, trackLength: number
   }
 
   const raw = (pointerTrackX - REEL_ITEM_WIDTH / 2) / REEL_STRIDE;
-  return clamp(Math.round(raw), 0, trackLength - 1);
+  return clamp(Math.floor(raw), 0, trackLength - 1);
 };
 
 const getPhaseForIndex = (index: number, pointerPx: number): number => index * REEL_STRIDE + REEL_ITEM_WIDTH / 2 - pointerPx;
@@ -227,6 +228,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
+  const centerStripIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -332,6 +334,9 @@ export default function CaseDetailPage() {
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
+  useEffect(() => {
+    centerStripIndexRef.current = centerStripIndex;
+  }, [centerStripIndex]);
   const highlightedStripIndex = isReelSpinning
     ? centerStripIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null)
     : (winnerReveal?.index ??
@@ -428,6 +433,7 @@ export default function CaseDetailPage() {
       setSpinPhase(frozenPhase);
       const finalPointer = getPointerPxNow();
       const resolvedStopIndex =
+        centerStripIndexRef.current ??
         getIndexAtPointer(frozenPhase, finalPointer, track.length) ?? targetIndex;
       const lockedFinalIndex = clamp(resolvedStopIndex, 0, track.length - 1);
 
