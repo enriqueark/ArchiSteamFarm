@@ -314,24 +314,6 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
-  const getPointerClientXNow = useCallback((): number | null => {
-    const lane = laneRef.current;
-    if (!lane) return null;
-    const rect = lane.getBoundingClientRect();
-    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) return null;
-    return rect.left + rect.width * 0.5;
-  }, []);
-
-  const getSlotCenterClientX = useCallback((slotIndex: number): number | null => {
-    const lane = laneRef.current;
-    if (!lane) return null;
-    const slot = lane.querySelector<HTMLElement>(`[data-strip-index="${slotIndex}"]`);
-    if (!slot) return null;
-    const rect = slot.getBoundingClientRect();
-    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) return null;
-    return rect.left + rect.width * 0.5;
-  }, []);
-
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -350,9 +332,12 @@ export default function CaseDetailPage() {
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
-  const highlightedStripIndex =
-    centerStripIndex ??
-    (winnerReveal?.index ?? lockedStopIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
+  const highlightedStripIndex = isReelSpinning
+    ? centerStripIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null)
+    : (winnerReveal?.index ??
+      lockedStopIndex ??
+      centerStripIndex ??
+      (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -436,32 +421,26 @@ export default function CaseDetailPage() {
         requestAnimationFrame(() => resolve());
       });
 
-      // Hard-freeze exactly at the winner center relative to the current lane width.
+      // Hard-freeze exactly on the last rendered frame (no post-stop movement).
       clearRaf();
+      const frozenPhase = spinPhaseRef.current;
+      spinPhaseRef.current = frozenPhase;
+      setSpinPhase(frozenPhase);
       const finalPointer = getPointerPxNow();
-      const correctedFinalPhase = getPhaseForIndex(targetIndex, finalPointer);
-      spinPhaseRef.current = correctedFinalPhase;
-      setSpinPhase(correctedFinalPhase);
+      const resolvedStopIndex =
+        getIndexAtPointer(frozenPhase, finalPointer, track.length) ?? targetIndex;
+      const lockedFinalIndex = clamp(resolvedStopIndex, 0, track.length - 1);
 
-      // One more geometry correction pass using live DOM positions to avoid any visual drift.
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      const pointerClientX = getPointerClientXNow();
-      const slotCenterClientX = getSlotCenterClientX(targetIndex);
-      if (pointerClientX !== null && slotCenterClientX !== null) {
-        const delta = slotCenterClientX - pointerClientX;
-        if (Math.abs(delta) > 0.25) {
-          const correctedWithDom = correctedFinalPhase + delta;
-          spinPhaseRef.current = correctedWithDom;
-          setSpinPhase(correctedWithDom);
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        }
+      if (track[lockedFinalIndex]?.id !== winnerItem.id) {
+        track[lockedFinalIndex] = winnerItem;
+        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
       }
 
-      setLockedStopIndex(targetIndex);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      setLockedStopIndex(lockedFinalIndex);
+      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerClientXNow, getPointerPxNow, getSlotCenterClientX, orderedItems]
+    [clearRaf, getPointerPxNow, orderedItems]
   );
 
   const openCaseNow = async () => {
