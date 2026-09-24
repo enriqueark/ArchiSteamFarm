@@ -327,7 +327,9 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = laneWidth * 0.5;
+  const pointerPx = (laneRef.current?.clientWidth && laneRef.current.clientWidth > 0
+    ? laneRef.current.clientWidth
+    : laneWidth) * 0.5;
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
@@ -337,18 +339,6 @@ export default function CaseDetailPage() {
       lockedStopIndex ??
       centerStripIndex ??
       (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
-
-  useEffect(() => {
-    if (isReelSpinning) return;
-    const stableIndex = winnerReveal?.index ?? lockedStopIndex;
-    if (stableIndex === null || stableIndex === undefined) return;
-    const pointer = getPointerPxNow();
-    const lockedPhase = getPhaseForIndex(stableIndex, pointer);
-    if (!Number.isFinite(lockedPhase)) return;
-    if (Math.abs(spinPhaseRef.current - lockedPhase) <= 0.01) return;
-    spinPhaseRef.current = lockedPhase;
-    setSpinPhase(lockedPhase);
-  }, [getPointerPxNow, isReelSpinning, laneWidth, lockedStopIndex, winnerReveal?.index]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -378,15 +368,14 @@ export default function CaseDetailPage() {
       }
       setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
 
-      const pointer = getPointerPxNow();
       const startIndex = REEL_START_INDEX + Math.floor(Math.random() * 3);
-      const startPhase = getPhaseForIndex(startIndex, pointer);
-      const endPhase = getPhaseForIndex(targetIndex, pointer);
-      const suspensePhaseRaw = endPhase - REEL_STRIDE * (0.52 + Math.random() * 0.26);
-      const suspensePhase = clamp(
-        suspensePhaseRaw,
-        startPhase + REEL_STRIDE * 8,
-        endPhase - REEL_STRIDE * 0.14
+      const startCenterPosition = startIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2;
+      const endCenterPosition = targetIndex * REEL_STRIDE + REEL_ITEM_WIDTH / 2;
+      const suspenseCenterRaw = endCenterPosition - REEL_STRIDE * (0.52 + Math.random() * 0.26);
+      const suspenseCenter = clamp(
+        suspenseCenterRaw,
+        startCenterPosition + REEL_STRIDE * 8,
+        endCenterPosition - REEL_STRIDE * 0.14
       );
       const cruiseDurationMs = 3600 + Math.floor(Math.random() * 900);
       const settleDurationMs = 1300 + Math.floor(Math.random() * 900);
@@ -398,8 +387,10 @@ export default function CaseDetailPage() {
         easing: (progress: number) => number
       ) => {
         if (!Number.isFinite(durationMs) || durationMs <= 0 || Math.abs(to - from) < 0.001) {
-          spinPhaseRef.current = to;
-          setSpinPhase(to);
+          const pointerNow = getPointerPxNow();
+          const nextPhase = to - pointerNow;
+          spinPhaseRef.current = nextPhase;
+          setSpinPhase(nextPhase);
           return;
         }
         await new Promise<void>((resolve) => {
@@ -407,15 +398,19 @@ export default function CaseDetailPage() {
           const tick = (ts: number) => {
             const progress = clamp((ts - startedAt) / durationMs, 0, 1);
             const mix = easing(progress);
-            const next = from + (to - from) * mix;
-            spinPhaseRef.current = next;
-            setSpinPhase(next);
+            const nextCenter = from + (to - from) * mix;
+            const pointerNow = getPointerPxNow();
+            const nextPhase = nextCenter - pointerNow;
+            spinPhaseRef.current = nextPhase;
+            setSpinPhase(nextPhase);
             if (progress < 1) {
               rafRef.current = requestAnimationFrame(tick);
               return;
             }
-            spinPhaseRef.current = to;
-            setSpinPhase(to);
+            const finalPointer = getPointerPxNow();
+            const finalPhase = to - finalPointer;
+            spinPhaseRef.current = finalPhase;
+            setSpinPhase(finalPhase);
             rafRef.current = null;
             resolve();
           };
@@ -423,11 +418,13 @@ export default function CaseDetailPage() {
         });
       };
 
+      const startPointer = getPointerPxNow();
+      const startPhase = startCenterPosition - startPointer;
       spinPhaseRef.current = startPhase;
       setSpinPhase(startPhase);
 
-      await animateSegment(startPhase, suspensePhase, cruiseDurationMs, getSpinEase);
-      await animateSegment(suspensePhase, endPhase, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
+      await animateSegment(startCenterPosition, suspenseCenter, cruiseDurationMs, getSpinEase);
+      await animateSegment(suspenseCenter, endCenterPosition, settleDurationMs, (progress) => 1 - Math.pow(1 - progress, 5.1));
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
@@ -435,7 +432,7 @@ export default function CaseDetailPage() {
       // Snap to the exact winner slot center and finish with no post-stop reindexing.
       clearRaf();
       const finalPointer = getPointerPxNow();
-      const lockedFinalPhase = getPhaseForIndex(targetIndex, finalPointer);
+      const lockedFinalPhase = endCenterPosition - finalPointer;
       spinPhaseRef.current = lockedFinalPhase;
       setSpinPhase(lockedFinalPhase);
       setLockedStopIndex(targetIndex);
