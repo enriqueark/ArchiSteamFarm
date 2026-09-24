@@ -333,12 +333,11 @@ export default function CaseDetailPage() {
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
-  const highlightedStripIndex = isReelSpinning
-    ? centerStripIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null)
-    : (winnerReveal?.index ??
-      lockedStopIndex ??
-      centerStripIndex ??
-      (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
+  const highlightedStripIndex =
+    centerStripIndex ??
+    lockedStopIndex ??
+    winnerReveal?.index ??
+    (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -429,14 +428,20 @@ export default function CaseDetailPage() {
         requestAnimationFrame(() => resolve());
       });
 
-      // Snap to the exact winner slot center and finish with no post-stop reindexing.
+      // Freeze at the current rendered frame and keep that exact stop slot.
       clearRaf();
+      const frozenPhase = spinPhaseRef.current;
+      spinPhaseRef.current = frozenPhase;
+      setSpinPhase(frozenPhase);
       const finalPointer = getPointerPxNow();
-      const lockedFinalPhase = endCenterPosition - finalPointer;
-      spinPhaseRef.current = lockedFinalPhase;
-      setSpinPhase(lockedFinalPhase);
-      setLockedStopIndex(targetIndex);
-      setWinnerReveal({ index: targetIndex, item: winnerItem });
+      const stopIndex = getIndexAtPointer(frozenPhase, finalPointer, track.length) ?? targetIndex;
+      const lockedFinalIndex = clamp(stopIndex, 0, track.length - 1);
+      if (track[lockedFinalIndex]?.id !== winnerItem.id) {
+        track[lockedFinalIndex] = winnerItem;
+        setReelTrackSlots(track.map((item, repeatedIndex) => ({ repeatedIndex, item })));
+      }
+      setLockedStopIndex(lockedFinalIndex);
+      setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
     [clearRaf, getPointerPxNow, orderedItems]
