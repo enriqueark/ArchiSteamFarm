@@ -228,6 +228,7 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
+  const centerStripIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -333,11 +334,17 @@ export default function CaseDetailPage() {
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
-  const highlightedStripIndex =
-    centerStripIndex ??
-    lockedStopIndex ??
-    winnerReveal?.index ??
-    (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null);
+  useEffect(() => {
+    centerStripIndexRef.current = centerStripIndex;
+  }, [centerStripIndex]);
+
+  const highlightedStripIndex = isReelSpinning
+    ? centerStripIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null)
+    : (winnerReveal?.index ??
+      lockedStopIndex ??
+      centerStripIndexRef.current ??
+      centerStripIndex ??
+      (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
@@ -434,7 +441,10 @@ export default function CaseDetailPage() {
       spinPhaseRef.current = frozenPhase;
       setSpinPhase(frozenPhase);
       const finalPointer = getPointerPxNow();
-      const stopIndex = getIndexAtPointer(frozenPhase, finalPointer, track.length) ?? targetIndex;
+      const stopIndex =
+        centerStripIndexRef.current ??
+        getIndexAtPointer(frozenPhase, finalPointer, track.length) ??
+        targetIndex;
       const lockedFinalIndex = clamp(stopIndex, 0, track.length - 1);
       if (track[lockedFinalIndex]?.id !== winnerItem.id) {
         track[lockedFinalIndex] = winnerItem;
