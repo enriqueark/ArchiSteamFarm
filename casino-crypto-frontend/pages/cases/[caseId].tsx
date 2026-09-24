@@ -327,9 +327,7 @@ export default function CaseDetailPage() {
     setWinnerReveal(null);
   }, [getPointerPxNow, orderedItems]);
 
-  const pointerPx = (laneRef.current?.clientWidth && laneRef.current.clientWidth > 0
-    ? laneRef.current.clientWidth
-    : laneWidth) * 0.5;
+  const pointerPx = laneWidth * 0.5;
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
@@ -339,6 +337,18 @@ export default function CaseDetailPage() {
       lockedStopIndex ??
       centerStripIndex ??
       (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
+
+  useEffect(() => {
+    if (isReelSpinning) return;
+    const stableIndex = winnerReveal?.index ?? lockedStopIndex;
+    if (stableIndex === null || stableIndex === undefined) return;
+    const pointer = getPointerPxNow();
+    const lockedPhase = getPhaseForIndex(stableIndex, pointer);
+    if (!Number.isFinite(lockedPhase)) return;
+    if (Math.abs(spinPhaseRef.current - lockedPhase) <= 0.01) return;
+    spinPhaseRef.current = lockedPhase;
+    setSpinPhase(lockedPhase);
+  }, [getPointerPxNow, isReelSpinning, laneWidth, lockedStopIndex, winnerReveal?.index]);
 
   const runOpeningAnimation = useCallback(
     async (winningItem: CaseItem): Promise<void> => {
