@@ -228,7 +228,6 @@ export default function CaseDetailPage() {
   const [lastOpening, setLastOpening] = useState<CaseOpeningResult | null>(null);
   const [topTierModal, setTopTierModal] = useState<CaseOpeningResult | null>(null);
   const spinPhaseRef = useRef(spinPhase);
-  const centerStripIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     spinPhaseRef.current = spinPhase;
@@ -316,6 +315,43 @@ export default function CaseDetailPage() {
     return laneWidthRef.current * 0.5;
   }, []);
 
+  const getVisibleStripIndexAtPointer = useCallback(
+    (trackLength: number): number | null => {
+      const lane = laneRef.current;
+      if (!lane || trackLength <= 0) return null;
+      const laneRect = lane.getBoundingClientRect();
+      if (!Number.isFinite(laneRect.left) || !Number.isFinite(laneRect.width) || laneRect.width <= 0) {
+        return null;
+      }
+
+      const pointerX = laneRect.left + laneRect.width * 0.5;
+      let closestIndex: number | null = null;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      const slots = lane.querySelectorAll<HTMLElement>("[data-strip-index]");
+      slots.forEach((slot) => {
+        const raw = slot.getAttribute("data-strip-index");
+        if (!raw) return;
+        const idx = Number(raw);
+        if (!Number.isInteger(idx)) return;
+        const rect = slot.getBoundingClientRect();
+        if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width) || rect.width <= 0) return;
+        const centerX = rect.left + rect.width * 0.5;
+        const distance = Math.abs(centerX - pointerX);
+        if (
+          distance < closestDistance - 0.001 ||
+          (Math.abs(distance - closestDistance) <= 0.001 && (closestIndex === null || idx < closestIndex))
+        ) {
+          closestIndex = idx;
+          closestDistance = distance;
+        }
+      });
+
+      return closestIndex === null ? null : clamp(closestIndex, 0, trackLength - 1);
+    },
+    []
+  );
+
   useEffect(() => {
     if (orderedItems.length === 0) return;
     const track = buildRandomTrack(orderedItems, REEL_TRACK_LENGTH);
@@ -334,15 +370,11 @@ export default function CaseDetailPage() {
   const centerStripIndex = useMemo(() => {
     return getIndexAtPointer(spinPhase, pointerPx, reelTrackSlots.length);
   }, [pointerPx, reelTrackSlots.length, spinPhase]);
-  useEffect(() => {
-    centerStripIndexRef.current = centerStripIndex;
-  }, [centerStripIndex]);
 
   const highlightedStripIndex = isReelSpinning
     ? centerStripIndex ?? (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null)
     : (winnerReveal?.index ??
       lockedStopIndex ??
-      centerStripIndexRef.current ??
       centerStripIndex ??
       (reelTrackSlots.length > 0 ? clamp(REEL_START_INDEX, 0, reelTrackSlots.length - 1) : null));
 
@@ -440,9 +472,10 @@ export default function CaseDetailPage() {
       const frozenPhase = spinPhaseRef.current;
       spinPhaseRef.current = frozenPhase;
       setSpinPhase(frozenPhase);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const finalPointer = getPointerPxNow();
       const stopIndex =
-        centerStripIndexRef.current ??
+        getVisibleStripIndexAtPointer(track.length) ??
         getIndexAtPointer(frozenPhase, finalPointer, track.length) ??
         targetIndex;
       const lockedFinalIndex = clamp(stopIndex, 0, track.length - 1);
@@ -454,7 +487,7 @@ export default function CaseDetailPage() {
       setWinnerReveal({ index: lockedFinalIndex, item: winnerItem });
       setIsReelSpinning(false);
     },
-    [clearRaf, getPointerPxNow, orderedItems]
+    [clearRaf, getPointerPxNow, getVisibleStripIndexAtPointer, orderedItems]
   );
 
   const openCaseNow = async () => {
